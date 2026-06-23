@@ -210,6 +210,25 @@ echo "nameserver 8.8.8.8" | pkexec tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/n
 # FASE 5: Configurar Repositorios e Instalar Paquetes de Pulsar OS
 # ==============================================================================
 
+echo "--- 🌐 Configurando repositorios APT (Debian Contrib/Backports e Inled) ---"
+# English: Enable contrib, non-free, non-free-firmware, and backports in target chroot sources list
+# Español: Habilitar contrib, non-free, non-free-firmware y backports en la lista de fuentes del chroot
+pkexec sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
+if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
+    echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | pkexec tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
+fi
+
+# English: Configure Inled APT GPG key and sources list in the chroot
+# Español: Configurar la clave GPG y la lista de fuentes de Inled APT en el chroot
+pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    set -e
+    apt-get update && apt-get install -y wget gnupg ca-certificates
+    wget -qO- https://apt.inled.es/archive.key | gpg --dearmor | tee /usr/share/keyrings/inled-archive-keyring.gpg > /dev/null
+"
+
+echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
+    pkexec tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
+
 if $USE_LOCAL_DEBS; then
     echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
     
@@ -246,31 +265,22 @@ if $USE_LOCAL_DEBS; then
     pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         apt-get update
-        apt-get install -y --fix-broken /tmp/packages/*.deb
+        apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+        apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari
         apt-get clean
     "
     # Limpiar instaladores temporales
     pkexec rm -rf "$ROOTFS_TARGET/tmp/packages"
-    echo "✅ Paquetes locales de Pulsar OS instalados correctamente."
+    echo "✅ Paquetes locales de Pulsar OS y repositorios externos instalados correctamente."
 else
-    echo "--- 🌐 MODO PRODUCCIÓN: Añadiendo repositorio APT de Inled e instalando paquetes ---"
+    echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
     
-    # 1. Configurar clave GPG e inyectarla en el chroot
-    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        set -e
-        apt-get update && apt-get install -y wget gnupg ca-certificates
-        wget -qO- https://apt.inled.es/archive.key | gpg --dearmor | tee /usr/share/keyrings/inled-archive-keyring.gpg > /dev/null
-    "
-    
-    # 2. Agregar repositorio APT a las fuentes
-    echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
-        pkexec tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
-        
     # 3. Actualizar e instalar el metapaquete o paquetes específicos
-    echo "Instalando paquetes declarativos de Pulsar OS..."
+    echo "Instalando paquetes de Pulsar OS..."
     pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         apt-get update
+        apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
         apt-get install -y --no-install-recommends \
             pulsaros-branding \
             pulsaros-theme \
@@ -279,7 +289,11 @@ else
             pulsaros-plymouth \
             pulsaros-grub \
             pulsaros-calamares \
-            pulsaros-essential
+            pulsaros-essential \
+            droidtux \
+            macboat \
+            appinstall \
+            seafari
         apt-get clean
     "
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
