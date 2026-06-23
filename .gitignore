@@ -1,0 +1,9 @@
+# Directorios de compilación del chroot (rootfs-base y rootfs-target)
+build/
+
+# Archivos de logs y depuración
+*.log
+*.tmp
+
+# Archivos temporales de QEMU
+.qemu_9p/

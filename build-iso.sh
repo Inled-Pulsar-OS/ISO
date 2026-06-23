@@ -6,10 +6,11 @@
 # de forma totalmente limpia, evitando la acumulación de archivos residuales.
 #
 # Funcionamiento:
-#   1. Realiza un bootstrap virgen de Debian si no existe en la caché.
-#   2. Clona el Debian base virgen a un directorio de destino temporal (target).
-#   3. Instala los paquetes locales .deb compilados o los descarga del repo APT.
-#   4. Aplica configuraciones finales y deja el chroot listo para QEMU o la ISO.
+#   1. Comprueba e instala dependencias en el host con pkexec bajo confirmación.
+#   2. Realiza un bootstrap virgen de Debian si no existe en la caché o si quedó corrupto.
+#   3. Clona el Debian base virgen a un directorio de destino temporal (target).
+#   4. Instala los paquetes locales .deb compilados o los descarga del repo APT.
+#   5. Aplica configuraciones finales y deja el chroot listo para QEMU o la ISO.
 #
 # Uso:
 #   ./build-iso.sh [--clean-base] [--local]
@@ -21,8 +22,53 @@
 
 set -e
 
-# Importar configuración global
-# Si configs/env.sh no existe localmente, definimos valores predeterminados
+# ==============================================================================
+# FASE 0: Comprobación de Dependencias del Host
+# ==============================================================================
+
+MISSING_PACKAGES=()
+
+# Comprobar comandos estándar
+for cmd in mmdebstrap fakeroot rsync jq curl unzip wget; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        MISSING_PACKAGES+=("$cmd")
+    fi
+done
+
+# Casos especiales de mapeo comando -> paquete
+if ! command -v convert >/dev/null 2>&1; then
+    MISSING_PACKAGES+=("imagemagick")
+fi
+
+if ! command -v fuser >/dev/null 2>&1; then
+    MISSING_PACKAGES+=("psmisc")
+fi
+
+# IMPORTANTE: Comprobar el llavero de Debian en hosts Ubuntu/Debian no oficiales
+if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+    MISSING_PACKAGES+=("debian-archive-keyring")
+fi
+
+# Instalar dependencias si faltan
+if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
+    echo "⚠️ Se ha detectado que faltan dependencias esenciales en el host: ${MISSING_PACKAGES[*]}"
+    echo "Estas herramientas son requeridas para la compilación de Pulsar OS."
+    read -p "¿Deseas instalar las dependencias faltantes ahora usando pkexec apt install? (s/n): " confirm
+    if [[ "$confirm" =~ ^[sS]$ ]] || [[ "$confirm" =~ ^[yY]$ ]] || [ -z "$confirm" ]; then
+        echo "📥 Iniciando instalación de dependencias..."
+        pkexec apt-get update && pkexec apt-get install -y "${MISSING_PACKAGES[@]}"
+        echo "✅ Dependencias instaladas con éxito."
+    else
+        echo "❌ Error: No se pueden cumplir los requisitos del host. Saliendo..."
+        exit 1
+    fi
+fi
+
+# ==============================================================================
+# FASE 1: Configuración de Entorno e Inicialización
+# ==============================================================================
+
+# Importar configuración global si existe
 if [ -f "../configs/env.sh" ]; then
     source ../configs/env.sh
 elif [ -f "configs/env.sh" ]; then
@@ -33,7 +79,7 @@ else
     MIRROR="http://deb.debian.org/debian"
 fi
 
-# Rutas del proyecto (asumiendo ejecución desde la raíz del repo ISO)
+# Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 ROOTFS_BASE="$BUILD_DIR/rootfs-base"
@@ -62,6 +108,9 @@ for arg in "$@"; do
     esac
 done
 
+# Detección dinámica de la ruta de chroot en el host (resuelve diferencias entre /usr/sbin/chroot y /usr/bin/chroot)
+CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
+
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
     echo "🧹 Finalizando y liberando recursos montados en el chroot..."
@@ -78,8 +127,15 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ==============================================================================
-# FASE 1: Construcción y mantenimiento del Debian Base Virgen (Caché)
+# FASE 2: Construcción y mantenimiento del Debian Base Virgen (Caché)
 # ==============================================================================
+
+# Robustez: Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
+if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BASE/proc" ] || [ ! -d "$ROOTFS_BASE/boot" ]; }; then
+    echo "⚠️ Caché del Debian Base incompleta o corrupta detectada (posible interrupción previa). Limpiando para regenerar..."
+    cleanup
+    pkexec rm -rf "$ROOTFS_BASE"
+fi
 
 if $CLEAN_BASE; then
     echo "🚨 Limpieza total de la caché Debian base solicitada..."
@@ -99,10 +155,18 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
     
     PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
     
+    # Agregar el llavero de Debian si existe en el host (requerido en Ubuntu/Mint)
+    KEYRING_PARAM=""
+    if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+        KEYRING_PARAM="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+        echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
+    fi
+    
     # Ejecutar bootstrap de Debian Virgen
     pkexec /usr/bin/mmdebstrap \
         --architecture="$ARCH" \
         --variant=apt \
+        $KEYRING_PARAM \
         --include="$PACKAGE_LIST" \
         "$DEBIAN_VERSION" \
         "$ROOTFS_BASE" \
@@ -114,7 +178,7 @@ else
 fi
 
 # ==============================================================================
-# FASE 2: Clonar base limpia para aplicar cambios
+# FASE 3: Clonar base limpia para aplicar cambios
 # ==============================================================================
 
 echo "--- 🔄 Clonando Debian Virgen en el directorio de trabajo (target) ---"
@@ -127,7 +191,7 @@ mkdir -p "$ROOTFS_TARGET"
 pkexec rsync -aHAXx --delete "$ROOTFS_BASE/" "$ROOTFS_TARGET/"
 
 # ==============================================================================
-# FASE 3: Montar directorios del sistema y configurar red
+# FASE 4: Montar directorios del sistema y configurar red
 # ==============================================================================
 
 echo "⚙️ Configurando montajes virtuales y DNS..."
@@ -143,30 +207,44 @@ fi
 echo "nameserver 8.8.8.8" | pkexec tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
 
 # ==============================================================================
-# FASE 4: Configurar Repositorios e Instalar Paquetes de Pulsar OS
+# FASE 5: Configurar Repositorios e Instalar Paquetes de Pulsar OS
 # ==============================================================================
 
 if $USE_LOCAL_DEBS; then
     echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
     
-    LOCAL_DEBS_DIR="$ISO_DIR/../build/packages"
-    if [ ! -d "$LOCAL_DEBS_DIR" ] || [ -z "$(ls "$LOCAL_DEBS_DIR"/*.deb 2>/dev/null)" ]; then
-         # Fallback en caso de estar ejecutando dentro de la estructura de repo ISO
-         LOCAL_DEBS_DIR="$ISO_DIR/build/packages"
-    fi
+    # Buscar paquetes locales en múltiples rutas comunes de desarrollo
+    LOCAL_DEBS_DIR=""
+    POSSIBLE_DIRS=(
+        "$ISO_DIR/../PKG/build/packages" # Estructura actual de repos vecinos
+        "$ISO_DIR/../build/packages"     # Estructura del proyecto monolítico
+        "$ISO_DIR/build/packages"        # Directorio interno del repo ISO
+        "/home/jaime/Documentos/pulsarbase/PKG/build/packages" # Ruta absoluta del host
+    )
     
-    if [ ! -d "$LOCAL_DEBS_DIR" ] || [ -z "$(ls "$LOCAL_DEBS_DIR"/*.deb 2>/dev/null)" ]; then
-        echo "❌ Error: No se encontraron paquetes .deb locales en $LOCAL_DEBS_DIR."
+    for dir in "${POSSIBLE_DIRS[@]}"; do
+        if [ -d "$dir" ] && [ -n "$(ls "$dir"/*.deb 2>/dev/null)" ]; then
+            LOCAL_DEBS_DIR="$dir"
+            break
+        fi
+    done
+    
+    if [ -z "$LOCAL_DEBS_DIR" ]; then
+        echo "❌ Error: No se encontraron paquetes .deb locales en ninguna de las rutas de búsqueda:"
+        for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
         echo "Ejecuta primero el empaquetador en la carpeta PKG/."
         exit 1
     fi
+    
+    echo "📂 Usando paquetes locales desde: $LOCAL_DEBS_DIR"
     
     # Copiar de forma segura debs al chroot temporal
     pkexec mkdir -p "$ROOTFS_TARGET/tmp/packages"
     pkexec cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
     
     # Instalar paquetes locales directamente y resolver dependencias
-    pkexec /usr/sbin/chroot "$ROOTFS_TARGET" /bin/bash -c "
+    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
         apt-get update
         apt-get install -y --fix-broken /tmp/packages/*.deb
         apt-get clean
@@ -178,7 +256,8 @@ else
     echo "--- 🌐 MODO PRODUCCIÓN: Añadiendo repositorio APT de Inled e instalando paquetes ---"
     
     # 1. Configurar clave GPG e inyectarla en el chroot
-    pkexec /usr/sbin/chroot "$ROOTFS_TARGET" /bin/bash -c "
+    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
         apt-get update && apt-get install -y wget gnupg ca-certificates
         wget -qO- https://apt.inled.es/archive.key | gpg --dearmor | tee /usr/share/keyrings/inled-archive-keyring.gpg > /dev/null
     "
@@ -189,7 +268,8 @@ else
         
     # 3. Actualizar e instalar el metapaquete o paquetes específicos
     echo "Instalando paquetes declarativos de Pulsar OS..."
-    pkexec /usr/sbin/chroot "$ROOTFS_TARGET" /bin/bash -c "
+    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
         apt-get update
         apt-get install -y --no-install-recommends \
             pulsaros-branding \
@@ -206,12 +286,11 @@ else
 fi
 
 # ==============================================================================
-# FASE 5: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
+# FASE 6: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
 # ==============================================================================
 
 echo "--- 🔄 Finalizando y actualizando initramfs ---"
-pkexec /usr/sbin/chroot "$ROOTFS_TARGET" /bin/bash -c "
-    # Asegurar que el initramfs esté totalmente actualizado con los módulos
+pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     update-initramfs -u -k all
 "
 
