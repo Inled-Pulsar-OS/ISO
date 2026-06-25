@@ -285,6 +285,8 @@ else
             pulsaros-branding \
             pulsaros-theme \
             pulsaros-gnome \
+            pulsaros-global-menu \
+            pulsaros-spotlight-launcher \
             pulsaros-sddm \
             pulsaros-plymouth \
             pulsaros-grub \
@@ -298,6 +300,44 @@ else
     "
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
 fi
+
+# ==============================================================================
+# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Spotlight)
+# ==============================================================================
+
+# English: Download spotlight-python deb package on the host and copy it to the chroot
+# Español: Descargar el paquete deb de spotlight-python en el host y copiarlo al chroot
+echo "📥 Descargando Spotlight-Python en el host..."
+wget -q -O /tmp/spotlight-python.deb https://github.com/InledGroup/spotlight-gtk/releases/download/v1.0.12/spotlight-python.deb
+pkexec cp /tmp/spotlight-python.deb "$ROOTFS_TARGET/tmp/"
+
+# English: Install flatpak, gnome-software plugin, and spotlight-python, then set icon to view-app-grid
+# Español: Instalar flatpak, el plugin de gnome-software y spotlight-python, luego cambiar el icono a view-app-grid
+echo "⚙️ Configurando Flatpak, GNOME Software y Spotlight-Python dentro del chroot..."
+pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    set -e
+    
+    # Instalar flatpak y el plugin de GNOME Software
+    echo '📥 Instalando Flatpak y plugin de GNOME Software...'
+    apt-get update
+    apt-get install -y flatpak gnome-software-plugin-flatpak
+    
+    # Configurar el repositorio Flathub a nivel de sistema
+    echo '🌐 Configurando repositorio de Flathub...'
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    
+    # Instalar spotlight-python
+    echo '📥 Instalando Spotlight-Python...'
+    apt-get install -y /tmp/spotlight-python.deb
+    rm -f /tmp/spotlight-python.deb
+    
+    # Configurar el icono de spotlight-python a 'view-app-grid'
+    # Configure the icon of spotlight-python to 'view-app-grid'
+    echo '⚙️ Personalizando lanzador de Spotlight...'
+    if [ -f /usr/share/applications/spotlight-python.desktop ]; then
+        sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
+    fi
+"
 
 # ==============================================================================
 # FASE 6: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
