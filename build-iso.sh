@@ -292,6 +292,8 @@ else
             pulsaros-grub \
             pulsaros-calamares \
             pulsaros-essential \
+            pulsaros-welcome \
+            pulsaros-recovery \
             droidtux \
             macboat \
             appinstall \
@@ -305,15 +307,16 @@ fi
 # FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Spotlight)
 # ==============================================================================
 
-# English: Download spotlight-python deb package on the host and copy it to the chroot
-# Español: Descargar el paquete deb de spotlight-python en el host y copiarlo al chroot
-echo "📥 Descargando Spotlight-Python en el host..."
+# English: Download spotlight-python and winboat deb packages on the host and copy them to the chroot
+# Español: Descargar los paquetes deb de spotlight-python y winboat en el host y copiarlos al chroot
+echo "📥 Descargando dependencias externas (Spotlight-Python y Winboat) en el host..."
 wget -q -O /tmp/spotlight-python.deb https://github.com/InledGroup/spotlight-gtk/releases/download/v1.0.12/spotlight-python.deb
-pkexec cp /tmp/spotlight-python.deb "$ROOTFS_TARGET/tmp/"
+wget -q -O /tmp/winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
+pkexec cp /tmp/spotlight-python.deb /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
 
-# English: Install flatpak, gnome-software plugin, and spotlight-python, then set icon to view-app-grid
-# Español: Instalar flatpak, el plugin de gnome-software y spotlight-python, luego cambiar el icono a view-app-grid
-echo "⚙️ Configurando Flatpak, GNOME Software y Spotlight-Python dentro del chroot..."
+# English: Install flatpak, gnome-software plugin, spotlight-python, and winboat
+# Español: Instalar flatpak, el plugin de gnome-software, spotlight-python y winboat
+echo "⚙️ Configurando Flatpak, GNOME Software, Spotlight-Python y Winboat dentro del chroot..."
 pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
     
@@ -330,6 +333,11 @@ pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     echo '📥 Instalando Spotlight-Python...'
     apt-get install -y /tmp/spotlight-python.deb
     rm -f /tmp/spotlight-python.deb
+    
+    # Instalar winboat
+    echo '📥 Instalando Winboat...'
+    apt-get install -y /tmp/winboat.deb
+    rm -f /tmp/winboat.deb
     
     # Configurar el icono de spotlight-python a 'view-app-grid'
     # Configure the icon of spotlight-python to 'view-app-grid'
