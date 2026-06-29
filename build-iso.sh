@@ -485,29 +485,42 @@ if [ -d "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" ]; then
     $SUDO cp -r "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
 fi
 
+# Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
+$SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
+if [ -f "/usr/share/grub/unicode.pf2" ]; then
+    $SUDO cp "/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+elif [ -f "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" ]; then
+    $SUDO cp "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+fi
+
 # 3. Create GRUB bootloader configuration / Crear menú de arranque de GRUB
 echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
 cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
 set default="0"
 set timeout=10
 
-# Load video drivers and graphical terminal / Cargar soporte de video y terminal gráfico
+# Load video and format drivers / Cargar soporte de gráficos y formatos de imágenes
 insmod all_video
 insmod font
 insmod gfxterm
 insmod png
+insmod jpeg
+insmod gfxmenu
 
-# Load theme font and set theme if exists
-if [ -d /boot/grub/themes/Particle-circle-window ]; then
-    loadfont /boot/grub/themes/Particle-circle-window/dejavu_14.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/dejavu_16.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/dejavu_font.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/font.pf2
-    
+# Load unicode font for standard borders
+if loadfont /boot/grub/fonts/unicode.pf2; then
     set gfxmode=auto
+    keep_gfxmode=keep
     terminal_output gfxterm
-    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 fi
+
+# Load theme font and set theme (uses terminus/unifont fonts which are physically in the theme)
+loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 --
