@@ -121,5 +121,4 @@ libgbm1
 mesa-utils
 live-boot
 live-config
-live-config-sddm
 live-config-systemd
