@@ -1,0 +1,125 @@
+linux-image-amd64
+systemd-sysv
+udev
+apt
+iproute2
+netbase
+procps
+isc-dhcp-client
+bash-completion
+sudo
+passwd
+initramfs-tools
+libpam-modules
+util-linux
+dbus
+# GNOME Base
+gnome-shell
+gnome-session
+gnome-session-xsession
+# SDDM Base
+sddm
+qt6-image-formats-plugins
+qml6-module-qtquick-layouts
+qml6-module-qtquick-templates
+qml6-module-qtquick-controls
+qml6-module-qtquick-window
+qml6-module-qt5compat-graphicaleffects
+qml6-module-org-kde-breeze
+qml6-module-org-kde-kirigami
+qml6-module-org-kde-kquickcontrolsaddons
+qml6-module-org-kde-iconthemes
+libqt6svg6
+network-manager
+gnome-terminal
+xwayland
+xserver-xorg-core
+# Componentes críticos de sesión y permisos
+libpam-systemd
+polkitd
+dbus-user-session
+accountsservice
+at-spi2-core
+libpam-runtime
+libnss-systemd
+zstd
+# Dependencias MacTahoe
+sassc
+libglib2.0-dev-bin
+libxml2-utils
+git
+ca-certificates
+# Herramientas de configuración
+dconf-cli
+gnome-tweaks
+gnome-shell-extension-manager
+wget
+curl
+unzip
+imagemagick
+# Navegador y Multimedia
+firefox-esr
+vlc
+totem
+# Flatpak
+flatpak
+gnome-software-plugin-flatpak
+# Extensiones GNOME
+gnome-shell-extensions
+gnome-shell-extension-blur-my-shell
+gnome-shell-extension-dashtodock
+gnome-shell-extension-appindicator
+gnome-shell-extension-gsconnect
+# Dependencias Fildem HUD
+python3-gi
+python3-dbus
+gir1.2-bamf-3
+gir1.2-keybinder-3.0
+gir1.2-gtk-3.0
+gir1.2-webkit2-4.1
+gir1.2-glib-2.0
+bamfdaemon
+libbamf3-dev
+libkeybinder-3.0-dev
+appmenu-gtk3-module
+python3-setuptools
+python3-pip
+python3-xlib
+# Bootloader y Disco
+grub-pc
+grub-efi-amd64-bin
+calamares
+calamares-settings-debian
+# Aplicaciones Estándar
+gnome-calculator
+gnome-calendar
+geary
+xournalpp
+loupe
+gnome-contacts
+gnome-music
+amberol
+endeavour
+gnome-clocks
+gnome-weather
+# Utilidades de Sistema
+gnome-disk-utility
+gnome-system-monitor
+gnome-logs
+locales
+docker.io
+bluez
+bluez-tools
+rfkill
+autokey-gtk
+mpv
+# Aceleración QEMU/VirGL
+libgl1-mesa-dri
+libvirglrenderer1
+libegl-mesa0
+libgbm1
+mesa-utils
+live-boot
+live-config
+live-config-sddm
+live-config-systemd

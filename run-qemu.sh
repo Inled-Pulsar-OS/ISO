@@ -63,11 +63,15 @@ echo "📂 Chroot Target: $ROOTFS"
 echo "🐧 Kernel: $(basename "$KERNEL")"
 echo "📦 Initrd: $(basename "$INITRD")"
 
-# 4. Lanzamiento de QEMU con soporte GPU acelerado (VirGL) y montaje del chroot en vivo
+# 4. Lanzamiento de QEMU con soporte GPU acelerado (VirGL), audio redirigido y montaje del chroot en vivo
+# English: Configure PULSE_SERVER and PULSE_COOKIE to allow the root process (pkexec) to connect to host PulseAudio/PipeWire, bypassing ownership checks on XDG_RUNTIME_DIR.
+# Español: Configurar PULSE_SERVER y PULSE_COOKIE para permitir que el proceso root (pkexec) se conecte a PulseAudio/PipeWire del host, evitando errores de propiedad en XDG_RUNTIME_DIR.
 pkexec env \
     DISPLAY="$DISPLAY" \
     XAUTHORITY="$XAUTHORITY" \
     XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+    PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
+    PULSE_COOKIE="$HOME/.config/pulse/cookie" \
     __NV_PRIME_RENDER_OFFLOAD=1 \
     __GLX_VENDOR_LIBRARY_NAME=nvidia \
     "$QEMU_BIN" \
@@ -81,4 +85,7 @@ pkexec env \
     -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
     -device virtio-vga-gl \
     -display sdl,gl=on \
+    -audiodev sdl,id=snd0 \
+    -device intel-hda \
+    -device hda-duplex,audiodev=snd0 \
     -serial mon:stdio

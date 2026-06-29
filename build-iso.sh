@@ -1,40 +1,64 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Clean Chroot Builder (ISO Infrastructure)
+# Pulsar OS - Clean Chroot and Live ISO Builder
 # ==============================================================================
-# Este script construye el sistema de archivos base (chroot) de Pulsar OS
-# de forma totalmente limpia, evitando la acumulación de archivos residuales.
+# This script builds the clean chroot base file system for Pulsar OS,
+# installs packages from the local builds or the APT repository, and packages
+# everything into a bootable hybrid Live CD ISO image.
 #
-# Funcionamiento:
-#   1. Comprueba e instala dependencias en el host con pkexec bajo confirmación.
-#   2. Realiza un bootstrap virgen de Debian si no existe en la caché o si quedó corrupto.
-#   3. Clona el Debian base virgen a un directorio de destino temporal (target).
-#   4. Instala los paquetes locales .deb compilados o los descarga del repo APT.
-#   5. Aplica configuraciones finales y deja el chroot listo para QEMU o la ISO.
+# Este script construye el sistema de archivos base (chroot) de Pulsar OS,
+# instala paquetes locales o desde el repositorio APT, y empaqueta todo en
+# una imagen ISO booteable híbrida de Live CD.
 #
-# Uso:
+# Usage / Uso:
 #   ./build-iso.sh [--clean-base] [--local]
 #
-# Opciones:
-#   --clean-base    Borra la caché base de Debian y la descarga de nuevo.
-#   --local         Usa los paquetes .deb locales de build/packages/ en vez del repo.
+# Options / Opciones:
+#   --clean-base    Delete the base Debian cache and download it from scratch.
+#                   Borra la caché base de Debian y la descarga de nuevo.
+#   --local         Use local .deb packages from build/packages/ instead of the repo.
+#                   Usa los paquetes .deb locales de build/packages/ en vez del repo.
 # ==============================================================================
 
 set -e
 
 # ==============================================================================
-# FASE 0: Comprobación de Dependencias del Host
+# Helper: Determine Root Privilege Command
+# Ayudante: Determinar el comando para privilegios root
+# ==============================================================================
+# We prefer 'sudo' in non-interactive environments (CI, GitHub Actions) or if
+# DISPLAY is not set (pure terminal). If graphical display is available, we
+# fallback to 'pkexec' for a nice graphical policykit dialog.
+#
+# Preferimos 'sudo' en entornos no interactivos (CI, GitHub Actions) o si no hay
+# un entorno gráfico activo (DISPLAY vacío). Si hay entorno gráfico, usamos
+# 'pkexec' para un diálogo visual amigable de Polkit.
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+elif [ "$GITHUB_ACTIONS" = "true" ] || [ -z "$DISPLAY" ]; then
+    SUDO="sudo"
+else
+    if command -v pkexec >/dev/null 2>&1; then
+        SUDO="pkexec"
+    else
+        SUDO="sudo"
+    fi
+fi
+
+# ==============================================================================
+# PHASE 0: Check Host Dependencies / FASE 0: Comprobación de Dependencias del Host
 # ==============================================================================
 
 MISSING_PACKAGES=()
 
-# Comprobar comandos estándar
-for cmd in mmdebstrap fakeroot rsync jq curl unzip wget; do
+# Check standard commands / Comprobar comandos estándar
+for cmd in mmdebstrap fakeroot rsync jq curl unzip wget mksquashfs xorriso grub-mkrescue; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         MISSING_PACKAGES+=("$cmd")
     fi
 done
 
+# Command to package name mapping for special cases
 # Casos especiales de mapeo comando -> paquete
 if ! command -v convert >/dev/null 2>&1; then
     MISSING_PACKAGES+=("imagemagick")
@@ -44,19 +68,46 @@ if ! command -v fuser >/dev/null 2>&1; then
     MISSING_PACKAGES+=("psmisc")
 fi
 
+# We also need the BIOS and UEFI build files for grub-mkrescue
+# También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
+if ! dpkg -l | grep -q "grub-pc-bin"; then
+    MISSING_PACKAGES+=("grub-pc-bin")
+fi
+
+if ! dpkg -l | grep -q "grub-efi-amd64-bin"; then
+    MISSING_PACKAGES+=("grub-efi-amd64-bin")
+fi
+
+if ! dpkg -l | grep -q "mtools"; then
+    MISSING_PACKAGES+=("mtools")
+fi
+
+# IMPORTANT: Check Debian archive keyring on non-Debian host distros (like Ubuntu/Mint)
 # IMPORTANTE: Comprobar el llavero de Debian en hosts Ubuntu/Debian no oficiales
 if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
     MISSING_PACKAGES+=("debian-archive-keyring")
 fi
 
-# Instalar dependencias si faltan
+# Install dependencies if they are missing / Instalar dependencias si faltan
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo "⚠️ Se ha detectado que faltan dependencias esenciales en el host: ${MISSING_PACKAGES[*]}"
     echo "Estas herramientas son requeridas para la compilación de Pulsar OS."
-    read -p "¿Deseas instalar las dependencias faltantes ahora usando pkexec apt install? (s/n): " confirm
-    if [[ "$confirm" =~ ^[sS]$ ]] || [[ "$confirm" =~ ^[yY]$ ]] || [ -z "$confirm" ]; then
+    
+    # Auto-approve if in non-interactive environment (CI, pipeline, no TTY stdin)
+    # Aprobación automática si estamos en un entorno no interactivo (CI, pipeline, sin TTY stdin)
+    auto_install=false
+    if [ "$GITHUB_ACTIONS" = "true" ] || [ ! -t 0 ]; then
+        auto_install=true
+    else
+        read -p "¿Deseas instalar las dependencias faltantes ahora usando apt install? (s/n): " confirm
+        if [[ "$confirm" =~ ^[sS]$ ]] || [[ "$confirm" =~ ^[yY]$ ]] || [ -z "$confirm" ]; then
+            auto_install=true
+        fi
+    fi
+    
+    if [ "$auto_install" = true ]; then
         echo "📥 Iniciando instalación de dependencias..."
-        pkexec apt-get update && pkexec apt-get install -y "${MISSING_PACKAGES[@]}"
+        $SUDO apt-get update && $SUDO apt-get install -y "${MISSING_PACKAGES[@]}"
         echo "✅ Dependencias instaladas con éxito."
     else
         echo "❌ Error: No se pueden cumplir los requisitos del host. Saliendo..."
@@ -65,10 +116,10 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
 fi
 
 # ==============================================================================
-# FASE 1: Configuración de Entorno e Inicialización
+# PHASE 1: Environment Settings and Initialization / FASE 1: Configuración de Entorno
 # ==============================================================================
 
-# Importar configuración global si existe
+# Import global configs if present / Importar configuración global si existe
 if [ -f "../configs/env.sh" ]; then
     source ../configs/env.sh
 elif [ -f "configs/env.sh" ]; then
@@ -79,19 +130,20 @@ else
     MIRROR="http://deb.debian.org/debian"
 fi
 
-# Rutas del proyecto
+# Paths in the project / Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 ROOTFS_BASE="$BUILD_DIR/rootfs-base"
 ROOTFS_TARGET="$BUILD_DIR/rootfs-target"
-PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
+PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
 
-# Corregir rutas si el script se ejecuta en el repo ISO independiente
+# Adjust paths / Fallback to root repo configuration if local config is missing
+# Corregir rutas / Usar configuración del repo raíz como fallback si no existe el de la ISO
 if [ ! -f "$PACKAGE_LIST_FILE" ]; then
-    PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
+    PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
 fi
 
-# Parámetros
+# Arguments / Parámetros
 CLEAN_BASE=false
 USE_LOCAL_DEBS=false
 
@@ -108,46 +160,59 @@ for arg in "$@"; do
     esac
 done
 
-# Detección dinámica de la ruta de chroot en el host (resuelve diferencias entre /usr/sbin/chroot y /usr/bin/chroot)
+# Dynamic detection of chroot binary path
+# Detección dinámica de la ruta de chroot en el host
 CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
 
+# Preventative cleanup function to ensure filesystems are unmounted on interruption
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
     echo "🧹 Finalizando y liberando recursos montados en el chroot..."
-    pkexec umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
-    pkexec umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
-    pkexec umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
-    pkexec umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
+    $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
+    $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
+    $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
+    $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
     
+    # Restore original DNS config in target if backup exists
     # Restaurar DNS original en el target si quedó copia
     if [ -f "$ROOTFS_TARGET/etc/resolv.conf.bak" ]; then
-        pkexec mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
+        $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT INT TERM
 
 # ==============================================================================
-# FASE 2: Construcción y mantenimiento del Debian Base Virgen (Caché)
+# PHASE 2: Build and Maintain Base Debian Cache / FASE 2: Caché Debian Base Virgen
 # ==============================================================================
 
-# Robustez: Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
+# Auto-cleanup if previous bootstrap was incomplete or corrupted
+# Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
 if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BASE/proc" ] || [ ! -d "$ROOTFS_BASE/boot" ]; }; then
-    echo "⚠️ Caché del Debian Base incompleta o corrupta detectada (posible interrupción previa). Limpiando para regenerar..."
+    echo "⚠️ Caché del Debian Base incompleta o corrupta detectada. Limpiando para regenerar..."
     cleanup
-    pkexec rm -rf "$ROOTFS_BASE"
+    $SUDO rm -rf "$ROOTFS_BASE"
 fi
 
-if $CLEAN_BASE; then
+# Detect if base.list has changed since the cache was created
+# Detectar si base.list ha cambiado desde que se creó la caché
+base_list_changed=false
+if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
+    if [ ! -f "$ROOTFS_BASE/etc/pulsaros-base.list" ] || ! diff -q "$PACKAGE_LIST_FILE" "$ROOTFS_BASE/etc/pulsaros-base.list" >/dev/null 2>&1; then
+        echo "🔄 Se ha detectado un cambio en base.list con respecto al Debian Base en caché. Regenerando base..."
+        base_list_changed=true
+    fi
+fi
+
+if $CLEAN_BASE || [ "$base_list_changed" = true ]; then
     echo "🚨 Limpieza total de la caché Debian base solicitada..."
     cleanup
-    pkexec rm -rf "$ROOTFS_BASE"
+    $SUDO rm -rf "$ROOTFS_BASE"
 fi
 
 if [ ! -d "$ROOTFS_BASE/etc" ]; then
     echo "--- 📥 Creando Debian Base Limpio (mmdebstrap) ---"
     mkdir -p "$BUILD_DIR"
     
-    # Limpiar el listado de paquetes base para mmdebstrap
     if [ ! -f "$PACKAGE_LIST_FILE" ]; then
         echo "❌ Error: No se encontró el archivo de paquetes base en: $PACKAGE_LIST_FILE"
         exit 1
@@ -155,6 +220,7 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
     
     PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
     
+    # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
     # Agregar el llavero de Debian si existe en el host (requerido en Ubuntu/Mint)
     KEYRING_PARAM=""
     if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
@@ -162,8 +228,9 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
     fi
     
+    # Execute Debian Bootstrap
     # Ejecutar bootstrap de Debian Virgen
-    pkexec /usr/bin/mmdebstrap \
+    $SUDO /usr/bin/mmdebstrap \
         --architecture="$ARCH" \
         --variant=apt \
         $KEYRING_PARAM \
@@ -172,66 +239,74 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         "$ROOTFS_BASE" \
         "$MIRROR"
         
+    # Save a copy of base.list in the base cache for future diffs
+    # Guardar una copia de base.list en la caché base para futuras comparaciones
+    $SUDO cp "$PACKAGE_LIST_FILE" "$ROOTFS_BASE/etc/pulsaros-base.list"
+    
     echo "✅ Bootstrap de Debian base completado en: $ROOTFS_BASE"
 else
     echo "✨ Debian Base Virgen detectado en caché. Saltando bootstrap."
 fi
 
 # ==============================================================================
-# FASE 3: Clonar base limpia para aplicar cambios
+# PHASE 3: Clone clean base for working target / FASE 3: Clonar base limpia
 # ==============================================================================
 
 echo "--- 🔄 Clonando Debian Virgen en el directorio de trabajo (target) ---"
-# Asegurar desmontajes previos
 cleanup
-pkexec rm -rf "$ROOTFS_TARGET"
+$SUDO rm -rf "$ROOTFS_TARGET"
 mkdir -p "$ROOTFS_TARGET"
 
-# Sincronización súper rápida manteniendo atributos especiales
-pkexec rsync -aHAXx --delete "$ROOTFS_BASE/" "$ROOTFS_TARGET/"
+# Sync keeping special attributes / Sincronización manteniendo atributos especiales
+$SUDO rsync -aHAXx --delete "$ROOTFS_BASE/" "$ROOTFS_TARGET/"
 
 # ==============================================================================
-# FASE 4: Montar directorios del sistema y configurar red
+# PHASE 4: Mount virtual filesystems and network / FASE 4: Montar directorios y red
 # ==============================================================================
 
 echo "⚙️ Configurando montajes virtuales y DNS..."
-pkexec mount -t proc proc "$ROOTFS_TARGET/proc"
-pkexec mount -t sysfs sys "$ROOTFS_TARGET/sys"
-pkexec mount --bind /dev "$ROOTFS_TARGET/dev"
-pkexec mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
+$SUDO mount -t proc proc "$ROOTFS_TARGET/proc"
+$SUDO mount -t sysfs sys "$ROOTFS_TARGET/sys"
+$SUDO mount --bind /dev "$ROOTFS_TARGET/dev"
+$SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
 
-# Asegurar DNS funcional en el chroot
+# Ensure working DNS in chroot / Asegurar DNS funcional en el chroot
 if [ -f "$ROOTFS_TARGET/etc/resolv.conf" ]; then
-    pkexec cp "$ROOTFS_TARGET/etc/resolv.conf" "$ROOTFS_TARGET/etc/resolv.conf.bak"
+    $SUDO cp "$ROOTFS_TARGET/etc/resolv.conf" "$ROOTFS_TARGET/etc/resolv.conf.bak"
 fi
-echo "nameserver 8.8.8.8" | pkexec tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+echo "nameserver 8.8.8.8" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+
+# English: Create Plymouth theme directory and symlink in advance to satisfy initramfs hooks
+# Español: Crear el directorio y el enlace simbólico del tema Plymouth con antelación para satisfacer los hooks de initramfs
+theme_dir="$ROOTFS_TARGET/usr/share/plymouth/themes/pulsar-plymouth"
+$SUDO mkdir -p "$theme_dir"
+$SUDO ln -sf . "$theme_dir/images"
 
 # ==============================================================================
-# FASE 5: Configurar Repositorios e Instalar Paquetes de Pulsar OS
+# PHASE 5: Configure repositories and install Pulsar OS / FASE 5: Repositorios
 # ==============================================================================
 
 echo "--- 🌐 Configurando repositorios APT (Debian Contrib/Backports e Inled) ---"
-# English: Enable contrib, non-free, non-free-firmware, and backports in target chroot sources list
-# Español: Habilitar contrib, non-free, non-free-firmware y backports en la lista de fuentes del chroot
-pkexec sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
+$SUDO sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
 if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
-    echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | pkexec tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
+    echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
 fi
 
-# English: Configure Inled APT GPG key and sources list in the chroot
-# Español: Configurar la clave GPG y la lista de fuentes de Inled APT en el chroot
-pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+# Configure Inled APT GPG key and sources list in the chroot
+# Configurar la clave GPG y la lista de fuentes de Inled APT en el chroot
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
     apt-get update && apt-get install -y wget gnupg ca-certificates
     wget -qO- https://apt.inled.es/archive.key | gpg --dearmor | tee /usr/share/keyrings/inled-archive-keyring.gpg > /dev/null
 "
 
 echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
-    pkexec tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
+    $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
 
 if $USE_LOCAL_DEBS; then
     echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
     
+    # Search in multiple potential packages build locations
     # Buscar paquetes locales en múltiples rutas comunes de desarrollo
     LOCAL_DEBS_DIR=""
     POSSIBLE_DIRS=(
@@ -257,27 +332,29 @@ if $USE_LOCAL_DEBS; then
     
     echo "📂 Usando paquetes locales desde: $LOCAL_DEBS_DIR"
     
+    # Copy debs securely to the temporary staging chroot
     # Copiar de forma segura debs al chroot temporal
-    pkexec mkdir -p "$ROOTFS_TARGET/tmp/packages"
-    pkexec cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
+    $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
+    $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
     
-    # Instalar paquetes locales directamente y resolver dependencias
-    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    # Install local packages and resolve dependencies, pulling non-local from APT
+    # Instalar paquetes locales directamente y resolver dependencias, bajando externos de APT
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         apt-get update
         apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari
+        apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
         apt-get clean
     "
-    # Limpiar instaladores temporales
-    pkexec rm -rf "$ROOTFS_TARGET/tmp/packages"
-    echo "✅ Paquetes locales de Pulsar OS y repositorios externos instalados correctamente."
+    # Clean up temporary installers / Limpiar instaladores temporales
+    $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
+    echo "✅ Paquetes locales e instalados de forma cruzada con éxito."
 else
     echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
     
-    # 3. Actualizar e instalar el metapaquete o paquetes específicos
-    echo "Instalando paquetes de Pulsar OS..."
-    pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    # Install metapackages and specific OS components from the Inled APT repo
+    # Instalar paquetes de Pulsar OS desde el repositorio de APT
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         apt-get update
         apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
@@ -294,6 +371,8 @@ else
             pulsaros-essential \
             pulsaros-welcome \
             pulsaros-recovery \
+            pulsaros-bootsound \
+            spotlight-python \
             droidtux \
             macboat \
             appinstall \
@@ -304,43 +383,35 @@ else
 fi
 
 # ==============================================================================
-# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Spotlight)
+# PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
+# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
 # ==============================================================================
 
-# English: Download spotlight-python and winboat deb packages on the host and copy them to the chroot
-# Español: Descargar los paquetes deb de spotlight-python y winboat en el host y copiarlos al chroot
-echo "📥 Descargando dependencias externas (Spotlight-Python y Winboat) en el host..."
-wget -q -O /tmp/spotlight-python.deb https://github.com/InledGroup/spotlight-gtk/releases/download/v1.0.12/spotlight-python.deb
+# Download external winboat dependencies on host and copy to chroot
+# Descargar dependencias externas de winboat en el host y copiarlas al chroot
+echo "📥 Descargando dependencias externas (Winboat) en el host..."
 wget -q -O /tmp/winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-pkexec cp /tmp/spotlight-python.deb /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
+$SUDO cp /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
 
-# English: Install flatpak, gnome-software plugin, spotlight-python, and winboat
-# Español: Instalar flatpak, el plugin de gnome-software, spotlight-python y winboat
-echo "⚙️ Configurando Flatpak, GNOME Software, Spotlight-Python y Winboat dentro del chroot..."
-pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+echo "⚙️ Configurando Flatpak, GNOME Software y Winboat dentro del chroot..."
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
     
-    # Instalar flatpak y el plugin de GNOME Software
+    # Install flatpak and plugin / Instalar flatpak y el plugin de GNOME Software
     echo '📥 Instalando Flatpak y plugin de GNOME Software...'
     apt-get update
     apt-get install -y flatpak gnome-software-plugin-flatpak
     
-    # Configurar el repositorio Flathub a nivel de sistema
+    # Configure Flathub at system level / Configurar el repositorio Flathub a nivel de sistema
     echo '🌐 Configurando repositorio de Flathub...'
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     
-    # Instalar spotlight-python
-    echo '📥 Instalando Spotlight-Python...'
-    apt-get install -y /tmp/spotlight-python.deb
-    rm -f /tmp/spotlight-python.deb
-    
-    # Instalar winboat
+    # Install winboat / Instalar winboat
     echo '📥 Instalando Winboat...'
     apt-get install -y /tmp/winboat.deb
     rm -f /tmp/winboat.deb
     
-    # Configurar el icono de spotlight-python a 'view-app-grid'
-    # Configure the icon of spotlight-python to 'view-app-grid'
+    # Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
     echo '⚙️ Personalizando lanzador de Spotlight...'
     if [ -f /usr/share/applications/spotlight-python.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
@@ -348,13 +419,108 @@ pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 "
 
 # ==============================================================================
+# PHASE 6: Final Tasks (Initramfs regeneration and cleanup)
 # FASE 6: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
 # ==============================================================================
 
 echo "--- 🔄 Finalizando y actualizando initramfs ---"
-pkexec "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     update-initramfs -u -k all
 "
 
-echo "✨ Proceso finalizado con éxito total. El rootfs limpio de Pulsar OS está en: $ROOTFS_TARGET"
-echo "Para probar el resultado en QEMU, ejecuta: ./run-qemu.sh"
+echo "✨ Chroot rootfs listo y estructurado correctamente en: $ROOTFS_TARGET"
+
+# ==============================================================================
+# PHASE 7: Packaging and Live ISO Generation
+# FASE 7: Creación de la Imagen Live ISO
+# ==============================================================================
+echo "--- 💿 Creando la Imagen Live ISO de Pulsar OS / Creating Pulsar OS Live ISO ---"
+
+ISO_STAGING="$BUILD_DIR/iso-staging"
+$SUDO rm -rf "$ISO_STAGING"
+mkdir -p "$ISO_STAGING/live"
+mkdir -p "$ISO_STAGING/boot/grub"
+
+# 0. Unmount virtual filesystems prior to packaging / Desmontar sistemas de archivos virtuales antes de empaquetar
+echo "🧹 Desmontando sistemas de archivos virtuales en el target... / Unmounting virtual filesystems in target..."
+$SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
+
+# 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
+echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... / Compressing rootfs into SquashFS..."
+# Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
+# Excluimos directorios dinámicos, temporales y sistemas de archivos virtuales para ahorrar espacio y evitar errores
+$SUDO mksquashfs "$ROOTFS_TARGET" "$ISO_STAGING/live/filesystem.squashfs" \
+    -noappend \
+    -comp xz \
+    -e boot \
+    -e proc/* \
+    -e sys/* \
+    -e dev/* \
+    -e run/* \
+    -e tmp/* \
+    -e var/tmp/* \
+    -e var/log/* \
+    -e root/.bash_history
+
+# 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
+echo "🐧 Copiando Kernel e Initrd... / Copying Kernel and Initrd..."
+KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initrd.img-* 2>/dev/null | head -n 1)
+
+if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
+    echo "❌ Error: No se encontró kernel o initrd en el chroot target. / Error: Kernel or initrd not found in target chroot."
+    exit 1
+fi
+
+$SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
+$SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
+
+# 2.5 Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
+if [ -d "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" ]; then
+    echo "🎨 Copiando tema de GRUB de Pulsar OS a la ISO staging..."
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
+    $SUDO cp -r "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+fi
+
+# 3. Create GRUB bootloader configuration / Crear menú de arranque de GRUB
+echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
+cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
+set default="0"
+set timeout=10
+
+# Load video drivers and graphical terminal / Cargar soporte de video y terminal gráfico
+insmod all_video
+insmod font
+insmod gfxterm
+insmod png
+
+# Load theme font and set theme if exists
+if [ -d /boot/grub/themes/Particle-circle-window ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/dejavu_14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/dejavu_16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/dejavu_font.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/font.pf2
+    
+    set gfxmode=auto
+    terminal_output gfxterm
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
+
+menuentry "Pulsar OS Live (RAM)" {
+    linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+EOF
+
+# 4. Generate the hybrid ISO file using grub-mkrescue / Generar el archivo ISO usando grub-mkrescue
+ISO_OUTPUT="$BUILD_DIR/pulsaros.iso"
+echo "💿 Generando archivo ISO en / Generating ISO file at: $ISO_OUTPUT..."
+$SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
+
+echo "=============================================================================="
+echo "🎉 ¡ISO de Pulsar OS generada con éxito! / Pulsar OS ISO generated successfully!"
+echo "📍 Ubicación / Location: $ISO_OUTPUT"
+echo "=============================================================================="

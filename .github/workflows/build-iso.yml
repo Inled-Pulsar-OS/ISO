@@ -1,0 +1,58 @@
+name: Build and Release ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag name for the release / Nombre del tag de la release'
+        required: true
+        default: 'latest'
+      release_title:
+        description: 'Title for the release / Título de la release'
+        required: true
+        default: 'Pulsar OS Tahoe Latest'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository / Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies on host / Instalar dependencias en el host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mmdebstrap \
+            rsync \
+            squashfs-tools \
+            grub-efi-amd64-bin \
+            grub-pc-bin \
+            xorriso \
+            mtools \
+            binutils
+
+      - name: Build Pulsar OS ISO / Compilar la ISO de Pulsar OS
+        run: |
+          chmod +x build-iso.sh
+          # Run the build script in production mode (will pull packages from the Inled APT repo)
+          # Ejecutar el script en modo de producción (descargará los paquetes del repo APT de Inled)
+          ./build-iso.sh
+
+      - name: Create Release and Upload ISO / Crear Release y subir archivo ISO
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: ${{ github.event.inputs.release_title }}
+          body: |
+            Automatic build of Pulsar OS Live ISO.
+            
+            Compilación automática de la imagen Live ISO de Pulsar OS.
+          files: build/pulsaros.iso
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
