@@ -10,21 +10,35 @@
 set -e
 
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target")"
 
-if [ ! -d "$ROOTFS/etc" ]; then
-    echo "❌ Error: No existe el rootfs en: $ROOTFS"
-    echo "Ejecuta primero: ./build-iso.sh"
-    exit 1
-fi
+# Parsear argumentos / Parse arguments
+USE_ISO=false
+for arg in "$@"; do
+    case $arg in
+        --iso)
+            USE_ISO=true
+            shift
+            ;;
+    esac
+done
 
-# 1. Buscar Kernel e Initrd de forma dinámica dentro de /boot/
-KERNEL=$(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null | head -n 1)
-INITRD=$(ls "$ROOTFS"/boot/initrd.img-* 2>/dev/null | head -n 1)
+if ! $USE_ISO; then
+    ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target")"
 
-if [ -z "$KERNEL" ] || [ -z "$INITRD" ]; then
-    echo "❌ Error: No se encontró kernel o initrd en: $ROOTFS/boot/"
-    exit 1
+    if [ ! -d "$ROOTFS/etc" ]; then
+        echo "❌ Error: No existe el rootfs en: $ROOTFS"
+        echo "Ejecuta primero: ./build-iso.sh"
+        exit 1
+    fi
+
+    # 1. Buscar Kernel e Initrd de forma dinámica dentro de /boot/
+    KERNEL=$(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+    INITRD=$(ls "$ROOTFS"/boot/initrd.img-* 2>/dev/null | head -n 1)
+
+    if [ -z "$KERNEL" ] || [ -z "$INITRD" ]; then
+        echo "❌ Error: No se encontró kernel o initrd en: $ROOTFS/boot/"
+        exit 1
+    fi
 fi
 
 # 2. Limpieza preventiva de puertos y procesos de QEMU anteriores
@@ -58,34 +72,68 @@ case "$HOST_ARCH" in
         ;;
 esac
 
-echo "🖥️  Iniciando máquina virtual QEMU ($QEMU_BIN)..."
-echo "📂 Chroot Target: $ROOTFS"
-echo "🐧 Kernel: $(basename "$KERNEL")"
-echo "📦 Initrd: $(basename "$INITRD")"
+if $USE_ISO; then
+    ISO_PATH="$ISO_DIR/build/pulsaros.iso"
+    if [ ! -f "$ISO_PATH" ]; then
+        echo "❌ Error: No se encontró la imagen ISO en: $ISO_PATH"
+        echo "Ejecuta primero: ./build-iso.sh"
+        exit 1
+    fi
 
-# 4. Lanzamiento de QEMU con soporte GPU acelerado (VirGL), audio redirigido y montaje del chroot en vivo
-# English: Configure PULSE_SERVER and PULSE_COOKIE to allow the root process (pkexec) to connect to host PulseAudio/PipeWire, bypassing ownership checks on XDG_RUNTIME_DIR.
-# Español: Configurar PULSE_SERVER y PULSE_COOKIE para permitir que el proceso root (pkexec) se conecte a PulseAudio/PipeWire del host, evitando errores de propiedad en XDG_RUNTIME_DIR.
-pkexec env \
-    DISPLAY="$DISPLAY" \
-    XAUTHORITY="$XAUTHORITY" \
-    XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-    PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
-    PULSE_COOKIE="$HOME/.config/pulse/cookie" \
-    __NV_PRIME_RENDER_OFFLOAD=1 \
-    __GLX_VENDOR_LIBRARY_NAME=nvidia \
-    "$QEMU_BIN" \
-    -m 4G \
-    -smp 4 \
-    $ACCEL \
-    -kernel "$KERNEL" \
-    -initrd "$INITRD" \
-    -append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,version=9p2000.L,msize=262144 console=$CONSOLE quiet splash plymouth.ignore-serial-consoles fbcon=nodefer loglevel=3" \
-    -fsdev local,id=rootfs,path="$ROOTFS",security_model=passthrough \
-    -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
-    -device virtio-vga-gl \
-    -display sdl,gl=on \
-    -audiodev sdl,id=snd0 \
-    -device intel-hda \
-    -device hda-duplex,audiodev=snd0 \
-    -serial mon:stdio
+    echo "🖥️  Iniciando máquina virtual QEMU ($QEMU_BIN) cargando imagen ISO..."
+    echo "💿 ISO: $ISO_PATH"
+
+    # Lanzamiento de QEMU con la ISO como CD-ROM
+    pkexec env \
+        DISPLAY="$DISPLAY" \
+        XAUTHORITY="$XAUTHORITY" \
+        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
+        PULSE_COOKIE="$HOME/.config/pulse/cookie" \
+        __NV_PRIME_RENDER_OFFLOAD=1 \
+        __GLX_VENDOR_LIBRARY_NAME=nvidia \
+        "$QEMU_BIN" \
+        -m 4G \
+        -smp 4 \
+        $ACCEL \
+        -cdrom "$ISO_PATH" \
+        -device virtio-vga-gl \
+        -display sdl,gl=on \
+        -audiodev sdl,id=snd0 \
+        -device intel-hda \
+        -device hda-duplex,audiodev=snd0 \
+        -boot d \
+        -serial mon:stdio
+else
+    echo "🖥️  Iniciando máquina virtual QEMU ($QEMU_BIN)..."
+    echo "📂 Chroot Target: $ROOTFS"
+    echo "🐧 Kernel: $(basename "$KERNEL")"
+    echo "📦 Initrd: $(basename "$INITRD")"
+
+    # 4. Lanzamiento de QEMU con soporte GPU acelerado (VirGL), audio redirigido y montaje del chroot en vivo
+    # English: Configure PULSE_SERVER and PULSE_COOKIE to allow the root process (pkexec) to connect to host PulseAudio/PipeWire, bypassing ownership checks on XDG_RUNTIME_DIR.
+    # Español: Configurar PULSE_SERVER y PULSE_COOKIE para permitir que el proceso root (pkexec) se conecte a PulseAudio/PipeWire del host, evitando errores de propiedad en XDG_RUNTIME_DIR.
+    pkexec env \
+        DISPLAY="$DISPLAY" \
+        XAUTHORITY="$XAUTHORITY" \
+        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
+        PULSE_COOKIE="$HOME/.config/pulse/cookie" \
+        __NV_PRIME_RENDER_OFFLOAD=1 \
+        __GLX_VENDOR_LIBRARY_NAME=nvidia \
+        "$QEMU_BIN" \
+        -m 4G \
+        -smp 4 \
+        $ACCEL \
+        -kernel "$KERNEL" \
+        -initrd "$INITRD" \
+        -append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,version=9p2000.L,msize=262144 console=$CONSOLE quiet splash plymouth.ignore-serial-consoles fbcon=nodefer loglevel=3" \
+        -fsdev local,id=rootfs,path="$ROOTFS",security_model=passthrough \
+        -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
+        -device virtio-vga-gl \
+        -display sdl,gl=on \
+        -audiodev sdl,id=snd0 \
+        -device intel-hda \
+        -device hda-duplex,audiodev=snd0 \
+        -serial mon:stdio
+fi

@@ -103,6 +103,10 @@ endeavour
 gnome-clocks
 gnome-weather
 # Utilidades de Sistema
+e2fsprogs
+dosfstools
+xfsprogs
+ntfs-3g
 gnome-disk-utility
 gnome-system-monitor
 gnome-logs
@@ -120,5 +124,4 @@ libegl-mesa0
 libgbm1
 mesa-utils
 live-boot
-live-config
-live-config-systemd
+squashfs-tools

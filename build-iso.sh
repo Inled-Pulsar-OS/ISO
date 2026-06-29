@@ -306,6 +306,20 @@ echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.
 if $USE_LOCAL_DEBS; then
     echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
     
+    # 1. Auto-compile local packages from the neighboring PKG repository
+    # 1. Compilar automáticamente los paquetes locales desde el repositorio vecino PKG
+    pkg_dir_source="$ISO_DIR/../PKG"
+    if [ ! -d "$pkg_dir_source" ]; then
+        pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
+    fi
+    
+    if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
+        echo "🔨 Compilando todos los paquetes locales de forma fresca..."
+        (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
+    else
+        echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
+    fi
+    
     # Search in multiple potential packages build locations
     # Buscar paquetes locales en múltiples rutas comunes de desarrollo
     LOCAL_DEBS_DIR=""
@@ -344,6 +358,9 @@ if $USE_LOCAL_DEBS; then
         apt-get update
         apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
         apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
+        # Purge live-config to avoid conflicts with our custom autologin and users setup
+        # Purgar live-config para evitar conflictos con nuestra configuración de autologin y usuarios
+        apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
     # Clean up temporary installers / Limpiar instaladores temporales
@@ -372,11 +389,14 @@ else
             pulsaros-welcome \
             pulsaros-recovery \
             pulsaros-bootsound \
-            spotlight-python \
             droidtux \
             macboat \
             appinstall \
-            seafari
+            seafari \
+            spotlight-python
+        # Purge live-config to avoid conflicts with our custom autologin and users setup
+        # Purgar live-config para evitar conflictos con nuestra configuración de autologin y usuarios
+        apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
@@ -417,6 +437,17 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
     fi
 "
+
+# English: Configure static autologin for SDDM live user inside the rootfs
+# Español: Configurar autologin estático para el usuario live de SDDM en el rootfs
+echo "⚙️ Configurando autologin estático para la sesión en vivo..."
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/sddm.conf.d"
+cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null
+[Autologin]
+User=live
+Session=gnome-xorg
+EOF
+$SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 
 # ==============================================================================
 # PHASE 6: Final Tasks (Initramfs regeneration and cleanup)
