@@ -301,38 +301,7 @@ $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/
 echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
     $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
 
-# Create temporary network and gpg mocks to bypass DroidTux's keyring setup (preventing 403/interactive prompts)
-# Crear mocks temporales de red y gpg para interceptar la auto-configuración del repo de DroidTux y evitar 403 y prompts interactivos
-echo "⚙️ Configurando mocks de red temporales para DroidTux..."
-$SUDO mkdir -p "$ROOTFS_TARGET/usr/local/bin"
-$SUDO tee "$ROOTFS_TARGET/usr/local/bin/curl" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
-    echo "dummy-key"
-    exit 0
-fi
-exec /usr/bin/curl "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/local/bin/curl"
 
-$SUDO tee "$ROOTFS_TARGET/usr/local/bin/wget" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
-    echo "dummy-key"
-    exit 0
-fi
-exec /usr/bin/wget "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/local/bin/wget"
-
-$SUDO tee "$ROOTFS_TARGET/usr/local/bin/gpg" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"--dearmor"* ]] && [[ "$*" == *"/usr/share/keyrings/inled-archive-keyring.gpg"* ]]; then
-    exit 0
-fi
-exec /usr/bin/gpg --yes --batch "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/local/bin/gpg"
 
 if $USE_LOCAL_DEBS; then
     echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
@@ -431,12 +400,7 @@ else
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
 fi
 
-# Clean up temporary DroidTux mocks
-# Limpiar los mocks temporales de DroidTux
-echo "🧹 Limpiando mocks temporales de DroidTux..."
-$SUDO rm -f "$ROOTFS_TARGET/usr/local/bin/curl"
-$SUDO rm -f "$ROOTFS_TARGET/usr/local/bin/wget"
-$SUDO rm -f "$ROOTFS_TARGET/usr/local/bin/gpg"
+
 
 # ==============================================================================
 # PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
