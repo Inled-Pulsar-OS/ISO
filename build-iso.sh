@@ -358,7 +358,7 @@ if $USE_LOCAL_DEBS; then
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        yes | apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
+        yes | apt-get install -y --fix-broken /tmp/packages/*.deb macboat appinstall seafari spotlight-python
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
@@ -389,7 +389,6 @@ else
             pulsaros-welcome \
             pulsaros-recovery \
             pulsaros-bootsound \
-            droidtux \
             macboat \
             appinstall \
             seafari \
@@ -400,35 +399,40 @@ else
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
 fi
 
-
-
 # ==============================================================================
-# PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
-# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
+# PHASE 5.5: Configure System Apps (Flatpak, DroidTux and External Winboat)
+# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak, DroidTux y Winboat)
 # ==============================================================================
 
-# Download external winboat dependencies on host and copy to chroot
-# Descargar dependencias externas de winboat en el host y copiarlas al chroot
-echo "📥 Descargando dependencias externas (Winboat) en el host..."
+# Download external dependencies (DroidTux and Winboat) on host and copy to chroot
+# Descargar dependencias externas (DroidTux y Winboat) en el host y copiarlas al chroot
+echo "📥 Descargando dependencias externas (DroidTux y Winboat) en el host..."
+wget -q -O /tmp/droidtux.deb https://github.com/InledGroup/DroidTux/releases/download/v1.0.18/droidtux_1.0.18_all.deb
 wget -q -O /tmp/winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-$SUDO cp /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
+$SUDO cp /tmp/droidtux.deb /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
 
-echo "⚙️ Configurando Flatpak, GNOME Software y Winboat dentro del chroot..."
+echo "⚙️ Configurando Flatpak, GNOME Software, DroidTux y Winboat dentro del chroot..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
+    export DEBIAN_FRONTEND=noninteractive
     
     # Install flatpak and plugin / Instalar flatpak y el plugin de GNOME Software
     echo '📥 Instalando Flatpak y plugin de GNOME Software...'
     apt-get update
-    apt-get install -y flatpak gnome-software-plugin-flatpak
+    yes | apt-get install -y flatpak gnome-software-plugin-flatpak
     
     # Configure Flathub at system level / Configurar el repositorio Flathub a nivel de sistema
     echo '🌐 Configurando repositorio de Flathub...'
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     
+    # Install DroidTux / Instalar DroidTux
+    echo '📥 Instalando DroidTux...'
+    yes | apt-get install -y /tmp/droidtux.deb
+    rm -f /tmp/droidtux.deb
+    
     # Install winboat / Instalar winboat
     echo '📥 Instalando Winboat...'
-    apt-get install -y /tmp/winboat.deb
+    yes | apt-get install -y /tmp/winboat.deb
     rm -f /tmp/winboat.deb
     
     # Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
