@@ -88,6 +88,7 @@ python3-xlib
 # Bootloader y Disco
 grub-pc
 grub-efi-amd64-bin
+efibootmgr
 calamares
 calamares-settings-debian
 # Aplicaciones Estándar

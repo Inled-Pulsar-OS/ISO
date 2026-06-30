@@ -486,7 +486,6 @@ echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... /
 $SUDO mksquashfs "$ROOTFS_TARGET" "$ISO_STAGING/live/filesystem.squashfs" \
     -noappend \
     -comp xz \
-    -e boot \
     -e proc/* \
     -e sys/* \
     -e dev/* \
