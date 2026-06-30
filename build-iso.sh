@@ -292,13 +292,11 @@ if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"
     echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
 fi
 
-# Configure Inled APT GPG key and sources list in the chroot
-# Configurar la clave GPG y la lista de fuentes de Inled APT en el chroot
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    set -e
-    apt-get update && apt-get install -y wget gnupg ca-certificates
-    wget -qO- https://apt.inled.es/archive.key | gpg --dearmor | tee /usr/share/keyrings/inled-archive-keyring.gpg > /dev/null
-"
+# Copy the bundled Inled APT GPG keyring directly to the chroot target
+# Copiar el llavero GPG de Inled pre-empaquetado directamente al chroot target
+echo "🔑 Copiando el llavero GPG de Inled pre-empaquetado..."
+$SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
+$SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
 echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
     $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
