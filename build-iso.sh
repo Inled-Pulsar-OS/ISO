@@ -353,12 +353,11 @@ if $USE_LOCAL_DEBS; then
     # Instalar paquetes locales directamente y resolver dependencias, bajando externos de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update
-        apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
-        # Purge live-config to avoid conflicts with our custom autologin and users setup
-        # Purgar live-config para evitar conflictos con nuestra configuración de autologin y usuarios
-        apt-get purge -y live-config live-config-systemd || true
+        yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+        yes | apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
+        yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
     # Clean up temporary installers / Limpiar instaladores temporales
@@ -371,9 +370,10 @@ else
     # Instalar paquetes de Pulsar OS desde el repositorio de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update
-        apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        apt-get install -y --no-install-recommends \
+        yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+        yes | apt-get install -y --no-install-recommends \
             pulsaros-branding \
             pulsaros-theme \
             pulsaros-gnome \
@@ -392,9 +392,7 @@ else
             appinstall \
             seafari \
             spotlight-python
-        # Purge live-config to avoid conflicts with our custom autologin and users setup
-        # Purgar live-config para evitar conflictos con nuestra configuración de autologin y usuarios
-        apt-get purge -y live-config live-config-systemd || true
+        yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
     echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
