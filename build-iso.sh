@@ -301,6 +301,44 @@ $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/
 echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
     $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
 
+# Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup (preventing 403/interactive prompts)
+# Crear desvíos de dpkg temporales para interceptar la auto-configuración del repo de DroidTux y AppInstall y evitar 403 y prompts interactivos
+echo "⚙️ Configurando desvíos de dpkg temporales para DroidTux y AppInstall..."
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    dpkg-divert --add --rename --divert /usr/bin/curl.real /usr/bin/curl
+    dpkg-divert --add --rename --divert /usr/bin/wget.real /usr/bin/wget
+    dpkg-divert --add --rename --divert /usr/bin/gpg.real /usr/bin/gpg
+"
+
+$SUDO tee "$ROOTFS_TARGET/usr/bin/curl" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
+    echo "dummy-key"
+    exit 0
+fi
+exec /usr/bin/curl.real "$@"
+EOF
+$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/curl"
+
+$SUDO tee "$ROOTFS_TARGET/usr/bin/wget" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
+    echo "dummy-key"
+    exit 0
+fi
+exec /usr/bin/wget.real "$@"
+EOF
+$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/wget"
+
+$SUDO tee "$ROOTFS_TARGET/usr/bin/gpg" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"--dearmor"* ]] && [[ "$*" == *"/usr/share/keyrings/inled-archive-keyring.gpg"* ]]; then
+    exit 0
+fi
+exec /usr/bin/gpg.real --yes --batch "$@"
+EOF
+$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/gpg"
+
 
 
 if $USE_LOCAL_DEBS; then
@@ -358,7 +396,7 @@ if $USE_LOCAL_DEBS; then
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        yes | apt-get install -y --fix-broken /tmp/packages/*.deb macboat appinstall seafari spotlight-python
+        yes | apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
@@ -389,6 +427,7 @@ else
             pulsaros-welcome \
             pulsaros-recovery \
             pulsaros-bootsound \
+            droidtux \
             macboat \
             appinstall \
             seafari \
@@ -396,43 +435,48 @@ else
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
-    echo "✅ Paquetes de Pulsar OS instalados desde repositorio APT."
 fi
 
+# Clean up temporary DroidTux and AppInstall mocks and restore dpkg-diverts
+# Limpiar los mocks temporales de DroidTux y AppInstall y restaurar desvíos de dpkg
+echo "🧹 Limpiando mocks y desvíos de dpkg de DroidTux y AppInstall..."
+$SUDO rm -f "$ROOTFS_TARGET/usr/bin/curl"
+$SUDO rm -f "$ROOTFS_TARGET/usr/bin/wget"
+$SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
+
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    dpkg-divert --remove --rename /usr/bin/curl
+    dpkg-divert --remove --rename /usr/bin/wget
+    dpkg-divert --remove --rename /usr/bin/gpg
+"
+
 # ==============================================================================
-# PHASE 5.5: Configure System Apps (Flatpak, DroidTux and External Winboat)
-# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak, DroidTux y Winboat)
+# PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
+# FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
 # ==============================================================================
 
-# Download external dependencies (DroidTux and Winboat) on host and copy to chroot
-# Descargar dependencias externas (DroidTux y Winboat) en el host y copiarlas al chroot
-echo "📥 Descargando dependencias externas (DroidTux y Winboat) en el host..."
-wget -q -O /tmp/droidtux.deb https://github.com/InledGroup/DroidTux/releases/download/v1.0.18/droidtux_1.0.18_all.deb
+# Download external winboat dependencies on host and copy to chroot
+# Descargar dependencias externas de winboat en el host y copiarlas al chroot
+echo "📥 Descargando dependencias externas (Winboat) en el host..."
 wget -q -O /tmp/winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-$SUDO cp /tmp/droidtux.deb /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
+$SUDO cp /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
 
-echo "⚙️ Configurando Flatpak, GNOME Software, DroidTux y Winboat dentro del chroot..."
+echo "⚙️ Configurando Flatpak, GNOME Software y Winboat dentro del chroot..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
-    export DEBIAN_FRONTEND=noninteractive
     
     # Install flatpak and plugin / Instalar flatpak y el plugin de GNOME Software
     echo '📥 Instalando Flatpak y plugin de GNOME Software...'
     apt-get update
-    yes | apt-get install -y flatpak gnome-software-plugin-flatpak
+    apt-get install -y flatpak gnome-software-plugin-flatpak
     
     # Configure Flathub at system level / Configurar el repositorio Flathub a nivel de sistema
     echo '🌐 Configurando repositorio de Flathub...'
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     
-    # Install DroidTux / Instalar DroidTux
-    echo '📥 Instalando DroidTux...'
-    yes | apt-get install -y /tmp/droidtux.deb
-    rm -f /tmp/droidtux.deb
-    
     # Install winboat / Instalar winboat
     echo '📥 Instalando Winboat...'
-    yes | apt-get install -y /tmp/winboat.deb
+    apt-get install -y /tmp/winboat.deb
     rm -f /tmp/winboat.deb
     
     # Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
