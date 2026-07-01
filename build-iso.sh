@@ -23,36 +23,41 @@
 set -e
 
 # ==============================================================================
-# Helper: Determine Root Privilege Command
-# Ayudante: Determinar el comando para privilegios root
+# Parse Arguments / Parámetros
 # ==============================================================================
-# We prefer 'sudo' in non-interactive environments (CI, GitHub Actions) or if
-# DISPLAY is not set (pure terminal). If graphical display is available, we
-# fallback to 'pkexec' for a nice graphical policykit dialog.
-#
-# Preferimos 'sudo' en entornos no interactivos (CI, GitHub Actions) o si no hay
-# un entorno gráfico activo (DISPLAY vacío). Si hay entorno gráfico, usamos
-# 'pkexec' para un diálogo visual amigable de Polkit.
-if [ "$EUID" -eq 0 ]; then
-    SUDO=""
-elif [ "$GITHUB_ACTIONS" = "true" ] || [ -z "$DISPLAY" ]; then
-    SUDO="sudo"
-else
-    if command -v pkexec >/dev/null 2>&1; then
-        SUDO="pkexec"
-    else
-        SUDO="sudo"
-    fi
-fi
+CLEAN_BASE=false
+USE_LOCAL_DEBS=false
+BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
+
+for arg in "$@"; do
+    case $arg in
+        --clean-base)
+            CLEAN_BASE=true
+            ;;
+        --local)
+            USE_LOCAL_DEBS=true
+            ;;
+        --refind)
+            BOOTLOADER="refind"
+            ;;
+        --grub)
+            BOOTLOADER="grub"
+            ;;
+    esac
+done
 
 # ==============================================================================
-# PHASE 0: Check Host Dependencies / FASE 0: Comprobación de Dependencias del Host
+# Check Host Dependencies / Comprobación de Dependencias del Host
 # ==============================================================================
-
 MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
-for cmd in mmdebstrap fakeroot rsync jq curl unzip wget mksquashfs xorriso grub-mkrescue; do
+CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso")
+if [ "$BOOTLOADER" = "grub" ]; then
+    CMDS+=("grub-mkrescue")
+fi
+
+for cmd in "${CMDS[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         MISSING_PACKAGES+=("$cmd")
     fi
@@ -68,18 +73,24 @@ if ! command -v fuser >/dev/null 2>&1; then
     MISSING_PACKAGES+=("psmisc")
 fi
 
-# We also need the BIOS and UEFI build files for grub-mkrescue
-# También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
-if ! dpkg -l | grep -q "grub-pc-bin"; then
-    MISSING_PACKAGES+=("grub-pc-bin")
-fi
-
-if ! dpkg -l | grep -q "grub-efi-amd64-bin"; then
-    MISSING_PACKAGES+=("grub-efi-amd64-bin")
-fi
-
-if ! dpkg -l | grep -q "mtools"; then
-    MISSING_PACKAGES+=("mtools")
+if [ "$BOOTLOADER" = "grub" ]; then
+    # We also need the BIOS and UEFI build files for grub-mkrescue
+    # También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
+    if ! dpkg -l | grep -q "grub-pc-bin"; then
+        MISSING_PACKAGES+=("grub-pc-bin")
+    fi
+    if ! dpkg -l | grep -q "grub-efi-amd64-bin"; then
+        MISSING_PACKAGES+=("grub-efi-amd64-bin")
+    fi
+else
+    # We need refind and mtools on the host to generate the bootable EFI image for rEFInd
+    # Necesitamos refind y mtools en el host para generar la imagen EFI arrancable de rEFInd
+    if ! dpkg -l | grep -q "refind"; then
+        MISSING_PACKAGES+=("refind")
+    fi
+    if ! dpkg -l | grep -q "mtools"; then
+        MISSING_PACKAGES+=("mtools")
+    fi
 fi
 
 # IMPORTANT: Check Debian archive keyring on non-Debian host distros (like Ubuntu/Mint)
@@ -91,7 +102,7 @@ fi
 # Install dependencies if they are missing / Instalar dependencias si faltan
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo "⚠️ Se ha detectado que faltan dependencias esenciales en el host: ${MISSING_PACKAGES[*]}"
-    echo "Estas herramientas son requeridas para la compilación de Pulsar OS."
+    echo "Estas herramientas son requeridas para la compilación de Pulsar OS ($BOOTLOADER)."
     
     # Auto-approve if in non-interactive environment (CI, pipeline, no TTY stdin)
     # Aprobación automática si estamos en un entorno no interactivo (CI, pipeline, sin TTY stdin)
@@ -107,13 +118,35 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     
     if [ "$auto_install" = true ]; then
         echo "📥 Iniciando instalación de dependencias..."
-        $SUDO apt-get update && $SUDO apt-get install -y "${MISSING_PACKAGES[@]}"
+        if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+            # Run in a single pkexec bash session to prevent double password prompts
+            # Ejecutar en una sola sesión de bash con pkexec para evitar dobles solicitudes de contraseña
+            pkexec /bin/bash -c "apt-get update && apt-get install -y ${MISSING_PACKAGES[*]}"
+        else
+            sudo apt-get update && sudo apt-get install -y "${MISSING_PACKAGES[@]}"
+        fi
         echo "✅ Dependencias instaladas con éxito."
     else
         echo "❌ Error: No se pueden cumplir los requisitos del host. Saliendo..."
         exit 1
     fi
 fi
+
+# ==============================================================================
+# Helper: Auto-Elevate to Root
+# Ayudante: Auto-elevación a privilegios de superusuario
+# ==============================================================================
+if [ "$EUID" -ne 0 ]; then
+    echo "🔐 Este script requiere privilegios de superusuario para ejecutarse."
+    echo "Re-ejecutando con pkexec..."
+    if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+        exec pkexec "$0" "$@"
+    else
+        exec sudo "$0" "$@"
+    fi
+fi
+
+SUDO=""
 
 # ==============================================================================
 # PHASE 1: Environment Settings and Initialization / FASE 1: Configuración de Entorno
@@ -142,23 +175,6 @@ PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
 if [ ! -f "$PACKAGE_LIST_FILE" ]; then
     PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
 fi
-
-# Arguments / Parámetros
-CLEAN_BASE=false
-USE_LOCAL_DEBS=false
-
-for arg in "$@"; do
-    case $arg in
-        --clean-base)
-            CLEAN_BASE=true
-            shift
-            ;;
-        --local)
-            USE_LOCAL_DEBS=true
-            shift
-            ;;
-    esac
-done
 
 # Dynamic detection of chroot binary path
 # Detección dinámica de la ruta de chroot en el host
@@ -388,14 +404,31 @@ if $USE_LOCAL_DEBS; then
     # Copiar de forma segura debs al chroot temporal
     $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
     $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
+    if [ "$BOOTLOADER" = "grub" ]; then
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
+    else
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-grub_*.deb
+    fi
+    
+    # Determine the bootloader packages to pull explicitly inside chroot
+    # Determinar los paquetes del cargador de arranque a instalar explícitamente en el chroot
+    if [ "$BOOTLOADER" = "grub" ]; then
+        BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+    else
+        BOOTLOADER_PKGS="refind efibootmgr"
+    fi
     
     # Install local packages and resolve dependencies, pulling non-local from APT
     # Instalar paquetes locales directamente y resolver dependencias, bajando externos de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         export DEBIAN_FRONTEND=noninteractive
+        # Pre-seed refind to not automatically install to the ESP of the build host chroot
+        # Preconfigurar refind para que no intente instalarse automáticamente en la ESP del host de compilación
+        echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+        yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
         # English: Install local debs first using dpkg to force their use, avoiding repository override
         # Español: Instalar debs locales primero usando dpkg para forzar su uso, evitando sobrescritura del repositorio
         dpkg -i /tmp/packages/*.deb || true
@@ -414,14 +447,26 @@ if $USE_LOCAL_DEBS; then
 else
     echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
     
+    # Determine the bootloader packages to pull explicitly inside chroot
+    # Determinar los paquetes del cargador de arranque a instalar explícitamente en el chroot
+    if [ "$BOOTLOADER" = "grub" ]; then
+        BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+    else
+        BOOTLOADER_PKGS="refind efibootmgr"
+    fi
+
     # Install metapackages and specific OS components from the Inled APT repo
     # Instalar paquetes de Pulsar OS desde el repositorio de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         export DEBIAN_FRONTEND=noninteractive
+        # Pre-seed refind to not automatically install to the ESP of the build host chroot
+        # Preconfigurar refind para que no intente instalarse automáticamente en la ESP del host de compilación
+        echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
         yes | apt-get install -y --no-install-recommends \
+            $BOOTLOADER_PKGS \
             pulsaros-branding \
             pulsaros-theme \
             pulsaros-gnome \
@@ -429,7 +474,7 @@ else
             pulsaros-spotlight-launcher \
             pulsaros-sddm \
             pulsaros-plymouth \
-            pulsaros-grub \
+            pulsaros-$BOOTLOADER \
             pulsaros-calamares \
             pulsaros-essential \
             pulsaros-welcome \
@@ -444,6 +489,18 @@ else
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
+fi
+
+# Dynamically adjust Calamares configuration inside chroot based on selected bootloader
+# Ajustar dinámicamente la configuración de Calamares en el chroot según el cargador de arranque seleccionado
+if [ "$BOOTLOADER" = "refind" ]; then
+    echo "⚙️ Configurando Calamares para rEFInd (removiendo módulos de GRUB)..."
+    if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
+        $SUDO sed -i '/- grubcfg/d' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+        $SUDO sed -i '/- bootloader/d' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+    fi
+else
+    echo "⚙️ Calamares configurado para GRUB (módulos por defecto)."
 fi
 
 # Clean up temporary DroidTux and AppInstall mocks and restore dpkg-diverts
@@ -467,8 +524,9 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 # Download external winboat dependencies on host and copy to chroot
 # Descargar dependencias externas de winboat en el host y copiarlas al chroot
 echo "📥 Descargando dependencias externas (Winboat) en el host..."
-wget -q -O /tmp/winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-$SUDO cp /tmp/winboat.deb "$ROOTFS_TARGET/tmp/"
+wget -q --timeout=15 --tries=3 -O "$BUILD_DIR/winboat.deb" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
+$SUDO cp "$BUILD_DIR/winboat.deb" "$ROOTFS_TARGET/tmp/winboat.deb"
+rm -f "$BUILD_DIR/winboat.deb"
 
 echo "⚙️ Configurando Flatpak, GNOME Software y Winboat dentro del chroot..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -565,28 +623,34 @@ fi
 $SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
 $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
 
-# 2.5 Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
-if [ -d "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" ]; then
-    echo "🎨 Copiando tema de GRUB de Pulsar OS a la ISO staging..."
-    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
-    $SUDO cp -r "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
-fi
-
-# Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
-$SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
-if [ -f "/usr/share/grub/unicode.pf2" ]; then
-    $SUDO cp "/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
-elif [ -f "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" ]; then
-    $SUDO cp "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
-fi
-
-# 3. Create GRUB bootloader configuration / Crear menú de arranque de GRUB
-echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
-cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
+if [ "$BOOTLOADER" = "grub" ]; then
+    # --------------------------------------------------------------------------
+    # GRUB BOOTLOADER PACKAGING
+    # --------------------------------------------------------------------------
+    echo "⚙️ Configurando GRUB para la ISO... / Configuring GRUB for ISO..."
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub"
+    
+    # Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
+    if [ -d "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" ]; then
+        echo "🎨 Copiando tema de GRUB de Pulsar OS a la ISO staging..."
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
+        $SUDO cp -r "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+    fi
+    
+    # Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
+    if [ -f "/usr/share/grub/unicode.pf2" ]; then
+        $SUDO cp "/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+    elif [ -f "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" ]; then
+        $SUDO cp "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+    fi
+    
+    # Create GRUB bootloader configuration / Crear menú de arranque de GRUB
+    echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
+    cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
 set default="0"
 set timeout=10
 
-# Load video and format drivers / Cargar soporte de gráficos y formatos de imágenes
 insmod all_video
 insmod font
 insmod gfxterm
@@ -594,14 +658,12 @@ insmod png
 insmod jpeg
 insmod gfxmenu
 
-# Load unicode font for standard borders
 if loadfont /boot/grub/fonts/unicode.pf2; then
     set gfxmode=auto
     keep_gfxmode=keep
     terminal_output gfxterm
 fi
 
-# Load theme font and set theme (uses terminus/unifont fonts which are physically in the theme)
 loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
 loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
 loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
@@ -615,12 +677,96 @@ menuentry "Pulsar OS Live (RAM)" {
 }
 EOF
 
-# 4. Generate the hybrid ISO file using grub-mkrescue / Generar el archivo ISO usando grub-mkrescue
-ISO_OUTPUT="$BUILD_DIR/pulsaros.iso"
-echo "💿 Generando archivo ISO en / Generating ISO file at: $ISO_OUTPUT..."
-$SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
+    ISO_OUTPUT="$BUILD_DIR/pulsaros.iso"
+    echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
+    $SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
+
+else
+    # --------------------------------------------------------------------------
+    # rEFInd BOOTLOADER PACKAGING
+    # --------------------------------------------------------------------------
+    echo "💿 Creando imagen EFI bootable con rEFInd... / Creating bootable EFI image with rEFInd..."
+    $SUDO mkdir -p "$ISO_STAGING/boot"
+    $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
+    EFI_IMG="$ISO_STAGING/boot/efi.img"
+
+    # Create an 80MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
+    # Crear un archivo vacío de 80MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
+    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=80 2>/dev/null
+    $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
+
+    # Create temporary refind.conf for the ISO boot
+    cat <<EOF > "$BUILD_DIR/refind.conf"
+timeout 10
+enable_mouse
+resolution 1024 768
+include themes/rEFInd-Regular-Dark/theme.conf
+
+menuentry "Pulsar OS Live" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_debian.png
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "boot=live components username=live autologin quiet splash loglevel=3 --"
+}
+EOF
+
+    # Clone the theme (using HTTP/1.1, low speed timeouts, and larger postBuffer to prevent HTTP/2 curl 92 errors and hangs)
+    # Clonar el tema (usando HTTP/1.1, límites de velocidad baja, y postBuffer mayor para evitar errores curl 92 y cuelgues)
+    echo "🎨 Descargando tema macOS de rEFInd..."
+    $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
+    $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
+    $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
+
+    # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
+    echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
+    $SUDO cp /usr/share/refind/refind/refind_x64.efi "$ISO_STAGING/EFI/BOOT/bootx64.efi"
+    $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
+    $SUDO cp /usr/share/refind/refind/drivers_x64/*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
+    $SUDO cp "$BUILD_DIR/refind.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
+    $SUDO cp -r /usr/share/refind/refind/icons "$ISO_STAGING/EFI/BOOT/"
+    $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark"
+    $SUDO cp -r "$BUILD_DIR/refind-mac-theme"/* "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark/"
+    # Copy kernel and initrd directly to the UEFI boot folder on the ISO
+    # Copiar kernel e initrd directamente al directorio de arranque UEFI en la ISO
+    $SUDO cp "$ISO_STAGING/live/vmlinuz" "$ISO_STAGING/EFI/BOOT/vmlinuz"
+    $SUDO cp "$ISO_STAGING/live/initrd" "$ISO_STAGING/EFI/BOOT/initrd"
+
+    # 2. Populate the efi.img for El Torito boot using mtools (resolves cluster size warnings)
+    echo "📥 Copiando archivos a efi.img usando mtools..."
+    $SUDO mmd -i "$EFI_IMG" ::/EFI
+    $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT
+    $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/drivers_x64
+    $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes
+    $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/icons
+
+    $SUDO mcopy -i "$EFI_IMG" /usr/share/refind/refind/refind_x64.efi ::/EFI/BOOT/bootx64.efi
+    $SUDO mcopy -i "$EFI_IMG" /usr/share/refind/refind/drivers_x64/*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
+    $SUDO mcopy -i "$EFI_IMG" "$BUILD_DIR/refind.conf" ::/EFI/BOOT/refind.conf
+    $SUDO mcopy -s -i "$EFI_IMG" /usr/share/refind/refind/icons/* ::/EFI/BOOT/icons/
+    $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes/rEFInd-Regular-Dark
+    $SUDO mcopy -s -i "$EFI_IMG" "$BUILD_DIR/refind-mac-theme"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
+    # Copy kernel and initrd directly to the efi.img FAT volume using mtools
+    # Copiar kernel e initrd directamente al volumen FAT de efi.img usando mtools
+    $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/vmlinuz" ::/EFI/BOOT/vmlinuz
+    $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/initrd" ::/EFI/BOOT/initrd
+
+    # Cleanup temp build files
+    $SUDO rm -f "$BUILD_DIR/refind.conf"
+    $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
+
+    ISO_OUTPUT="$BUILD_DIR/pulsaros-refind.iso"
+    echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
+    $SUDO xorriso -as mkisofs \
+      -o "$ISO_OUTPUT" \
+      -J -R -V "Pulsar OS" \
+      -eltorito-alt-boot \
+      -e "boot/efi.img" \
+      -no-emul-boot \
+      -isohybrid-gpt-basdat \
+      "$ISO_STAGING"
+fi
 
 echo "=============================================================================="
-echo "🎉 ¡ISO de Pulsar OS generada con éxito! / Pulsar OS ISO generated successfully!"
+echo "🎉 ¡ISO de Pulsar OS ($BOOTLOADER) generada con éxito!"
 echo "📍 Ubicación / Location: $ISO_OUTPUT"
 echo "=============================================================================="

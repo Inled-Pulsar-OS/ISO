@@ -13,11 +13,17 @@ ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Parsear argumentos / Parse arguments
 USE_ISO=false
+BOOTLOADER="grub" # Default bootloader / Cargador por defecto
 for arg in "$@"; do
     case $arg in
         --iso)
             USE_ISO=true
-            shift
+            ;;
+        --refind)
+            BOOTLOADER="refind"
+            ;;
+        --grub)
+            BOOTLOADER="grub"
             ;;
     esac
 done
@@ -73,15 +79,28 @@ case "$HOST_ARCH" in
 esac
 
 if $USE_ISO; then
-    ISO_PATH="$ISO_DIR/build/pulsaros.iso"
+    if [ "$BOOTLOADER" = "refind" ]; then
+        ISO_PATH="$ISO_DIR/build/pulsaros-refind.iso"
+    else
+        ISO_PATH="$ISO_DIR/build/pulsaros.iso"
+    fi
+
     if [ ! -f "$ISO_PATH" ]; then
         echo "❌ Error: No se encontró la imagen ISO en: $ISO_PATH"
-        echo "Ejecuta primero: ./build-iso.sh"
+        echo "Ejecuta primero: ./build-iso.sh --$BOOTLOADER"
         exit 1
     fi
 
     echo "🖥️  Iniciando máquina virtual QEMU ($QEMU_BIN) cargando imagen ISO..."
     echo "💿 ISO: $ISO_PATH"
+
+    # English: Detect if OVMF UEFI BIOS is available on the host to boot the UEFI ISO
+    # Español: Detectar si la BIOS OVMF UEFI está disponible en el host para arrancar la ISO UEFI
+    BIOS_ARG=""
+    if [ "$HOST_ARCH" = "x86_64" ] && [ -f "/usr/share/ovmf/OVMF.fd" ]; then
+        BIOS_ARG="-bios /usr/share/ovmf/OVMF.fd"
+        echo "🔒 UEFI: Cargando firmware OVMF UEFI ($BIOS_ARG) / UEFI: Loading OVMF UEFI firmware..."
+    fi
 
     # Lanzamiento de QEMU con la ISO como CD-ROM
     pkexec env \
@@ -96,12 +115,15 @@ if $USE_ISO; then
         -m 4G \
         -smp 4 \
         $ACCEL \
+        $BIOS_ARG \
         -cdrom "$ISO_PATH" \
         -device virtio-vga-gl \
         -display sdl,gl=on \
         -audiodev sdl,id=snd0 \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
+        -device qemu-xhci \
+        -device usb-tablet \
         -boot d \
         -serial mon:stdio
 else
@@ -135,5 +157,7 @@ else
         -audiodev sdl,id=snd0 \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
+        -device qemu-xhci \
+        -device usb-tablet \
         -serial mon:stdio
 fi
