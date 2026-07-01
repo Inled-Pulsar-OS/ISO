@@ -396,7 +396,15 @@ if $USE_LOCAL_DEBS; then
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        yes | apt-get install -y --fix-broken /tmp/packages/*.deb droidtux macboat appinstall seafari spotlight-python
+        # English: Install local debs first using dpkg to force their use, avoiding repository override
+        # Español: Instalar debs locales primero usando dpkg para forzar su uso, evitando sobrescritura del repositorio
+        dpkg -i /tmp/packages/*.deb || true
+        # English: Resolve dependencies of local packages first without adding new ones, which is required by apt
+        # Español: Resolver dependencias de paquetes locales primero sin añadir nuevos, lo cual es requerido por apt
+        yes | apt-get install -y --fix-broken
+        # English: Install remote OS packages once the package system state is clean
+        # Español: Instalar paquetes remotos del sistema operativo una vez que el estado de paquetes esté limpio
+        yes | apt-get install -y droidtux macboat appinstall seafari spotlight-python
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
@@ -427,6 +435,7 @@ else
             pulsaros-welcome \
             pulsaros-recovery \
             pulsaros-bootsound \
+            pulsar-macos-keyboard-remap-x11 \
             droidtux \
             macboat \
             appinstall \

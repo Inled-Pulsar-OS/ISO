@@ -58,7 +58,6 @@ curl
 unzip
 imagemagick
 # Navegador y Multimedia
-firefox-esr
 vlc
 totem
 # Flatpak
