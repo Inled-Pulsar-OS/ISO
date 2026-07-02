@@ -83,11 +83,10 @@ if [ "$BOOTLOADER" = "grub" ]; then
         MISSING_PACKAGES+=("grub-efi-amd64-bin")
     fi
 else
-    # We need refind and mtools on the host to generate the bootable EFI image for rEFInd
-    # Necesitamos refind y mtools en el host para generar la imagen EFI arrancable de rEFInd
-    if ! dpkg -l | grep -q "refind"; then
-        MISSING_PACKAGES+=("refind")
-    fi
+    # We only need mtools on the host to generate the bootable EFI image for rEFInd
+    # (rEFInd binaries and icons are copied directly from the target chroot to avoid overwriting the host bootloader)
+    # Solo necesitamos mtools en el host para generar la imagen EFI arrancable de rEFInd
+    # (Los binarios e iconos de rEFInd se copian directamente del chroot para evitar sobrescribir el cargador del host)
     if ! dpkg -l | grep -q "mtools"; then
         MISSING_PACKAGES+=("mtools")
     fi
@@ -496,7 +495,7 @@ fi
 if [ "$BOOTLOADER" = "refind" ]; then
     echo "⚙️ Configurando Calamares para rEFInd (removiendo módulos de GRUB)..."
     if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
-        $SUDO sed -i '/- grubcfg/d' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+        $SUDO sed -i 's/- grubcfg/- shellprocess@refind/' "$ROOTFS_TARGET/etc/calamares/settings.conf"
         $SUDO sed -i '/- bootloader/d' "$ROOTFS_TARGET/etc/calamares/settings.conf"
     fi
 else
@@ -719,11 +718,11 @@ EOF
 
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
     echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
-    $SUDO cp /usr/share/refind/refind/refind_x64.efi "$ISO_STAGING/EFI/BOOT/bootx64.efi"
+    $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
-    $SUDO cp /usr/share/refind/refind/drivers_x64/*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
+    $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
     $SUDO cp "$BUILD_DIR/refind.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
-    $SUDO cp -r /usr/share/refind/refind/icons "$ISO_STAGING/EFI/BOOT/"
+    $SUDO cp -r "$ROOTFS_TARGET/usr/share/refind/refind/icons" "$ISO_STAGING/EFI/BOOT/"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark"
     $SUDO cp -r "$BUILD_DIR/refind-mac-theme"/* "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark/"
     # Copy kernel and initrd directly to the UEFI boot folder on the ISO
@@ -739,10 +738,10 @@ EOF
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/icons
 
-    $SUDO mcopy -i "$EFI_IMG" /usr/share/refind/refind/refind_x64.efi ::/EFI/BOOT/bootx64.efi
-    $SUDO mcopy -i "$EFI_IMG" /usr/share/refind/refind/drivers_x64/*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
+    $SUDO mcopy -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/refind_x64.efi" ::/EFI/BOOT/bootx64.efi
+    $SUDO mcopy -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/drivers_x64/"*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
     $SUDO mcopy -i "$EFI_IMG" "$BUILD_DIR/refind.conf" ::/EFI/BOOT/refind.conf
-    $SUDO mcopy -s -i "$EFI_IMG" /usr/share/refind/refind/icons/* ::/EFI/BOOT/icons/
+    $SUDO mcopy -s -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/icons"/* ::/EFI/BOOT/icons/
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes/rEFInd-Regular-Dark
     $SUDO mcopy -s -i "$EFI_IMG" "$BUILD_DIR/refind-mac-theme"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
     # Copy kernel and initrd directly to the efi.img FAT volume using mtools
