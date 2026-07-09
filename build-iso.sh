@@ -67,6 +67,31 @@ fi
 # ==============================================================================
 # Check Host Dependencies / Comprobación de Dependencias del Host
 # ==============================================================================
+check_host_package_installed() {
+    local pkg="$1"
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg -l | grep -q "^ii\s\+${pkg}\b" >/dev/null 2>&1
+        return $?
+    elif command -v pacman >/dev/null 2>&1; then
+        local arch_pkg="$pkg"
+        case "$pkg" in
+            grub-pc-bin|grub-efi-amd64-bin)
+                arch_pkg="grub"
+                ;;
+            mtools)
+                arch_pkg="mtools"
+                ;;
+            debian-archive-keyring)
+                arch_pkg="debian-archive-keyring"
+                ;;
+        esac
+        pacman -Qs "^${arch_pkg}$" >/dev/null 2>&1
+        return $?
+    else
+        return 0
+    fi
+}
+
 MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
@@ -94,10 +119,10 @@ fi
 if [ "$BOOTLOADER" = "grub" ]; then
     # We also need the BIOS and UEFI build files for grub-mkrescue
     # También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
-    if ! dpkg -l | grep -q "grub-pc-bin"; then
+    if ! check_host_package_installed "grub-pc-bin"; then
         MISSING_PACKAGES+=("grub-pc-bin")
     fi
-    if ! dpkg -l | grep -q "grub-efi-amd64-bin"; then
+    if ! check_host_package_installed "grub-efi-amd64-bin"; then
         MISSING_PACKAGES+=("grub-efi-amd64-bin")
     fi
 else
@@ -105,7 +130,7 @@ else
     # (rEFInd binaries and icons are copied directly from the target chroot to avoid overwriting the host bootloader)
     # Solo necesitamos mtools en el host para generar la imagen EFI arrancable de rEFInd
     # (Los binarios e iconos de rEFInd se copian directamente del chroot para evitar sobrescribir el cargador del host)
-    if ! dpkg -l | grep -q "mtools"; then
+    if ! check_host_package_installed "mtools"; then
         MISSING_PACKAGES+=("mtools")
     fi
 fi
@@ -127,22 +152,75 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     if [ "$GITHUB_ACTIONS" = "true" ] || [ ! -t 0 ]; then
         auto_install=true
     else
-        read -p "¿Deseas instalar las dependencias faltantes ahora usando apt install? (s/n): " confirm
+        read -p "¿Deseas instalar las dependencias faltantes ahora? (s/n): " confirm
         if [[ "$confirm" =~ ^[sS]$ ]] || [[ "$confirm" =~ ^[yY]$ ]] || [ -z "$confirm" ]; then
             auto_install=true
         fi
     fi
     
     if [ "$auto_install" = true ]; then
-        echo "📥 Iniciando instalación de dependencias..."
-        if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-            # Run in a single pkexec bash session to prevent double password prompts
-            # Ejecutar en una sola sesión de bash con pkexec para evitar dobles solicitudes de contraseña
-            pkexec /bin/bash -c "apt-get update && apt-get install -y ${MISSING_PACKAGES[*]}"
-        else
-            sudo apt-get update && sudo apt-get install -y "${MISSING_PACKAGES[@]}"
+        # Detect package manager and install mapped packages
+        local pkg_manager=""
+        if command -v pacman >/dev/null 2>&1; then
+            pkg_manager="pacman"
+        elif command -v apt-get >/dev/null 2>&1; then
+            pkg_manager="apt"
         fi
-        echo "✅ Dependencias instaladas con éxito."
+
+        if [ -z "$pkg_manager" ]; then
+            echo "❌ Error: No se detectó un gestor de paquetes soportado (apt o pacman)."
+            exit 1
+        fi
+
+        local packages_to_install=()
+        for item in "${MISSING_PACKAGES[@]}"; do
+            case "$item" in
+                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring)
+                    packages_to_install+=("$item")
+                    ;;
+                mksquashfs)
+                    packages_to_install+=("squashfs-tools")
+                    ;;
+                grub-mkrescue)
+                    if [ "$pkg_manager" = "pacman" ]; then
+                        packages_to_install+=("grub")
+                    else
+                        packages_to_install+=("grub-common")
+                    fi
+                    ;;
+                grub-pc-bin|grub-efi-amd64-bin)
+                    if [ "$pkg_manager" = "apt" ]; then
+                        packages_to_install+=("$item")
+                    fi
+                    ;;
+                *)
+                    packages_to_install+=("$item")
+                    ;;
+            esac
+        done
+
+        # Deduplicate
+        packages_to_install=($(echo "${packages_to_install[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+        if [ ${#packages_to_install[@]} -gt 0 ]; then
+            echo "📥 Instalando dependencias en el host usando $pkg_manager..."
+            if [ "$pkg_manager" = "pacman" ]; then
+                if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+                    pkexec pacman -Syu --noconfirm "${packages_to_install[@]}"
+                else
+                    sudo pacman -Syu --noconfirm "${packages_to_install[@]}"
+                fi
+            elif [ "$pkg_manager" = "apt" ]; then
+                if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+                    pkexec /bin/bash -c "apt-get update && apt-get install -y ${packages_to_install[*]}"
+                else
+                    sudo apt-get update && sudo apt-get install -y "${packages_to_install[@]}"
+                fi
+            fi
+            echo "✅ Dependencias instaladas con éxito."
+        else
+            echo "✅ No hay paquetes que instalar para tu plataforma."
+        fi
     else
         echo "❌ Error: No se pueden cumplir los requisitos del host. Saliendo..."
         exit 1
