@@ -28,23 +28,41 @@ set -e
 CLEAN_BASE=false
 USE_LOCAL_DEBS=false
 BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
+BRANCH="stable"
 
-for arg in "$@"; do
-    case $arg in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --clean-base)
             CLEAN_BASE=true
+            shift
             ;;
         --local)
             USE_LOCAL_DEBS=true
+            shift
             ;;
         --refind)
             BOOTLOADER="refind"
+            shift
             ;;
         --grub)
             BOOTLOADER="grub"
+            shift
+            ;;
+        --branch|-b)
+            BRANCH="$2"
+            shift 2
+            ;;
+        *)
+            echo "❌ Opción desconocida: $1"
+            exit 1
             ;;
     esac
 done
+
+if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
+    echo "❌ Error: La rama debe ser 'stable', 'forky' o 'rolling'. Valor recibido: $BRANCH"
+    exit 1
+fi
 
 # ==============================================================================
 # Check Host Dependencies / Comprobación de Dependencias del Host
@@ -157,16 +175,28 @@ if [ -f "../configs/env.sh" ]; then
 elif [ -f "configs/env.sh" ]; then
     source configs/env.sh
 else
-    DEBIAN_VERSION="trixie"
     ARCH="amd64"
     MIRROR="http://deb.debian.org/debian"
 fi
 
+# Override Debian version based on the selected branch
+case "$BRANCH" in
+    stable)
+        DEBIAN_VERSION="trixie"
+        ;;
+    forky)
+        DEBIAN_VERSION="forky"
+        ;;
+    rolling)
+        DEBIAN_VERSION="testing"
+        ;;
+esac
+
 # Paths in the project / Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
-ROOTFS_BASE="$BUILD_DIR/rootfs-base"
-ROOTFS_TARGET="$BUILD_DIR/rootfs-target"
+ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH"
+ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH"
 PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
 
 # Adjust paths / Fallback to root repo configuration if local config is missing
@@ -313,7 +343,7 @@ echo "🔑 Copiando el llavero GPG de Inled pre-empaquetado..."
 $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
 $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
-echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es stable main" | \
+echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es $BRANCH main" | \
     $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
 
 # Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup (preventing 403/interactive prompts)
@@ -367,8 +397,8 @@ if $USE_LOCAL_DEBS; then
     fi
     
     if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
-        echo "🔨 Compilando todos los paquetes locales de forma fresca..."
-        (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
+        echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
+        (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
     else
         echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
     fi
@@ -676,7 +706,7 @@ menuentry "Pulsar OS Live (RAM)" {
 }
 EOF
 
-    ISO_OUTPUT="$BUILD_DIR/pulsaros.iso"
+    ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}.iso"
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
 
@@ -753,7 +783,7 @@ EOF
     $SUDO rm -f "$BUILD_DIR/refind.conf"
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
-    ISO_OUTPUT="$BUILD_DIR/pulsaros-refind.iso"
+    ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind.iso"
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \
       -o "$ISO_OUTPUT" \

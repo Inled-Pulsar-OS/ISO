@@ -14,26 +14,44 @@ ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Parsear argumentos / Parse arguments
 USE_ISO=false
 BOOTLOADER="grub" # Default bootloader / Cargador por defecto
-for arg in "$@"; do
-    case $arg in
+BRANCH="stable"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --iso)
             USE_ISO=true
+            shift
             ;;
         --refind)
             BOOTLOADER="refind"
+            shift
             ;;
         --grub)
             BOOTLOADER="grub"
+            shift
+            ;;
+        --branch|-b)
+            BRANCH="$2"
+            shift 2
+            ;;
+        *)
+            echo "❌ Opción desconocida: $1"
+            exit 1
             ;;
     esac
 done
 
+if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
+    echo "❌ Error: La rama debe ser 'stable', 'forky' o 'rolling'. Valor recibido: $BRANCH"
+    exit 1
+fi
+
 if ! $USE_ISO; then
-    ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target")"
+    ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH")"
 
     if [ ! -d "$ROOTFS/etc" ]; then
         echo "❌ Error: No existe el rootfs en: $ROOTFS"
-        echo "Ejecuta primero: ./build-iso.sh"
+        echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH"
         exit 1
     fi
 
@@ -80,14 +98,14 @@ esac
 
 if $USE_ISO; then
     if [ "$BOOTLOADER" = "refind" ]; then
-        ISO_PATH="$ISO_DIR/build/pulsaros-refind.iso"
+        ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind.iso"
     else
-        ISO_PATH="$ISO_DIR/build/pulsaros.iso"
+        ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}.iso"
     fi
 
     if [ ! -f "$ISO_PATH" ]; then
         echo "❌ Error: No se encontró la imagen ISO en: $ISO_PATH"
-        echo "Ejecuta primero: ./build-iso.sh --$BOOTLOADER"
+        echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --$BOOTLOADER"
         exit 1
     fi
 
