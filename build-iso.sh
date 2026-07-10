@@ -160,7 +160,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     
     if [ "$auto_install" = true ]; then
         # Detect package manager and install mapped packages
-        local pkg_manager=""
+        pkg_manager=""
         if command -v pacman >/dev/null 2>&1; then
             pkg_manager="pacman"
         elif command -v apt-get >/dev/null 2>&1; then
@@ -172,7 +172,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
             exit 1
         fi
 
-        local packages_to_install=()
+        packages_to_install=()
         for item in "${MISSING_PACKAGES[@]}"; do
             case "$item" in
                 mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring)
@@ -205,10 +205,52 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         if [ ${#packages_to_install[@]} -gt 0 ]; then
             echo "📥 Instalando dependencias en el host usando $pkg_manager..."
             if [ "$pkg_manager" = "pacman" ]; then
-                if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-                    pkexec pacman -Syu --noconfirm "${packages_to_install[@]}"
-                else
-                    sudo pacman -Syu --noconfirm "${packages_to_install[@]}"
+                # Separate official pacman packages from AUR packages
+                pacman_official=()
+                aur_packages=()
+                for pkg in "${packages_to_install[@]}"; do
+                    if pacman -Si "$pkg" >/dev/null 2>&1; then
+                        pacman_official+=("$pkg")
+                    else
+                        aur_packages+=("$pkg")
+                    fi
+                done
+
+                if [ ${#pacman_official[@]} -gt 0 ]; then
+                    echo "📥 Instalando dependencias oficiales usando pacman..."
+                    if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+                        pkexec pacman -Syu --noconfirm "${pacman_official[@]}"
+                    else
+                        sudo pacman -Syu --noconfirm "${pacman_official[@]}"
+                    fi
+                fi
+
+                if [ ${#aur_packages[@]} -gt 0 ]; then
+                    echo "⚠️ Los siguientes paquetes son del repositorio AUR y no están en los repos oficiales:"
+                    echo "   ${aur_packages[*]}"
+                    
+                    # Try to locate an AUR helper
+                    aur_helper=""
+                    if command -v yay >/dev/null 2>&1; then
+                        aur_helper="yay"
+                    elif command -v paru >/dev/null 2>&1; then
+                        aur_helper="paru"
+                    fi
+
+                    if [ -n "$aur_helper" ]; then
+                        echo "🚀 Se ha detectado el ayudante de AUR: $aur_helper. Instalando..."
+                        # Run AUR helper as the original non-root user if SUDO_USER is defined
+                        if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+                            sudo -u "$SUDO_USER" "$aur_helper" -S --noconfirm "${aur_packages[@]}"
+                        else
+                            "$aur_helper" -S --noconfirm "${aur_packages[@]}"
+                        fi
+                    else
+                        echo "❌ No se detectó ningún asistente de AUR (como yay o paru)."
+                        echo "Por favor, instala estos paquetes manualmente antes de continuar:"
+                        echo "   yay -S ${aur_packages[*]}"
+                        exit 1
+                    fi
                 fi
             elif [ "$pkg_manager" = "apt" ]; then
                 if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
@@ -587,7 +629,7 @@ else
             pulsaros-welcome \
             pulsaros-recovery \
             pulsaros-bootsound \
-            pulsar-macos-keyboard-remap-x11 \
+            gnome-macos-remap-wayland \
             droidtux \
             macboat \
             appinstall \
