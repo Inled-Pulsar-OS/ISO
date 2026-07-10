@@ -116,6 +116,10 @@ if ! command -v fuser >/dev/null 2>&1; then
     MISSING_PACKAGES+=("psmisc")
 fi
 
+if ! check_host_package_installed "mtools"; then
+    MISSING_PACKAGES+=("mtools")
+fi
+
 if [ "$BOOTLOADER" = "grub" ]; then
     # We also need the BIOS and UEFI build files for grub-mkrescue
     # También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
@@ -124,14 +128,6 @@ if [ "$BOOTLOADER" = "grub" ]; then
     fi
     if ! check_host_package_installed "grub-efi-amd64-bin"; then
         MISSING_PACKAGES+=("grub-efi-amd64-bin")
-    fi
-else
-    # We only need mtools on the host to generate the bootable EFI image for rEFInd
-    # (rEFInd binaries and icons are copied directly from the target chroot to avoid overwriting the host bootloader)
-    # Solo necesitamos mtools en el host para generar la imagen EFI arrancable de rEFInd
-    # (Los binarios e iconos de rEFInd se copian directamente del chroot para evitar sobrescribir el cargador del host)
-    if ! check_host_package_installed "mtools"; then
-        MISSING_PACKAGES+=("mtools")
     fi
 fi
 
