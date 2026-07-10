@@ -69,10 +69,7 @@ fi
 # ==============================================================================
 check_host_package_installed() {
     local pkg="$1"
-    if command -v dpkg >/dev/null 2>&1; then
-        dpkg -l | grep -q "^ii\s\+${pkg}\b" >/dev/null 2>&1
-        return $?
-    elif command -v pacman >/dev/null 2>&1; then
+    if command -v pacman >/dev/null 2>&1; then
         local arch_pkg="$pkg"
         case "$pkg" in
             grub-pc-bin|grub-efi-amd64-bin)
@@ -86,6 +83,9 @@ check_host_package_installed() {
                 ;;
         esac
         pacman -Qs "^${arch_pkg}$" >/dev/null 2>&1
+        return $?
+    elif command -v dpkg >/dev/null 2>&1; then
+        dpkg -l | grep -q "^ii\s\+${pkg}\b" >/dev/null 2>&1
         return $?
     else
         return 0
@@ -149,7 +149,8 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         auto_install=true
     else
         read -p "¿Deseas instalar las dependencias faltantes ahora? (s/n): " confirm
-        if [[ "$confirm" =~ ^[sS]$ ]] || [[ "$confirm" =~ ^[yY]$ ]] || [ -z "$confirm" ]; then
+        confirm=$(echo "$confirm" | tr -d '\r')
+        if [[ "$confirm" =~ ^[sSyY]$ ]] || [ -z "$confirm" ]; then
             auto_install=true
         fi
     fi
