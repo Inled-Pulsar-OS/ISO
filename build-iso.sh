@@ -702,14 +702,14 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     fi
 "
 
-# English: Configure static autologin for SDDM live user inside the rootfs
-# Español: Configurar autologin estático para el usuario live de SDDM en el rootfs
-echo "⚙️ Configurando autologin estático para la sesión en vivo..."
+# English: Configure static autologin for SDDM live user inside the rootfs (using GNOME Wayland)
+# Español: Configurar autologin estático para el usuario live de SDDM en el rootfs (usando GNOME Wayland)
+echo "⚙️ Configurando autologin estático para la sesión en vivo (Wayland)..."
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/sddm.conf.d"
 cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null
 [Autologin]
 User=live
-Session=gnome-xorg
+Session=gnome
 EOF
 $SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 
