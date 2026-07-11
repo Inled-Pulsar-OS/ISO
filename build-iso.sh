@@ -22,6 +22,9 @@
 
 set -e
 
+# Guardar argumentos originales para la auto-elevación antes de ser consumidos por shift
+ORIGINAL_ARGS=("$@")
+
 # ==============================================================================
 # Parse Arguments / Parámetros
 # ==============================================================================
@@ -95,7 +98,7 @@ check_host_package_installed() {
 MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
-CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso")
+CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 if [ "$BOOTLOADER" = "grub" ]; then
     CMDS+=("grub-mkrescue")
 fi
@@ -172,7 +175,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         packages_to_install=()
         for item in "${MISSING_PACKAGES[@]}"; do
             case "$item" in
-                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring)
+                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
                     packages_to_install+=("$item")
                     ;;
                 mksquashfs)
@@ -274,9 +277,9 @@ if [ "$EUID" -ne 0 ]; then
     echo "🔐 Este script requiere privilegios de superusuario para ejecutarse."
     echo "Re-ejecutando con pkexec..."
     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-        exec pkexec "$0" "$@"
+        exec pkexec "$0" "${ORIGINAL_ARGS[@]}"
     else
-        exec sudo "$0" "$@"
+        exec sudo "$0" "${ORIGINAL_ARGS[@]}"
     fi
 fi
 
@@ -564,6 +567,14 @@ if $USE_LOCAL_DEBS; then
         BOOTLOADER_PKGS="refind efibootmgr"
     fi
     
+    # English: Create a temporary APT preferences file to pin local packages to -1, preventing APT from downloading them from the remote repo
+    # Español: Crear un archivo temporal de preferencias de APT para retener paquetes locales a -1, evitando que APT los descargue
+    $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
+Package: pulsaros-* gnome-macos-remap-wayland
+Pin: release *
+Pin-Priority: -1
+EOF
+
     # Install local packages and resolve dependencies, pulling non-local from APT
     # Instalar paquetes locales directamente y resolver dependencias, bajando externos de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -578,33 +589,21 @@ if $USE_LOCAL_DEBS; then
         # English: Install local debs first using dpkg to force their use, avoiding repository override
         # Español: Instalar debs locales primero usando dpkg para forzar su uso, evitando sobrescritura del repositorio
         dpkg -i /tmp/packages/*.deb || true
-        # English: Hold local packages to prevent apt-get from replacing them with remote versions during dependency resolution
-        # Español: Mantener paquetes locales retenidos para evitar que apt-get los reemplace con versiones remotas
-        for deb in /tmp/packages/*.deb; do
-            pkg_name=\$(dpkg-deb -f "\$deb" Package)
-            if [ -n "\$pkg_name" ]; then
-                echo "\$pkg_name hold" | dpkg --set-selections
-            fi
-        done
-        # English: Resolve dependencies of local packages first without adding new ones, which is required by apt
-        # Español: Resolver dependencias de paquetes locales primero sin añadir nuevos, lo cual es requerido por apt
-        yes | apt-get install -y --fix-broken
-        # English: Install remote OS packages once the package system state is clean
-        # Español: Instalar paquetes remotos del sistema operativo una vez que el estado de paquetes esté limpio
-        yes | apt-get install -y droidtux macboat appinstall seafari spotlight-python
-        # English: Unhold local packages so they can receive updates normally on the final system
-        # Español: Liberar paquetes locales retenidos para que puedan recibir actualizaciones normalmente
-        for deb in /tmp/packages/*.deb; do
-            pkg_name=\$(dpkg-deb -f "\$deb" Package)
-            if [ -n "\$pkg_name" ]; then
-                echo "\$pkg_name install" | dpkg --set-selections
-            fi
-        done
+        # English: Install external packages and resolve dependencies in a single atomic command to prevent apt from removing local debs
+        # Español: Instalar paquetes externos y resolver dependencias en un único comando atómico para evitar que apt elimine los debs locales
+        yes | apt-get install -y --fix-broken \
+            droidtux \
+            macboat \
+            appinstall \
+            seafari \
+            spotlight-python \
+            gnome-macos-remap-wayland
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
-    # Clean up temporary installers / Limpiar instaladores temporales
+    # Clean up temporary installers and preferences / Limpiar instaladores y preferencias temporales
     $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
+    $SUDO rm -f "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar"
     echo "✅ Paquetes locales e instalados de forma cruzada con éxito."
 else
     echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
