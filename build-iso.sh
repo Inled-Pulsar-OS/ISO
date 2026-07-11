@@ -578,12 +578,28 @@ if $USE_LOCAL_DEBS; then
         # English: Install local debs first using dpkg to force their use, avoiding repository override
         # Español: Instalar debs locales primero usando dpkg para forzar su uso, evitando sobrescritura del repositorio
         dpkg -i /tmp/packages/*.deb || true
+        # English: Hold local packages to prevent apt-get from replacing them with remote versions during dependency resolution
+        # Español: Mantener paquetes locales retenidos para evitar que apt-get los reemplace con versiones remotas
+        for deb in /tmp/packages/*.deb; do
+            pkg_name=\$(dpkg-deb -f "\$deb" Package)
+            if [ -n "\$pkg_name" ]; then
+                echo "\$pkg_name hold" | dpkg --set-selections
+            fi
+        done
         # English: Resolve dependencies of local packages first without adding new ones, which is required by apt
         # Español: Resolver dependencias de paquetes locales primero sin añadir nuevos, lo cual es requerido por apt
         yes | apt-get install -y --fix-broken
         # English: Install remote OS packages once the package system state is clean
         # Español: Instalar paquetes remotos del sistema operativo una vez que el estado de paquetes esté limpio
         yes | apt-get install -y droidtux macboat appinstall seafari spotlight-python
+        # English: Unhold local packages so they can receive updates normally on the final system
+        # Español: Liberar paquetes locales retenidos para que puedan recibir actualizaciones normalmente
+        for deb in /tmp/packages/*.deb; do
+            pkg_name=\$(dpkg-deb -f "\$deb" Package)
+            if [ -n "\$pkg_name" ]; then
+                echo "\$pkg_name install" | dpkg --set-selections
+            fi
+        done
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
