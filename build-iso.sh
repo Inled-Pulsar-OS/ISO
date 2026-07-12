@@ -586,12 +586,10 @@ EOF
         apt-get update
         yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
         yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
-        # English: Install local debs first using dpkg to force their use, avoiding repository override
-        # Español: Instalar debs locales primero usando dpkg para forzar su uso, evitando sobrescritura del repositorio
-        dpkg -i /tmp/packages/*.deb || true
-        # English: Install external packages and resolve dependencies in a single atomic command to prevent apt from removing local debs
-        # Español: Instalar paquetes externos y resolver dependencias en un único comando atómico para evitar que apt elimine los debs locales
-        yes | apt-get install -y --fix-broken \
+        # English: Install local debs and external packages in a single atomic APT command by path, allowing native dependency resolution
+        # Español: Instalar debs locales y paquetes externos en un único comando APT atómico por ruta, permitiendo resolución de dependencias nativa
+        yes | apt-get install -y \
+            /tmp/packages/*.deb \
             droidtux \
             macboat \
             appinstall \
