@@ -596,8 +596,7 @@ EOF
             macboat \
             appinstall \
             seafari \
-            spotlight-python \
-            gnome-macos-remap-wayland
+            spotlight-python
         yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
