@@ -120,6 +120,13 @@ if $USE_ISO; then
         echo "🔒 UEFI: Cargando firmware OVMF UEFI ($BIOS_ARG) / UEFI: Loading OVMF UEFI firmware..."
     fi
 
+    # Create a temporary virtual disk if it does not exist (needed for testing the Calamares installer)
+    DISK_PATH="/tmp/pulsaros-test-disk.qcow2"
+    if [ ! -f "$DISK_PATH" ]; then
+        echo "💾 Creando disco virtual temporal de 30GB en $DISK_PATH..."
+        qemu-img create -f qcow2 "$DISK_PATH" 30G
+    fi
+
     # Lanzamiento de QEMU con la ISO como CD-ROM
     pkexec env \
         DISPLAY="$DISPLAY" \
@@ -134,6 +141,7 @@ if $USE_ISO; then
         -smp 4 \
         $ACCEL \
         $BIOS_ARG \
+        -drive file="$DISK_PATH",format=qcow2,media=disk,if=virtio \
         -cdrom "$ISO_PATH" \
         -device virtio-vga-gl \
         -display sdl,gl=on \
