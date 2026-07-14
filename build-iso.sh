@@ -397,6 +397,7 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
     # Ejecutar bootstrap de Debian Virgen
     $SUDO /usr/bin/mmdebstrap \
         --architecture="$ARCH" \
+        --components="main,contrib,non-free,non-free-firmware" \
         --variant=apt \
         $KEYRING_PARAM \
         --include="$PACKAGE_LIST" \
@@ -830,7 +831,7 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 --
+    linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 noprompt --
     initrd /live/initrd
 }
 EOF
@@ -864,7 +865,7 @@ menuentry "Pulsar OS Live" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_debian.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "boot=live components username=live autologin quiet splash loglevel=3 --"
+    options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
 }
 EOF
 

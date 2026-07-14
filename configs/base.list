@@ -30,6 +30,7 @@ qml6-module-org-kde-kirigami
 qml6-module-org-kde-kquickcontrolsaddons
 qml6-module-org-kde-iconthemes
 libqt6svg6
+qt6-svg-plugins
 network-manager
 gnome-terminal
 xwayland
@@ -116,7 +117,7 @@ bluez
 bluez-tools
 rfkill
 autokey-gtk
-mpv
+alsa-utils
 # Aceleración QEMU/VirGL
 libgl1-mesa-dri
 libvirglrenderer1
@@ -125,3 +126,10 @@ libgbm1
 mesa-utils
 live-boot
 squashfs-tools
+# NVIDIA Drivers & Headers
+nvidia-driver
+nvidia-settings
+linux-headers-amd64
+# Broadcom Drivers
+broadcom-sta-dkms
+dkms
