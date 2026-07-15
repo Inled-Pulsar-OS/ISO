@@ -32,6 +32,7 @@ CLEAN_BASE=false
 USE_LOCAL_DEBS=false
 BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
+WITH_NVIDIA=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -49,6 +50,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --grub)
             BOOTLOADER="grub"
+            shift
+            ;;
+        --nvidia)
+            WITH_NVIDIA=true
             shift
             ;;
         --branch|-b)
@@ -315,8 +320,15 @@ esac
 # Paths in the project / Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
-ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH"
-ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH"
+
+if $WITH_NVIDIA; then
+    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-nvidia"
+    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-nvidia"
+else
+    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH"
+    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH"
+fi
+
 PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
 
 # Adjust paths / Fallback to root repo configuration if local config is missing
@@ -358,18 +370,31 @@ if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BAS
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
 
-# Detect if base.list has changed since the cache was created
-# Detectar si base.list ha cambiado desde que se creó la caché
+# Detect if the package list has changed since the cache was created
+# Detectar si la lista de paquetes ha cambiado desde que se creó la caché
 base_list_changed=false
 if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
-    if [ ! -f "$ROOTFS_BASE/etc/pulsaros-base.list" ] || ! diff -q "$PACKAGE_LIST_FILE" "$ROOTFS_BASE/etc/pulsaros-base.list" >/dev/null 2>&1; then
-        echo "🔄 Se ha detectado un cambio en base.list con respecto al Debian Base en caché. Regenerando base..."
+    # Generate the current list of packages to install (line-separated, no comments or empty lines)
+    if $WITH_NVIDIA; then
+        current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$')
+    else
+        current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64')
+    fi
+    
+    if [ ! -f "$ROOTFS_BASE/etc/pulsaros-base.list" ]; then
+        echo "🔄 No se encontró pulsaros-base.list en la caché. Regenerando base..."
         base_list_changed=true
+    else
+        cached_list=$(cat "$ROOTFS_BASE/etc/pulsaros-base.list")
+        if [ "$current_list" != "$cached_list" ]; then
+            echo "🔄 Se ha detectado un cambio en la lista de paquetes requerida con respecto al Debian Base en caché. Regenerando base..."
+            base_list_changed=true
+        fi
     fi
 fi
 
 if $CLEAN_BASE || [ "$base_list_changed" = true ]; then
-    echo "🚨 Limpieza total de la caché Debian base solicitada..."
+    echo "🚨 Limpieza total de la caché Debian base solicitada o cambio de lista de paquetes detectado..."
     cleanup
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
@@ -383,7 +408,13 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         exit 1
     fi
     
-    PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+    if $WITH_NVIDIA; then
+        echo "💚 Incluyendo controladores de hardware propietarios (NVIDIA, Broadcom STA, DKMS, Headers) en la instalación..."
+        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+    else
+        echo "💙 Excluyendo controladores propietarios (NVIDIA, Broadcom STA, DKMS, Headers) de la instalación..."
+        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
+    fi
     
     # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
     # Agregar el llavero de Debian si existe en el host (requerido en Ubuntu/Mint)
@@ -405,9 +436,13 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         "$ROOTFS_BASE" \
         "$MIRROR"
         
-    # Save a copy of base.list in the base cache for future diffs
-    # Guardar una copia de base.list en la caché base para futuras comparaciones
-    $SUDO cp "$PACKAGE_LIST_FILE" "$ROOTFS_BASE/etc/pulsaros-base.list"
+    # Save the actually used package list in the base cache for future diffs
+    # Guardar la lista de paquetes realmente usada en la caché base para futuras comparaciones
+    if $WITH_NVIDIA; then
+        grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+    else
+        grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+    fi
     
     echo "✅ Bootstrap de Debian base completado en: $ROOTFS_BASE"
 else
@@ -830,13 +865,67 @@ loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
 loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
+# Detect if the OS is already installed on the disk to dynamically adjust default boot option
+# Detectar si el sistema ya está instalado en el disco para cambiar la opción por defecto
+set local_grub=""
+search --no-floppy --file --set=dev /boot/grub/grub.cfg
+if [ -n "\$dev" -a "\$dev" != "\$root" ]; then
+    set local_grub="(\$dev)/boot/grub/grub.cfg"
+    set default="1"
+    set timeout=5
+elif search --no-floppy --file --set=installed_os /EFI/debian/grubx64.efi; then
+    set default="1"
+    set timeout=5
+fi
+
 menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 noprompt --
     initrd /live/initrd
 }
+
+menuentry "Boot from Hard Disk (Iniciar desde el Disco Duro)" {
+    insmod chain
+    insmod ext2
+    
+    # 1. Try booting via local grub.cfg if found / Intentar cargar el grub.cfg local si existe
+    if [ -n "\$local_grub" ]; then
+        configfile "\$local_grub"
+    else
+        # 2. Try searching dynamically again in case variables were cleared / Buscar dinámicamente de nuevo
+        search --no-floppy --file --set=dev /boot/grub/grub.cfg
+        if [ -n "\$dev" -a "\$dev" != "\$root" ]; then
+            configfile (\$dev)/boot/grub/grub.cfg
+        else
+            # 3. UEFI bootloaders search / Buscar cargadores UEFI
+            search --no-floppy --file --set=root /EFI/debian/grubx64.efi
+            if [ -f /EFI/debian/grubx64.efi ]; then
+                chainloader /EFI/debian/grubx64.efi
+            else
+                search --no-floppy --file --set=root /EFI/boot/bootx64.efi
+                if [ -f /EFI/boot/bootx64.efi ]; then
+                    chainloader /EFI/boot/bootx64.efi
+                else
+                    # 4. BIOS Mode Fallbacks / Opciones de respaldo en modo BIOS
+                    # Try hd1 first (often the local hard disk when USB is hd0)
+                    set root=(hd1)
+                    chainloader +1
+                    # Try hd0 as last resort
+                    if [ \$? -ne 0 ]; then
+                        set root=(hd0)
+                        chainloader +1
+                    fi
+                fi
+            fi
+        fi
+    fi
+}
 EOF
 
-    ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}.iso"
+    if $WITH_NVIDIA; then
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-nvidia.iso"
+    else
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}.iso"
+    fi
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
 
@@ -859,6 +948,7 @@ else
 timeout 10
 enable_mouse
 resolution 1024 768
+default_selection "+,debian,Pulsar OS Live"
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live" {
@@ -913,7 +1003,11 @@ EOF
     $SUDO rm -f "$BUILD_DIR/refind.conf"
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
-    ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind.iso"
+    if $WITH_NVIDIA; then
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-nvidia.iso"
+    else
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind.iso"
+    fi
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \
       -o "$ISO_OUTPUT" \

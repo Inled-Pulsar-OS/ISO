@@ -15,6 +15,7 @@ ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USE_ISO=false
 BOOTLOADER="grub" # Default bootloader / Cargador por defecto
 BRANCH="stable"
+WITH_NVIDIA=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --grub)
             BOOTLOADER="grub"
+            shift
+            ;;
+        --nvidia)
+            WITH_NVIDIA=true
             shift
             ;;
         --branch|-b)
@@ -47,11 +52,19 @@ if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "roll
 fi
 
 if ! $USE_ISO; then
-    ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH")"
+    if $WITH_NVIDIA; then
+        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH-nvidia")"
+    else
+        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH")"
+    fi
 
     if [ ! -d "$ROOTFS/etc" ]; then
         echo "❌ Error: No existe el rootfs en: $ROOTFS"
-        echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH"
+        if $WITH_NVIDIA; then
+            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --nvidia"
+        else
+            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH"
+        fi
         exit 1
     fi
 
@@ -98,14 +111,26 @@ esac
 
 if $USE_ISO; then
     if [ "$BOOTLOADER" = "refind" ]; then
-        ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind.iso"
+        if $WITH_NVIDIA; then
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-nvidia.iso"
+        else
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind.iso"
+        fi
     else
-        ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}.iso"
+        if $WITH_NVIDIA; then
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-nvidia.iso"
+        else
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}.iso"
+        fi
     fi
 
     if [ ! -f "$ISO_PATH" ]; then
         echo "❌ Error: No se encontró la imagen ISO en: $ISO_PATH"
-        echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --$BOOTLOADER"
+        if $WITH_NVIDIA; then
+            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --$BOOTLOADER --nvidia"
+        else
+            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --$BOOTLOADER"
+        fi
         exit 1
     fi
 

@@ -133,3 +133,7 @@ linux-headers-amd64
 # Broadcom Drivers
 broadcom-sta-dkms
 dkms
+# Firmware Packages for Hardware/Graphics Compatibility
+firmware-linux
+firmware-misc-nonfree
+
