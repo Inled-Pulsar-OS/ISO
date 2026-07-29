@@ -631,7 +631,6 @@ EOF
             appinstall \
             seafari \
             spotlight-python
-        yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
     # Clean up temporary installers and preferences / Limpiar instaladores y preferencias temporales
@@ -680,7 +679,6 @@ else
             appinstall \
             seafari \
             spotlight-python
-        yes | apt-get purge -y live-config live-config-systemd || true
         apt-get clean
     "
 fi
@@ -893,7 +891,7 @@ else
     $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=150 2>/dev/null
     $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
 
-    # Create temporary refind.conf for the ISO boot
+    # Create temporary refind.conf for the ISO boot (full config with theme — goes inside efi.img)
     cat <<EOF > "$BUILD_DIR/refind.conf"
 timeout 10
 enable_mouse
@@ -901,11 +899,25 @@ mouse_speed 4
 mouse_size 16
 resolution 1024 768
 default_selection "+,pulsaros,Pulsar OS Live"
-showtools about,reboot,shutdown,firmware,hidden_tags
+#showtools about,reboot,shutdown,firmware,hidden_tags
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+}
+EOF
+
+    # Minimal refind.conf for the ISO root (no showtools, no theme — avoids duplicate tool buttons
+    # when rEFInd scans both ISO9660 and FAT efi.img filesystems)
+    cat <<EOF > "$BUILD_DIR/refind-minimal.conf"
+timeout 10
+resolution 1024 768
+default_selection "+,pulsaros,Pulsar OS Live"
+
+menuentry "Pulsar OS Live" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
@@ -926,14 +938,14 @@ EOF
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
 
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
+    # NOTE: refind.conf, icons and theme go ONLY inside efi.img to avoid rEFInd
+    # processing showtools from two filesystems and duplicating tool buttons.
+    # Solo el bootloader, driver, kernel e initrd van en la raíz ISO.
     echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
     $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
     $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
-    $SUDO cp "$BUILD_DIR/refind.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
-    $SUDO cp -r "$ROOTFS_TARGET/usr/share/refind/refind/icons" "$ISO_STAGING/EFI/BOOT/"
-    $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark"
-    $SUDO cp -r "$BUILD_DIR/refind-mac-theme"/* "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark/"
+    $SUDO cp "$BUILD_DIR/refind-minimal.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
     # Copy kernel and initrd directly to the UEFI boot folder on the ISO
     # Copiar kernel e initrd directamente al directorio de arranque UEFI en la ISO
     $SUDO cp "$ISO_STAGING/live/vmlinuz" "$ISO_STAGING/EFI/BOOT/vmlinuz"
@@ -960,6 +972,7 @@ EOF
 
     # Cleanup temp build files
     $SUDO rm -f "$BUILD_DIR/refind.conf"
+    $SUDO rm -f "$BUILD_DIR/refind-minimal.conf"
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
     if $WITH_NVIDIA; then
