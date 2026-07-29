@@ -865,59 +865,9 @@ loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
 loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
-# Detect if the OS is already installed on the disk to dynamically adjust default boot option
-# Detectar si el sistema ya está instalado en el disco para cambiar la opción por defecto
-set local_grub=""
-search --no-floppy --file --set=dev /boot/grub/grub.cfg
-if [ -n "\$dev" -a "\$dev" != "\$root" ]; then
-    set local_grub="(\$dev)/boot/grub/grub.cfg"
-    set default="1"
-    set timeout=5
-elif search --no-floppy --file --set=installed_os /EFI/debian/grubx64.efi; then
-    set default="1"
-    set timeout=5
-fi
-
 menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 noprompt --
     initrd /live/initrd
-}
-
-menuentry "Boot from Hard Disk (Iniciar desde el Disco Duro)" {
-    insmod chain
-    insmod ext2
-    
-    # 1. Try booting via local grub.cfg if found / Intentar cargar el grub.cfg local si existe
-    if [ -n "\$local_grub" ]; then
-        configfile "\$local_grub"
-    else
-        # 2. Try searching dynamically again in case variables were cleared / Buscar dinámicamente de nuevo
-        search --no-floppy --file --set=dev /boot/grub/grub.cfg
-        if [ -n "\$dev" -a "\$dev" != "\$root" ]; then
-            configfile (\$dev)/boot/grub/grub.cfg
-        else
-            # 3. UEFI bootloaders search / Buscar cargadores UEFI
-            search --no-floppy --file --set=root /EFI/debian/grubx64.efi
-            if [ -f /EFI/debian/grubx64.efi ]; then
-                chainloader /EFI/debian/grubx64.efi
-            else
-                search --no-floppy --file --set=root /EFI/boot/bootx64.efi
-                if [ -f /EFI/boot/bootx64.efi ]; then
-                    chainloader /EFI/boot/bootx64.efi
-                else
-                    # 4. BIOS Mode Fallbacks / Opciones de respaldo en modo BIOS
-                    # Try hd1 first (often the local hard disk when USB is hd0)
-                    set root=(hd1)
-                    chainloader +1
-                    # Try hd0 as last resort
-                    if [ \$? -ne 0 ]; then
-                        set root=(hd0)
-                        chainloader +1
-                    fi
-                fi
-            fi
-        fi
-    fi
 }
 EOF
 
@@ -938,9 +888,9 @@ else
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
     EFI_IMG="$ISO_STAGING/boot/efi.img"
 
-    # Create an 80MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
-    # Crear un archivo vacío de 80MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
-    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=80 2>/dev/null
+    # Create a 150MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
+    # Crear un archivo vacío de 150MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
+    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=150 2>/dev/null
     $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
 
     # Create temporary refind.conf for the ISO boot
@@ -948,22 +898,29 @@ else
 timeout 10
 enable_mouse
 resolution 1024 768
-default_selection "+,debian,Pulsar OS Live"
+default_selection "+,pulsaros,Pulsar OS Live"
+showtools about, reboot, shutdown, firmware, hidden_tags
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_debian.png
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
 }
 EOF
 
-    # Clone the theme (using HTTP/1.1, low speed timeouts, and larger postBuffer to prevent HTTP/2 curl 92 errors and hangs)
-    # Clonar el tema (usando HTTP/1.1, límites de velocidad baja, y postBuffer mayor para evitar errores curl 92 y cuelgues)
-    echo "🎨 Descargando tema macOS de rEFInd..."
+    # Get the theme (copy local if exists, else clone from GitHub)
+    echo "🎨 Obteniendo tema macOS de rEFInd..."
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
-    $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
+    if [ -d "$ISO_DIR/../refind" ]; then
+        echo "📂 Copiando tema local desde: $ISO_DIR/../refind"
+        $SUDO cp -r "$ISO_DIR/../refind" "$BUILD_DIR/refind-mac-theme"
+        $SUDO rm -rf "$BUILD_DIR/refind-mac-theme/.git"
+    else
+        echo "🌐 Descargando tema desde GitHub..."
+        $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
+    fi
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
 
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
