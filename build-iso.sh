@@ -897,9 +897,11 @@ else
     cat <<EOF > "$BUILD_DIR/refind.conf"
 timeout 10
 enable_mouse
+mouse_speed 4
+mouse_size 16
 resolution 1024 768
 default_selection "+,pulsaros,Pulsar OS Live"
-showtools about, reboot, shutdown, firmware, hidden_tags
+showtools about,reboot,shutdown,firmware,hidden_tags
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live" {

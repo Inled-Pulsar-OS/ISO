@@ -175,6 +175,7 @@ if $USE_ISO; then
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
         -device usb-tablet \
+        -device usb-mouse \
         -boot d \
         -serial mon:stdio
 else
@@ -210,5 +211,6 @@ else
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
         -device usb-tablet \
+        -device usb-mouse \
         -serial mon:stdio
 fi
