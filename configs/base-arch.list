@@ -1,6 +1,7 @@
 linux
 systemd
 systemd-sysvcompat
+archlinux-keyring
 udev
 iproute2
 procps-ng

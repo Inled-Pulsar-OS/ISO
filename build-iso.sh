@@ -456,8 +456,9 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
         
         # Bootstrap Arch Linux using pacstrap
+        # Note: without -c, package cache goes to target (in home) instead of host's /var/cache/pacman (root)
         mkdir -p "$ROOTFS_BASE"
-        $SUDO pacstrap -K -c "$ROOTFS_BASE" $PACKAGE_LIST
+        $SUDO pacstrap -K "$ROOTFS_BASE" $PACKAGE_LIST
         
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
