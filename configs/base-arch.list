@@ -23,11 +23,11 @@ qt6-5compat
 qt6-svg
 qt6-wayland
 kirigami
-kquickcontrols
+kdeclarative
 breeze
 networkmanager
 gnome-terminal
-xwayland
+xorg-xwayland
 xorg-server
 polkit
 accountsservice
@@ -46,20 +46,18 @@ wget
 curl
 unzip
 imagemagick
-# Navegador y Multimedia
 vlc
 totem
 # Flatpak
 flatpak
-# Extensiones GNOME
+# Extensiones GNOME (solo las que están en repos oficiales)
 gnome-shell-extensions
 gnome-shell-extension-appindicator
-gsconnect
 # Dependencias Fildem HUD
 python-gobject
 python-dbus
 bamf
-keybinder3
+libkeybinder3
 gtk3
 webkitgtk-6.0
 glib2
@@ -70,7 +68,6 @@ python-xlib
 # Bootloader y Disco
 grub
 efibootmgr
-calamares
 # Aplicaciones Estándar
 gnome-calculator
 gnome-calendar
@@ -101,12 +98,12 @@ mesa-utils
 squashfs-tools
 # Arch Linux ISO live
 archiso
-# NVIDIA Drivers & Headers
-nvidia
+# NVIDIA Drivers (open source driver modern)
+nvidia-open
 nvidia-settings
 linux-headers
-# Broadcom Drivers
-broadcom-wl-dkms
+# Broadcom Drivers (AUR - descomentar si se necesita)
+# broadcom-wl-dkms
 dkms
 # Firmware
 linux-firmware
