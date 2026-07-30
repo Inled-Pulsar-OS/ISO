@@ -16,6 +16,7 @@ USE_ISO=false
 BOOTLOADER="grub" # Default bootloader / Cargador por defecto
 BRANCH="stable"
 WITH_NVIDIA=false
+DISTRO="debian"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -33,6 +34,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --nvidia)
             WITH_NVIDIA=true
+            shift
+            ;;
+        --arch)
+            DISTRO="arch"
+            shift
+            ;;
+        --debian)
+            DISTRO="debian"
             shift
             ;;
         --branch|-b)
@@ -53,24 +62,33 @@ fi
 
 if ! $USE_ISO; then
     if $WITH_NVIDIA; then
-        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH-nvidia")"
+        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH-$DISTRO-nvidia")"
     else
-        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH")"
+        ROOTFS="$(realpath -m "$ISO_DIR/build/rootfs-target-$BRANCH-$DISTRO")"
     fi
 
     if [ ! -d "$ROOTFS/etc" ]; then
         echo "❌ Error: No existe el rootfs en: $ROOTFS"
-        if $WITH_NVIDIA; then
-            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --nvidia"
+        if [ "$DISTRO" = "arch" ]; then
+            echo "Ejecuta primero: ./build-iso.sh --arch --branch $BRANCH"
         else
-            echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH"
+            if $WITH_NVIDIA; then
+                echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH --nvidia"
+            else
+                echo "Ejecuta primero: ./build-iso.sh --branch $BRANCH"
+            fi
         fi
         exit 1
     fi
 
     # 1. Buscar Kernel e Initrd de forma dinámica dentro de /boot/
-    KERNEL=$(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null | head -n 1)
-    INITRD=$(ls "$ROOTFS"/boot/initrd.img-* 2>/dev/null | head -n 1)
+    if [ "$DISTRO" = "arch" ]; then
+        KERNEL=$(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+        INITRD=$(ls "$ROOTFS"/boot/initramfs-*.img 2>/dev/null | head -n 1)
+    else
+        KERNEL=$(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+        INITRD=$(ls "$ROOTFS"/boot/initrd.img-* 2>/dev/null | head -n 1)
+    fi
 
     if [ -z "$KERNEL" ] || [ -z "$INITRD" ]; then
         echo "❌ Error: No se encontró kernel o initrd en: $ROOTFS/boot/"
@@ -112,15 +130,15 @@ esac
 if $USE_ISO; then
     if [ "$BOOTLOADER" = "refind" ]; then
         if $WITH_NVIDIA; then
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-nvidia.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-${DISTRO}-nvidia.iso"
         else
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-${DISTRO}.iso"
         fi
     else
         if $WITH_NVIDIA; then
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-nvidia.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-${DISTRO}-nvidia.iso"
         else
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-${DISTRO}.iso"
         fi
     fi
 

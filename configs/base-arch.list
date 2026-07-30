@@ -1,0 +1,112 @@
+linux
+systemd
+systemd-sysvcompat
+udev
+iproute2
+procps-ng
+dhcpcd
+bash-completion
+sudo
+shadow
+mkinitcpio
+pam
+util-linux
+dbus
+# GNOME Base
+gnome-shell
+gnome-session
+# SDDM Base
+sddm
+qt6-imageformats
+qt6-declarative
+qt6-5compat
+qt6-svg
+qt6-wayland
+kirigami
+kquickcontrols
+breeze
+networkmanager
+gnome-terminal
+xwayland
+xorg-server
+polkit
+accountsservice
+at-spi2-core
+zstd
+# Dependencias MacTahoe
+sassc
+glib2
+libxml2
+git
+ca-certificates
+# Herramientas de configuración
+dconf
+gnome-tweaks
+wget
+curl
+unzip
+imagemagick
+# Navegador y Multimedia
+vlc
+totem
+# Flatpak
+flatpak
+# Extensiones GNOME
+gnome-shell-extensions
+gnome-shell-extension-appindicator
+gsconnect
+# Dependencias Fildem HUD
+python-gobject
+python-dbus
+bamf
+keybinder3
+gtk3
+webkitgtk-6.0
+glib2
+appmenu-gtk-module
+python-setuptools
+python-pip
+python-xlib
+# Bootloader y Disco
+grub
+efibootmgr
+calamares
+# Aplicaciones Estándar
+gnome-calculator
+gnome-calendar
+geary
+xournalpp
+gnome-contacts
+gnome-music
+gnome-clocks
+gnome-weather
+# Utilidades de Sistema
+e2fsprogs
+dosfstools
+xfsprogs
+ntfs-3g
+gnome-disk-utility
+gnome-system-monitor
+gnome-logs
+glibc
+docker
+bluez
+bluez-utils
+rfkill
+alsa-utils
+# Aceleración QEMU/VirGL
+mesa
+virglrenderer
+mesa-utils
+squashfs-tools
+# Arch Linux ISO live
+archiso
+# NVIDIA Drivers & Headers
+nvidia
+nvidia-settings
+linux-headers
+# Broadcom Drivers
+broadcom-wl-dkms
+dkms
+# Firmware
+linux-firmware

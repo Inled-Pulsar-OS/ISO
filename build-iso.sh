@@ -6,18 +6,22 @@
 # installs packages from the local builds or the APT repository, and packages
 # everything into a bootable hybrid Live CD ISO image.
 #
+# Supports both Debian-based and Arch Linux editions.
+#
 # Este script construye el sistema de archivos base (chroot) de Pulsar OS,
 # instala paquetes locales o desde el repositorio APT, y empaqueta todo en
 # una imagen ISO booteable híbrida de Live CD.
 #
 # Usage / Uso:
-#   ./build-iso.sh [--clean-base] [--local]
+#   ./build-iso.sh [--clean-base] [--local] [--arch]
 #
 # Options / Opciones:
 #   --clean-base    Delete the base Debian cache and download it from scratch.
 #                   Borra la caché base de Debian y la descarga de nuevo.
 #   --local         Use local .deb packages from build/packages/ instead of the repo.
 #                   Usa los paquetes .deb locales de build/packages/ en vez del repo.
+#   --arch          Build Arch Linux edition instead of Debian.
+#                   Construye la edición Arch Linux en vez de Debian.
 # ==============================================================================
 
 set -e
@@ -33,6 +37,7 @@ USE_LOCAL_DEBS=false
 BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
 WITH_NVIDIA=false
+DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -56,6 +61,14 @@ while [[ $# -gt 0 ]]; do
             WITH_NVIDIA=true
             shift
             ;;
+        --arch)
+            DISTRO="arch"
+            shift
+            ;;
+        --debian)
+            DISTRO="debian"
+            shift
+            ;;
         --branch|-b)
             BRANCH="$2"
             shift 2
@@ -70,6 +83,13 @@ done
 if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
     echo "❌ Error: La rama debe ser 'stable', 'forky' o 'rolling'. Valor recibido: $BRANCH"
     exit 1
+fi
+
+# ==============================================================================
+# Detect distribution type from branch suffix or explicit flag
+# ==============================================================================
+if [ "$DISTRO" = "arch" ]; then
+    echo "🏗️  Modo Arch Linux activado / Arch Linux mode enabled"
 fi
 
 # ==============================================================================
@@ -103,7 +123,11 @@ check_host_package_installed() {
 MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
-CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+if [ "$DISTRO" = "arch" ]; then
+    CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+else
+    CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+fi
 if [ "$BOOTLOADER" = "grub" ]; then
     CMDS+=("grub-mkrescue")
 fi
@@ -141,7 +165,7 @@ fi
 
 # IMPORTANT: Check Debian archive keyring on non-Debian host distros (like Ubuntu/Mint)
 # IMPORTANTE: Comprobar el llavero de Debian en hosts Ubuntu/Debian no oficiales
-if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+if [ "$DISTRO" != "arch" ] && [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
     MISSING_PACKAGES+=("debian-archive-keyring")
 fi
 
@@ -180,7 +204,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         packages_to_install=()
         for item in "${MISSING_PACKAGES[@]}"; do
             case "$item" in
-                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
+                mmdebstrap|pacstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
                     packages_to_install+=("$item")
                     ;;
                 mksquashfs)
@@ -301,40 +325,55 @@ elif [ -f "configs/env.sh" ]; then
     source configs/env.sh
 else
     ARCH="amd64"
-    MIRROR="http://deb.debian.org/debian"
+    if [ "$DISTRO" = "arch" ]; then
+        MIRROR="https://mirror.archlinux.de/archlinux"
+    else
+        MIRROR="http://deb.debian.org/debian"
+    fi
 fi
 
-# Override Debian version based on the selected branch
-case "$BRANCH" in
-    stable)
-        DEBIAN_VERSION="trixie"
-        ;;
-    forky)
-        DEBIAN_VERSION="forky"
-        ;;
-    rolling)
-        DEBIAN_VERSION="testing"
-        ;;
-esac
+if [ "$DISTRO" = "debian" ]; then
+    # Override Debian version based on the selected branch
+    case "$BRANCH" in
+        stable)
+            DEBIAN_VERSION="trixie"
+            ;;
+        forky)
+            DEBIAN_VERSION="forky"
+            ;;
+        rolling)
+            DEBIAN_VERSION="testing"
+            ;;
+    esac
+fi
 
 # Paths in the project / Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 
 if $WITH_NVIDIA; then
-    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-nvidia"
-    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-nvidia"
+    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO-nvidia"
+    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO-nvidia"
 else
-    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH"
-    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH"
+    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO"
+    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO"
 fi
 
-PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
+# Select package list based on distro
+if [ "$DISTRO" = "arch" ]; then
+    PACKAGE_LIST_FILE="$ISO_DIR/configs/base-arch.list"
+else
+    PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
+fi
 
 # Adjust paths / Fallback to root repo configuration if local config is missing
 # Corregir rutas / Usar configuración del repo raíz como fallback si no existe el de la ISO
 if [ ! -f "$PACKAGE_LIST_FILE" ]; then
-    PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
+    if [ "$DISTRO" = "arch" ]; then
+        PACKAGE_LIST_FILE="$ISO_DIR/../configs/base-arch.list"
+    else
+        PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
+    fi
 fi
 
 # Dynamic detection of chroot binary path
@@ -359,13 +398,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ==============================================================================
-# PHASE 2: Build and Maintain Base Debian Cache / FASE 2: Caché Debian Base Virgen
+# PHASE 2: Build and Maintain Base Cache / FASE 2: Caché Base Virgen
 # ==============================================================================
 
 # Auto-cleanup if previous bootstrap was incomplete or corrupted
 # Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
 if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BASE/proc" ] || [ ! -d "$ROOTFS_BASE/boot" ]; }; then
-    echo "⚠️ Caché del Debian Base incompleta o corrupta detectada. Limpiando para regenerar..."
+    echo "⚠️ Caché base incompleta o corrupta detectada. Limpiando para regenerar..."
     cleanup
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
@@ -375,7 +414,9 @@ fi
 base_list_changed=false
 if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
     # Generate the current list of packages to install (line-separated, no comments or empty lines)
-    if $WITH_NVIDIA; then
+    if [ "$DISTRO" = "arch" ]; then
+        current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$')
+    elif $WITH_NVIDIA; then
         current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$')
     else
         current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64')
@@ -387,20 +428,19 @@ if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
     else
         cached_list=$(cat "$ROOTFS_BASE/etc/pulsaros-base.list")
         if [ "$current_list" != "$cached_list" ]; then
-            echo "🔄 Se ha detectado un cambio en la lista de paquetes requerida con respecto al Debian Base en caché. Regenerando base..."
+            echo "🔄 Se ha detectado un cambio en la lista de paquetes requerida con respecto a la base en caché. Regenerando base..."
             base_list_changed=true
         fi
     fi
 fi
 
 if $CLEAN_BASE || [ "$base_list_changed" = true ]; then
-    echo "🚨 Limpieza total de la caché Debian base solicitada o cambio de lista de paquetes detectado..."
+    echo "🚨 Limpieza total de la caché base solicitada o cambio de lista de paquetes detectado..."
     cleanup
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
 
 if [ ! -d "$ROOTFS_BASE/etc" ]; then
-    echo "--- 📥 Creando Debian Base Limpio (mmdebstrap) ---"
     mkdir -p "$BUILD_DIR"
     
     if [ ! -f "$PACKAGE_LIST_FILE" ]; then
@@ -408,52 +448,68 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         exit 1
     fi
     
-    if $WITH_NVIDIA; then
-        echo "💚 Incluyendo controladores de hardware propietarios (NVIDIA, Broadcom STA, DKMS, Headers) en la instalación..."
-        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
-    else
-        echo "💙 Excluyendo controladores propietarios (NVIDIA, Broadcom STA, DKMS, Headers) de la instalación..."
-        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
-    fi
-    
-    # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
-    # Agregar el llavero de Debian si existe en el host (requerido en Ubuntu/Mint)
-    KEYRING_PARAM=""
-    if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
-        KEYRING_PARAM="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
-        echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
-    fi
-    
-    # Execute Debian Bootstrap
-    # Ejecutar bootstrap de Debian Virgen
-    $SUDO /usr/bin/mmdebstrap \
-        --architecture="$ARCH" \
-        --components="main,contrib,non-free,non-free-firmware" \
-        --variant=apt \
-        $KEYRING_PARAM \
-        --include="$PACKAGE_LIST" \
-        "$DEBIAN_VERSION" \
-        "$ROOTFS_BASE" \
-        "$MIRROR"
+    if [ "$DISTRO" = "arch" ]; then
+        echo "--- 📥 Creando Arch Linux Base (pacstrap) ---"
+        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
         
-    # Save the actually used package list in the base cache for future diffs
-    # Guardar la lista de paquetes realmente usada en la caché base para futuras comparaciones
-    if $WITH_NVIDIA; then
+        # Bootstrap Arch Linux using pacstrap
+        $SUDO pacstrap -c "$ROOTFS_BASE" $PACKAGE_LIST
+        
+        # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+        
+        echo "✅ Bootstrap de Arch base completado en: $ROOTFS_BASE"
     else
-        grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+        echo "--- 📥 Creando Debian Base Limpio (mmdebstrap) ---"
+        
+        if $WITH_NVIDIA; then
+            echo "💚 Incluyendo controladores de hardware propietarios (NVIDIA, Broadcom STA, DKMS, Headers) en la instalación..."
+            PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+        else
+            echo "💙 Excluyendo controladores propietarios (NVIDIA, Broadcom STA, DKMS, Headers) de la instalación..."
+            PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
+        fi
+        
+        # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
+        KEYRING_PARAM=""
+        if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+            KEYRING_PARAM="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+            echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
+        fi
+        
+        # Execute Debian Bootstrap
+        $SUDO /usr/bin/mmdebstrap \
+            --architecture="$ARCH" \
+            --components="main,contrib,non-free,non-free-firmware" \
+            --variant=apt \
+            $KEYRING_PARAM \
+            --include="$PACKAGE_LIST" \
+            "$DEBIAN_VERSION" \
+            "$ROOTFS_BASE" \
+            "$MIRROR"
+            
+        # Save the actually used package list in the base cache for future diffs
+        if $WITH_NVIDIA; then
+            grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+        else
+            grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+        fi
+        
+        echo "✅ Bootstrap de Debian base completado en: $ROOTFS_BASE"
     fi
-    
-    echo "✅ Bootstrap de Debian base completado en: $ROOTFS_BASE"
 else
-    echo "✨ Debian Base Virgen detectado en caché. Saltando bootstrap."
+    echo "✨ Base virgen detectada en caché. Saltando bootstrap."
 fi
 
 # ==============================================================================
 # PHASE 3: Clone clean base for working target / FASE 3: Clonar base limpia
 # ==============================================================================
 
-echo "--- 🔄 Clonando Debian Virgen en el directorio de trabajo (target) ---"
+if [ "$DISTRO" = "arch" ]; then
+    echo "--- 🔄 Clonando Arch base en el directorio de trabajo (target) ---"
+else
+    echo "--- 🔄 Clonando Debian base en el directorio de trabajo (target) ---"
+fi
 cleanup
 $SUDO rm -rf "$ROOTFS_TARGET"
 mkdir -p "$ROOTFS_TARGET"
@@ -487,178 +543,45 @@ $SUDO ln -sf . "$theme_dir/images"
 # PHASE 5: Configure repositories and install Pulsar OS / FASE 5: Repositorios
 # ==============================================================================
 
-echo "--- 🌐 Configurando repositorios APT (Debian Contrib/Backports e Inled) ---"
-$SUDO sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
-if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
-    echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
-fi
+if [ "$DISTRO" = "arch" ]; then
+    # ==========================================================================
+    # ARCH LINUX PATH
+    # ==========================================================================
+    echo "--- 🐧 Configurando repositorios Arch Linux (Inled) ---"
 
-# Copy the bundled Inled APT GPG keyring directly to the chroot target
-# Copiar el llavero GPG de Inled pre-empaquetado directamente al chroot target
-echo "🔑 Copiando el llavero GPG de Inled pre-empaquetado..."
-$SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
-$SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
+    # Copy the Inled keyring to chroot
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
+    $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
-echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es $BRANCH main" | \
-    $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
+    # Configure Inled pacman repository
+    $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
 
-# Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup (preventing 403/interactive prompts)
-# Crear desvíos de dpkg temporales para interceptar la auto-configuración del repo de DroidTux y AppInstall y evitar 403 y prompts interactivos
-echo "⚙️ Configurando desvíos de dpkg temporales para DroidTux y AppInstall..."
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    dpkg-divert --add --rename --divert /usr/bin/curl.real /usr/bin/curl
-    dpkg-divert --add --rename --divert /usr/bin/wget.real /usr/bin/wget
-    dpkg-divert --add --rename --divert /usr/bin/gpg.real /usr/bin/gpg
-"
-
-$SUDO tee "$ROOTFS_TARGET/usr/bin/curl" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
-    echo "dummy-key"
-    exit 0
-fi
-exec /usr/bin/curl.real "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/curl"
-
-$SUDO tee "$ROOTFS_TARGET/usr/bin/wget" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
-    echo "dummy-key"
-    exit 0
-fi
-exec /usr/bin/wget.real "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/wget"
-
-$SUDO tee "$ROOTFS_TARGET/usr/bin/gpg" > /dev/null << 'EOF'
-#!/bin/bash
-if [[ "$*" == *"--dearmor"* ]] && [[ "$*" == *"/usr/share/keyrings/inled-archive-keyring.gpg"* ]]; then
-    exit 0
-fi
-exec /usr/bin/gpg.real --yes --batch "$@"
-EOF
-$SUDO chmod +x "$ROOTFS_TARGET/usr/bin/gpg"
-
-
-
-if $USE_LOCAL_DEBS; then
-    echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
-    
-    # 1. Auto-compile local packages from the neighboring PKG repository
-    # 1. Compilar automáticamente los paquetes locales desde el repositorio vecino PKG
-    pkg_dir_source="$ISO_DIR/../PKG"
-    if [ ! -d "$pkg_dir_source" ]; then
-        pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
-    fi
-    
-    if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
-        echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
-        (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
-    else
-        echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
-    fi
-    
-    # Search in multiple potential packages build locations
-    # Buscar paquetes locales en múltiples rutas comunes de desarrollo
-    LOCAL_DEBS_DIR=""
-    POSSIBLE_DIRS=(
-        "$ISO_DIR/../PKG/build/packages" # Estructura actual de repos vecinos
-        "$ISO_DIR/../build/packages"     # Estructura del proyecto monolítico
-        "$ISO_DIR/build/packages"        # Directorio interno del repo ISO
-        "/home/jaime/Documentos/pulsarbase/PKG/build/packages" # Ruta absoluta del host
-    )
-    
-    for dir in "${POSSIBLE_DIRS[@]}"; do
-        if [ -d "$dir" ] && [ -n "$(ls "$dir"/*.deb 2>/dev/null)" ]; then
-            LOCAL_DEBS_DIR="$dir"
-            break
-        fi
-    done
-    
-    if [ -z "$LOCAL_DEBS_DIR" ]; then
-        echo "❌ Error: No se encontraron paquetes .deb locales en ninguna de las rutas de búsqueda:"
-        for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
-        echo "Ejecuta primero el empaquetador en la carpeta PKG/."
-        exit 1
-    fi
-    
-    echo "📂 Usando paquetes locales desde: $LOCAL_DEBS_DIR"
-    
-    # Copy debs securely to the temporary staging chroot
-    # Copiar de forma segura debs al chroot temporal
-    $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
-    $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
-    if [ "$BOOTLOADER" = "grub" ]; then
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
-    else
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-grub_*.deb
-    fi
-    
-    # Determine the bootloader packages to pull explicitly inside chroot
-    # Determinar los paquetes del cargador de arranque a instalar explícitamente en el chroot
-    if [ "$BOOTLOADER" = "grub" ]; then
-        BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
-    else
-        BOOTLOADER_PKGS="refind efibootmgr"
-    fi
-    
-    # English: Create a temporary APT preferences file to pin local packages to -1, preventing APT from downloading them from the remote repo
-    # Español: Crear un archivo temporal de preferencias de APT para retener paquetes locales a -1, evitando que APT los descargue
-    $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
-Package: pulsaros-* gnome-macos-remap-wayland
-Pin: release *
-Pin-Priority: -1
+[inled]
+SigLevel = Required DatabaseOptional
+Server = https://apt.inled.es/arch/\$repo/\$arch
 EOF
 
-    # Install local packages and resolve dependencies, pulling non-local from APT
-    # Instalar paquetes locales directamente y resolver dependencias, bajando externos de APT
+    # Ensure /etc/pacman.d/gnupg exists and trust Inled key
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        set -e
-        export DEBIAN_FRONTEND=noninteractive
-        # Pre-seed refind to not automatically install to the ESP of the build host chroot
-        # Preconfigurar refind para que no intente instalarse automáticamente en la ESP del host de compilación
-        echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
-        apt-get update
-        yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
-        # English: Install local debs and external packages in a single atomic APT command by path, allowing native dependency resolution
-        # Español: Instalar debs locales y paquetes externos en un único comando APT atómico por ruta, permitiendo resolución de dependencias nativa
-        yes | apt-get install -y \
-            /tmp/packages/*.deb \
-            droidtux \
-            macboat \
-            appinstall \
-            seafari \
-            spotlight-python
-        apt-get clean
+        mkdir -p /etc/pacman.d/gnupg
+        chmod 700 /etc/pacman.d/gnupg
     "
-    # Clean up temporary installers and preferences / Limpiar instaladores y preferencias temporales
-    $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
-    $SUDO rm -f "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar"
-    echo "✅ Paquetes locales e instalados de forma cruzada con éxito."
-else
-    echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
-    
-    # Determine the bootloader packages to pull explicitly inside chroot
-    # Determinar los paquetes del cargador de arranque a instalar explícitamente en el chroot
+
+    # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
-        BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+        BOOTLOADER_PKGS="grub"
     else
         BOOTLOADER_PKGS="refind efibootmgr"
     fi
 
-    # Install metapackages and specific OS components from the Inled APT repo
-    # Instalar paquetes de Pulsar OS desde el repositorio de APT
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
-        export DEBIAN_FRONTEND=noninteractive
-        # Pre-seed refind to not automatically install to the ESP of the build host chroot
-        # Preconfigurar refind para que no intente instalarse automáticamente en la ESP del host de compilación
-        echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
-        apt-get update
-        yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-        yes | apt-get install -y --no-install-recommends \
+        echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
+        pacman-key --init
+        pacman-key --populate archlinux
+        pacman -Sy --noconfirm archlinux-keyring
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm \
             $BOOTLOADER_PKGS \
             pulsaros-branding \
             pulsaros-theme \
@@ -667,7 +590,7 @@ else
             pulsaros-spotlight-launcher \
             pulsaros-sddm \
             pulsaros-plymouth \
-            pulsaros-$BOOTLOADER \
+            pulsaros-\$BOOTLOADER \
             pulsaros-calamares \
             pulsaros-essential \
             pulsaros-welcome \
@@ -679,12 +602,193 @@ else
             appinstall \
             seafari \
             spotlight-python
-        apt-get clean
+    "
+
+    echo "✅ Paquetes de Arch instalados desde el repositorio Inled."
+else
+    # ==========================================================================
+    # DEBIAN PATH (original)
+    # ==========================================================================
+    echo "--- 🌐 Configurando repositorios APT (Debian Contrib/Backports e Inled) ---"
+    $SUDO sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
+    if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
+        echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
+    fi
+
+    # Copy the bundled Inled APT GPG keyring directly to the chroot target
+    echo "🔑 Copiando el llavero GPG de Inled pre-empaquetado..."
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
+    $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
+
+    echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es $BRANCH main" | \
+        $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
+
+    # Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup
+    echo "⚙️ Configurando desvíos de dpkg temporales para DroidTux y AppInstall..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        dpkg-divert --add --rename --divert /usr/bin/curl.real /usr/bin/curl
+        dpkg-divert --add --rename --divert /usr/bin/wget.real /usr/bin/wget
+        dpkg-divert --add --rename --divert /usr/bin/gpg.real /usr/bin/gpg
+    "
+
+    $SUDO tee "$ROOTFS_TARGET/usr/bin/curl" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
+    echo "dummy-key"
+    exit 0
+fi
+exec /usr/bin/curl.real "$@"
+EOF
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/curl"
+
+    $SUDO tee "$ROOTFS_TARGET/usr/bin/wget" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"apt.inled.es/archive.key"* ]]; then
+    echo "dummy-key"
+    exit 0
+fi
+exec /usr/bin/wget.real "$@"
+EOF
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/wget"
+
+    $SUDO tee "$ROOTFS_TARGET/usr/bin/gpg" > /dev/null << 'EOF'
+#!/bin/bash
+if [[ "$*" == *"--dearmor"* ]] && [[ "$*" == *"/usr/share/keyrings/inled-archive-keyring.gpg"* ]]; then
+    exit 0
+fi
+exec /usr/bin/gpg.real --yes --batch "$@"
+EOF
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/gpg"
+
+    if $USE_LOCAL_DEBS; then
+        echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
+        pkg_dir_source="$ISO_DIR/../PKG"
+        if [ ! -d "$pkg_dir_source" ]; then
+            pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
+        fi
+
+        if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
+            echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
+            (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
+        else
+            echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
+        fi
+
+        LOCAL_DEBS_DIR=""
+        POSSIBLE_DIRS=(
+            "$ISO_DIR/../PKG/build/packages"
+            "$ISO_DIR/../build/packages"
+            "$ISO_DIR/build/packages"
+            "/home/jaime/Documentos/pulsarbase/PKG/build/packages"
+        )
+
+        for dir in "${POSSIBLE_DIRS[@]}"; do
+            if [ -d "$dir" ] && [ -n "$(ls "$dir"/*.deb 2>/dev/null)" ]; then
+                LOCAL_DEBS_DIR="$dir"
+                break
+            fi
+        done
+
+        if [ -z "$LOCAL_DEBS_DIR" ]; then
+            echo "❌ Error: No se encontraron paquetes .deb locales en ninguna de las rutas de búsqueda:"
+            for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
+            echo "Ejecuta primero el empaquetador en la carpeta PKG/."
+            exit 1
+        fi
+
+        echo "📂 Usando paquetes locales desde: $LOCAL_DEBS_DIR"
+        $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
+        $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
+        if [ "$BOOTLOADER" = "grub" ]; then
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
+        else
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-grub_*.deb
+        fi
+
+        if [ "$BOOTLOADER" = "grub" ]; then
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+        else
+            BOOTLOADER_PKGS="refind efibootmgr"
+        fi
+
+        $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
+Package: pulsaros-* gnome-macos-remap-wayland
+Pin: release *
+Pin-Priority: -1
+EOF
+
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
+            apt-get update
+            yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+            yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
+            yes | apt-get install -y \
+                /tmp/packages/*.deb \
+                droidtux \
+                macboat \
+                appinstall \
+                seafari \
+                spotlight-python
+            apt-get clean
+        "
+        $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
+        $SUDO rm -f "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar"
+        echo "✅ Paquetes locales e instalados de forma cruzada con éxito."
+    else
+        echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
+        if [ "$BOOTLOADER" = "grub" ]; then
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+        else
+            BOOTLOADER_PKGS="refind efibootmgr"
+        fi
+
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
+            apt-get update
+            yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+            yes | apt-get install -y --no-install-recommends \
+                $BOOTLOADER_PKGS \
+                pulsaros-branding \
+                pulsaros-theme \
+                pulsaros-gnome \
+                pulsaros-global-menu \
+                pulsaros-spotlight-launcher \
+                pulsaros-sddm \
+                pulsaros-plymouth \
+                pulsaros-\$BOOTLOADER \
+                pulsaros-calamares \
+                pulsaros-essential \
+                pulsaros-welcome \
+                pulsaros-recovery \
+                pulsaros-bootsound \
+                gnome-macos-remap-wayland \
+                droidtux \
+                macboat \
+                appinstall \
+                seafari \
+                spotlight-python
+            apt-get clean
+        "
+    fi
+
+    # Clean up temporary DroidTux and AppInstall mocks and restore dpkg-diverts
+    echo "🧹 Limpiando mocks y desvíos de dpkg de DroidTux y AppInstall..."
+    $SUDO rm -f "$ROOTFS_TARGET/usr/bin/curl"
+    $SUDO rm -f "$ROOTFS_TARGET/usr/bin/wget"
+    $SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
+
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        dpkg-divert --remove --rename /usr/bin/curl
+        dpkg-divert --remove --rename /usr/bin/wget
+        dpkg-divert --remove --rename /usr/bin/gpg
     "
 fi
 
 # Dynamically adjust Calamares configuration inside chroot based on selected bootloader
-# Ajustar dinámicamente la configuración de Calamares en el chroot según el cargador de arranque seleccionado
 if [ "$BOOTLOADER" = "refind" ]; then
     echo "⚙️ Configurando Calamares para rEFInd (removiendo módulos de GRUB)..."
     if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
@@ -695,55 +799,34 @@ else
     echo "⚙️ Calamares configurado para GRUB (módulos por defecto)."
 fi
 
-# Clean up temporary DroidTux and AppInstall mocks and restore dpkg-diverts
-# Limpiar los mocks temporales de DroidTux y AppInstall y restaurar desvíos de dpkg
-echo "🧹 Limpiando mocks y desvíos de dpkg de DroidTux y AppInstall..."
-$SUDO rm -f "$ROOTFS_TARGET/usr/bin/curl"
-$SUDO rm -f "$ROOTFS_TARGET/usr/bin/wget"
-$SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
-
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    dpkg-divert --remove --rename /usr/bin/curl
-    dpkg-divert --remove --rename /usr/bin/wget
-    dpkg-divert --remove --rename /usr/bin/gpg
-"
-
 # ==============================================================================
 # PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
 # FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
 # ==============================================================================
 
-# Download external winboat dependencies on host and copy to chroot
-# Descargar dependencias externas de winboat en el host y copiarlas al chroot
-echo "📥 Descargando dependencias externas (Winboat) en el host..."
-wget -q --timeout=15 --tries=3 -O "$BUILD_DIR/winboat.deb" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-$SUDO cp "$BUILD_DIR/winboat.deb" "$ROOTFS_TARGET/tmp/winboat.deb"
-rm -f "$BUILD_DIR/winboat.deb"
-
-echo "⚙️ Configurando Flatpak, GNOME Software y Winboat dentro del chroot..."
+# Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
+echo "⚙️ Personalizando lanzador de Spotlight..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
-    
-    # Install flatpak and plugin / Instalar flatpak y el plugin de GNOME Software
-    echo '📥 Instalando Flatpak y plugin de GNOME Software...'
-    apt-get update
-    apt-get install -y flatpak gnome-software-plugin-flatpak
-    
-    # Configure Flathub at system level / Configurar el repositorio Flathub a nivel de sistema
-    echo '🌐 Configurando repositorio de Flathub...'
-    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    
-    # Install winboat / Instalar winboat
-    echo '📥 Instalando Winboat...'
-    apt-get install -y /tmp/winboat.deb
-    rm -f /tmp/winboat.deb
-    
-    # Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
-    echo '⚙️ Personalizando lanzador de Spotlight...'
     if [ -f /usr/share/applications/spotlight-python.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
     fi
 "
+
+if [ "$DISTRO" = "debian" ]; then
+    # Download external winboat dependencies on host and copy to chroot
+    echo "📥 Descargando dependencias externas (Winboat) en el host..."
+    wget -q --timeout=15 --tries=3 -O "$BUILD_DIR/winboat.deb" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
+    $SUDO cp "$BUILD_DIR/winboat.deb" "$ROOTFS_TARGET/tmp/winboat.deb"
+    rm -f "$BUILD_DIR/winboat.deb"
+
+    echo "📥 Instalando Winboat..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
+        apt-get install -y /tmp/winboat.deb
+        rm -f /tmp/winboat.deb
+    "
+fi
 
 # English: Configure static autologin for SDDM live user inside the rootfs (using GNOME Wayland)
 # Español: Configurar autologin estático para el usuario live de SDDM en el rootfs (usando GNOME Wayland)
@@ -761,10 +844,17 @@ $SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 # FASE 6: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
 # ==============================================================================
 
-echo "--- 🔄 Finalizando y actualizando initramfs ---"
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    update-initramfs -u -k all
-"
+if [ "$DISTRO" = "arch" ]; then
+    echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        mkinitcpio -P
+    "
+else
+    echo "--- 🔄 Finalizando y actualizando initramfs ---"
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        update-initramfs -u -k all
+    "
+fi
 
 echo "✨ Chroot rootfs listo y estructurado correctamente en: $ROOTFS_TARGET"
 
@@ -870,9 +960,9 @@ menuentry "Pulsar OS Live (RAM)" {
 EOF
 
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}.iso"
     fi
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
@@ -976,9 +1066,9 @@ EOF
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-${DISTRO}-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-${DISTRO}.iso"
     fi
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \

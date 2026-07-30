@@ -63,7 +63,7 @@ vlc
 totem
 # Flatpak
 flatpak
-gnome-software-plugin-flatpak
+
 # Extensiones GNOME
 gnome-shell-extensions
 gnome-shell-extension-dashtodock
