@@ -210,6 +210,9 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                 mksquashfs)
                     packages_to_install+=("squashfs-tools")
                     ;;
+                pacstrap)
+                    packages_to_install+=("arch-install-scripts")
+                    ;;
                 grub-mkrescue)
                     if [ "$pkg_manager" = "pacman" ]; then
                         packages_to_install+=("grub")
