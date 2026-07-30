@@ -567,6 +567,7 @@ Server = https://apt.inled.es/arch/
 EOF
 
     # Bootstrap packages into target
+    $SUDO sed -i 's/^CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub"
     else
