@@ -574,6 +574,10 @@ SigLevel = PackageRequired
 Server = https://apt.inled.es/arch/
 EOF
 
+    # Disable CheckSpace: inside chroot, pacman reads host's /proc/self/mountinfo
+    # and can't find chroot root as a mountpoint, causing false 'not enough space' errors.
+    echo 'CheckSpace = false' | $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null
+
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub"
