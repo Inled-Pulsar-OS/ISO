@@ -329,7 +329,7 @@ elif [ -f "configs/env.sh" ]; then
 else
     ARCH="amd64"
     if [ "$DISTRO" = "arch" ]; then
-        MIRROR="https://mirror.archlinux.de/archlinux"
+        MIRROR="https://geo.mirror.pkgbuild.com/\$repo/os/\$arch"
     else
         MIRROR="http://deb.debian.org/debian"
     fi
@@ -566,12 +566,6 @@ SigLevel = Required DatabaseOptional
 Server = https://apt.inled.es/arch/\$repo/\$arch
 EOF
 
-    # Ensure /etc/pacman.d/gnupg exists and trust Inled key
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        mkdir -p /etc/pacman.d/gnupg
-        chmod 700 /etc/pacman.d/gnupg
-    "
-
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub"
@@ -581,10 +575,26 @@ EOF
 
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
+
+        # Init pacman keyring
+        mkdir -p /etc/pacman.d/gnupg
+        chmod 700 /etc/pacman.d/gnupg
+
+        # Write mirrorlist
         echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
+
+        # Init and populate keyring
         pacman-key --init
         pacman-key --populate archlinux
+
+        # Sync databases and install keyring
         pacman -Sy --noconfirm archlinux-keyring
+
+        # Import Inled repo key
+        pacman-key --recv-keys 89F828A9675B63CD0077CE9965AA57CF36E2018F
+        pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+
+        # Install Pulsar OS packages and bootloader
         pacman -Syu --noconfirm
         pacman -S --noconfirm \
             $BOOTLOADER_PKGS \
