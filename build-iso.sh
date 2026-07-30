@@ -354,6 +354,10 @@ fi
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 
+# Pacman cache dir in home (not in /var/cache/pacman on root partition)
+PACMAN_CACHE_DIR="$HOME/.cache/pacman"
+mkdir -p "$PACMAN_CACHE_DIR"
+
 if $WITH_NVIDIA; then
     ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO-nvidia"
     ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO-nvidia"
@@ -391,6 +395,7 @@ cleanup() {
     $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
+    $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
     
     # Restore original DNS config in target if backup exists
     # Restaurar DNS original en el target si quedó copia
@@ -458,7 +463,7 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         # Bootstrap Arch Linux using pacstrap
         # Note: without -c, package cache goes to target (in home) instead of host's /var/cache/pacman (root)
         mkdir -p "$ROOTFS_BASE"
-        $SUDO pacstrap -K "$ROOTFS_BASE" $PACKAGE_LIST
+        $SUDO pacstrap -c -K "$ROOTFS_BASE" $PACKAGE_LIST
         
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
@@ -532,6 +537,9 @@ $SUDO mount -t sysfs sys "$ROOTFS_TARGET/sys"
 $SUDO mount --bind /dev "$ROOTFS_TARGET/dev"
 $SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
 
+# Bind mount pacman cache dir in home (not root partition)
+$SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
+
 # Ensure working DNS in chroot / Asegurar DNS funcional en el chroot
 if [ -f "$ROOTFS_TARGET/etc/resolv.conf" ]; then
     $SUDO cp "$ROOTFS_TARGET/etc/resolv.conf" "$ROOTFS_TARGET/etc/resolv.conf.bak"
@@ -567,7 +575,6 @@ Server = https://apt.inled.es/arch/
 EOF
 
     # Bootstrap packages into target
-    $SUDO sed -i 's/^CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub"
     else
@@ -890,6 +897,7 @@ $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
 echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... / Compressing rootfs into SquashFS..."
