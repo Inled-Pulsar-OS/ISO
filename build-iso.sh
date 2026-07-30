@@ -587,12 +587,12 @@ EOF
         pacman-key --init
         pacman-key --populate archlinux
 
+        # Import and sign Inled repo key from bundled file (before syncing Inled repo)
+        pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+        pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+
         # Sync databases and install keyring
         pacman -Sy --noconfirm archlinux-keyring
-
-        # Import and sign Inled repo key
-        curl -s https://apt.inled.es/archive.key | pacman-key -a -
-        pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
 
         # Install Pulsar OS packages and bootloader
         pacman -Syu --noconfirm
