@@ -562,8 +562,8 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
 
 [inled]
-SigLevel = Required DatabaseOptional
-Server = https://apt.inled.es/arch/\$repo/\$arch
+SigLevel = PackageRequired
+Server = https://apt.inled.es/arch/
 EOF
 
     # Bootstrap packages into target
@@ -590,8 +590,8 @@ EOF
         # Sync databases and install keyring
         pacman -Sy --noconfirm archlinux-keyring
 
-        # Import Inled repo key
-        pacman-key --recv-keys 89F828A9675B63CD0077CE9965AA57CF36E2018F
+        # Import and sign Inled repo key
+        curl -s https://apt.inled.es/archive.key | pacman-key -a -
         pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
 
         # Install Pulsar OS packages and bootloader
