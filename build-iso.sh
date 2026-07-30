@@ -204,7 +204,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         packages_to_install=()
         for item in "${MISSING_PACKAGES[@]}"; do
             case "$item" in
-                mmdebstrap|pacstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
+                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
                     packages_to_install+=("$item")
                     ;;
                 mksquashfs)
