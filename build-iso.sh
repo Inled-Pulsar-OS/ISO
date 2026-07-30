@@ -595,7 +595,6 @@ EOF
         pacman -Sy --noconfirm archlinux-keyring
 
         # Install Pulsar OS packages and bootloader
-        pacman -Syu --noconfirm
         pacman -S --noconfirm \
             $BOOTLOADER_PKGS \
             pulsaros-branding \
