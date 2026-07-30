@@ -354,9 +354,29 @@ fi
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 
+# Get the original user who ran the script to find their home and run makepkg
+ORIGINAL_USER=""
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    ORIGINAL_USER="$SUDO_USER"
+elif [ -n "$PKEXEC_UID" ] && [ "$PKEXEC_UID" != "0" ]; then
+    ORIGINAL_USER=$(id -un "$PKEXEC_UID" 2>/dev/null || true)
+fi
+
+if [ -z "$ORIGINAL_USER" ] || [ "$ORIGINAL_USER" = "root" ]; then
+    ORIGINAL_USER=$(stat -c '%U' "$ISO_DIR/.." 2>/dev/null || true)
+fi
+
+ORIGINAL_HOME=$(getent passwd "$ORIGINAL_USER" | cut -d: -f6)
+if [ -z "$ORIGINAL_HOME" ]; then
+    ORIGINAL_HOME="$HOME"
+fi
+
 # Pacman cache dir in home (not in /var/cache/pacman on root partition)
-PACMAN_CACHE_DIR="$HOME/.cache/pacman"
+PACMAN_CACHE_DIR="$ORIGINAL_HOME/.cache/pacman"
 mkdir -p "$PACMAN_CACHE_DIR"
+if [ "$EUID" -eq 0 ] && [ -n "$ORIGINAL_USER" ]; then
+    chown -R "$ORIGINAL_USER":"$ORIGINAL_USER" "$ORIGINAL_HOME/.cache" 2>/dev/null || true
+fi
 
 if $WITH_NVIDIA; then
     ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO-nvidia"
@@ -576,7 +596,9 @@ EOF
 
     # Disable CheckSpace: inside chroot, pacman reads host's /proc/self/mountinfo
     # and can't find chroot root as a mountpoint, causing false 'not enough space' errors.
-    echo 'CheckSpace = false' | $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null
+    # We must comment it out in the [options] section rather than appending a 'CheckSpace = false'
+    # which is not recognized as a valid directive under the [inled] section.
+    $SUDO sed -i 's/^[[:space:]]*CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
 
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
@@ -585,52 +607,190 @@ EOF
         BOOTLOADER_PKGS="refind efibootmgr"
     fi
 
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        set -e
+    if $USE_LOCAL_DEBS; then
+        echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes Arch locales ---"
+        pkg_dir_source="$ISO_DIR/../PKG/arch"
+        if [ ! -d "$pkg_dir_source" ]; then
+            pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG/arch"
+        fi
 
-        # Init pacman keyring
-        mkdir -p /etc/pacman.d/gnupg
-        chmod 700 /etc/pacman.d/gnupg
+        if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
+            echo "🔨 Compilando todos los paquetes locales de forma fresca..."
+            chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
+            # Run as the original non-root user since makepkg cannot run as root
+            if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
+                sudo -u "$ORIGINAL_USER" bash -c "cd '$pkg_dir_source' && ./package-and-deploy.sh all"
+            else
+                (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
+            fi
+        else
+            echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar paquetes pre-existentes."
+        fi
 
-        # Write mirrorlist
-        echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
+        LOCAL_PKGS_DIR=""
+        POSSIBLE_DIRS=(
+            "$ISO_DIR/../PKG/arch/build/packages"
+            "$ISO_DIR/../PKG/build/packages"
+            "/home/jaime/Documentos/pulsarbase/PKG/arch/build/packages"
+        )
 
-        # Init and populate keyring
-        pacman-key --init
-        pacman-key --populate archlinux
+        for dir in "${POSSIBLE_DIRS[@]}"; do
+            if [ -d "$dir" ] && [ -n "$(ls "$dir"/*.pkg.tar.zst 2>/dev/null)" ]; then
+                LOCAL_PKGS_DIR="$dir"
+                break
+            fi
+        done
 
-        # Import and sign Inled repo key from bundled file (before syncing Inled repo)
-        pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-        pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+        if [ -z "$LOCAL_PKGS_DIR" ]; then
+            echo "❌ Error: No se encontraron paquetes Arch locales en ninguna de las rutas de búsqueda:"
+            for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
+            echo "Ejecuta primero el empaquetador en la carpeta PKG/arch/."
+            exit 1
+        fi
 
-        # Sync databases and install keyring
-        pacman -Sy --noconfirm archlinux-keyring
+        # Compile and gather AUR dependencies on the host, saving them directly into LOCAL_PKGS_DIR
+        # so they are copied and installed inside the chroot
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin")
+        aur_helper=""
+        if command -v yay >/dev/null 2>&1; then
+            aur_helper="yay"
+        elif command -v paru >/dev/null 2>&1; then
+            aur_helper="paru"
+        fi
 
-        # Install Pulsar OS packages and bootloader
-        pacman -S --noconfirm \
-            $BOOTLOADER_PKGS \
-            pulsaros-branding \
-            pulsaros-theme \
-            pulsaros-gnome \
-            pulsaros-global-menu \
-            pulsaros-spotlight-launcher \
-            pulsaros-sddm \
-            pulsaros-plymouth \
-            pulsaros-\$BOOTLOADER \
-            pulsaros-calamares \
-            pulsaros-essential \
-            pulsaros-welcome \
-            pulsaros-recovery \
-            pulsaros-bootsound \
-            gnome-macos-remap-wayland \
-            droidtux \
-            macboat \
-            appinstall \
-            seafari \
-            spotlight-python
-    "
+        if [ -n "$aur_helper" ]; then
+            for dep in "${AUR_DEPS[@]}"; do
+                # Check if package is already built/present in LOCAL_PKGS_DIR
+                if ls "$LOCAL_PKGS_DIR"/$dep-*.pkg.tar.zst >/dev/null 2>&1; then
+                    echo "✅ Dependencia AUR ya compilada: $dep"
+                    continue
+                fi
+                
+                echo "🔨 Compilando dependencia AUR: $dep..."
+                BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep"
+                $SUDO rm -rf "$BUILD_TEMP_DIR"
+                mkdir -p "$BUILD_TEMP_DIR"
+                $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$BUILD_TEMP_DIR"
+                
+                # Download PKGBUILD using helper
+                sudo -u "$ORIGINAL_USER" bash -c "cd '$BUILD_TEMP_DIR' && $aur_helper -G '$dep'"
+                
+                dep_dir=$(find "$BUILD_TEMP_DIR" -maxdepth 2 -type d -name "$dep")
+                if [ -n "$dep_dir" ]; then
+                    # Build package and save to LOCAL_PKGS_DIR
+                    # We run as ORIGINAL_USER since makepkg cannot run as root.
+                    sudo -u "$ORIGINAL_USER" bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                    echo "✅ Dependencia AUR $dep compilada con éxito."
+                else
+                    echo "❌ Error: No se pudo obtener el PKGBUILD para $dep."
+                    exit 1
+                fi
+                $SUDO rm -rf "$BUILD_TEMP_DIR"
+            done
+        fi
 
-    echo "✅ Paquetes de Arch instalados desde el repositorio Inled."
+        # Compile spotlight-gtk local package if it exists on the host
+        SPOTLIGHT_REPO_DIR="/home/jaime/Documentos/spotlight-gtk"
+        if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
+            if ! ls "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst >/dev/null 2>&1; then
+                echo "🔨 Compilando spotlight-gtk localmente..."
+                sudo -u "$ORIGINAL_USER" bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                echo "✅ spotlight-gtk compilado con éxito."
+            fi
+        fi
+
+        echo "📂 Usando paquetes locales desde: $LOCAL_PKGS_DIR"
+        $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
+        $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
+        if [ "$BOOTLOADER" = "grub" ]; then
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
+        else
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-grub-*.pkg.tar.zst
+        fi
+
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            set -e
+
+            # Init pacman keyring
+            mkdir -p /etc/pacman.d/gnupg
+            chmod 700 /etc/pacman.d/gnupg
+
+            # Write mirrorlist
+            echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
+
+            # Init and populate keyring
+            pacman-key --init
+            pacman-key --populate archlinux
+
+            # Import and sign Inled repo key from bundled file (before syncing Inled repo)
+            pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+            pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+
+            # Sync databases and install keyring
+            pacman -Sy --noconfirm archlinux-keyring
+
+            # Install local packages (using -U) and pull dependencies
+            pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
+
+            # Install remaining dependencies and packages
+            pacman -S --noconfirm --overwrite '*' \
+                $BOOTLOADER_PKGS \
+                droidtux \
+                macboat \
+                appinstall \
+                seafari \
+                spotlight-gtk
+        "
+        $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
+        echo "✅ Paquetes locales de Arch instalados con éxito."
+    else
+        echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio Arch (Inled) ---"
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            set -e
+
+            # Init pacman keyring
+            mkdir -p /etc/pacman.d/gnupg
+            chmod 700 /etc/pacman.d/gnupg
+
+            # Write mirrorlist
+            echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
+
+            # Init and populate keyring
+            pacman-key --init
+            pacman-key --populate archlinux
+
+            # Import and sign Inled repo key from bundled file (before syncing Inled repo)
+            pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+            pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+
+            # Sync databases and install keyring
+            pacman -Sy --noconfirm archlinux-keyring
+
+            # Install Pulsar OS packages and bootloader
+            pacman -S --noconfirm --overwrite '*' \
+                $BOOTLOADER_PKGS \
+                pulsaros-branding \
+                pulsaros-theme \
+                pulsaros-gnome \
+                pulsaros-global-menu \
+                pulsaros-spotlight-launcher \
+                pulsaros-sddm \
+                pulsaros-plymouth \
+                pulsaros-$BOOTLOADER \
+                pulsaros-calamares \
+                pulsaros-essential \
+                pulsaros-welcome \
+                pulsaros-recovery \
+                pulsaros-bootsound \
+                gnome-macos-remap-wayland \
+                droidtux \
+                macboat \
+                appinstall \
+                seafari \
+                spotlight-gtk
+        "
+        echo "✅ Paquetes de Arch instalados desde el repositorio Inled."
+    fi
 else
     # ==========================================================================
     # DEBIAN PATH (original)
@@ -695,6 +855,7 @@ EOF
 
         if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
             echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
+            chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
             (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
         else
             echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
@@ -830,12 +991,14 @@ fi
 # FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
 # ==============================================================================
 
-# Configure spotlight-python icon / Configurar el icono de spotlight-python a 'view-app-grid'
+# Configure spotlight icon / Configurar el icono de spotlight a 'view-app-grid'
 echo "⚙️ Personalizando lanzador de Spotlight..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
     if [ -f /usr/share/applications/spotlight-python.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
+    elif [ -f /usr/share/applications/spotlight-gtk.desktop ]; then
+        sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-gtk.desktop
     fi
 "
 
