@@ -251,9 +251,9 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                 if [ ${#pacman_official[@]} -gt 0 ]; then
                     echo "📥 Instalando dependencias oficiales usando pacman..."
                     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-                        pkexec pacman -Syu --noconfirm "${pacman_official[@]}"
+                        pkexec pacman -Sy --noconfirm "${pacman_official[@]}"
                     else
-                        sudo pacman -Syu --noconfirm "${pacman_official[@]}"
+                        sudo pacman -Sy --noconfirm "${pacman_official[@]}"
                     fi
                 fi
 
@@ -456,7 +456,8 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
         
         # Bootstrap Arch Linux using pacstrap
-        $SUDO pacstrap -c "$ROOTFS_BASE" $PACKAGE_LIST
+        mkdir -p "$ROOTFS_BASE"
+        $SUDO pacstrap -K -c "$ROOTFS_BASE" $PACKAGE_LIST
         
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
