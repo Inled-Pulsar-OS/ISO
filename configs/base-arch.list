@@ -99,6 +99,7 @@ mesa-utils
 squashfs-tools
 # Arch Linux ISO live
 archiso
+mkinitcpio-archiso
 # NVIDIA Drivers (open source driver modern)
 nvidia-open
 nvidia-settings

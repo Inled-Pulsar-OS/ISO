@@ -22,6 +22,14 @@
 #                   Usa los paquetes .deb locales de build/packages/ en vez del repo.
 #   --arch          Build Arch Linux edition instead of Debian.
 #                   Construye la edición Arch Linux en vez de Debian.
+#
+# Safety / Seguridad:
+#   By default the script NEVER installs packages on the host machine. If host
+#   dependencies are missing it aborts with instructions. To allow host package
+#   installation, run with ALLOW_HOST_INSTALL=true (dangerous on Arch hosts).
+#   Por defecto el script NUNCA instala paquetes en el host. Si faltan dependencias
+#   del host, aborta con instrucciones. Para autorizar la instalación en el host,
+#   ejecuta con ALLOW_HOST_INSTALL=true (peligroso en hosts Arch).
 # ==============================================================================
 
 set -e
@@ -173,6 +181,18 @@ fi
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo "⚠️ Se ha detectado que faltan dependencias esenciales en el host: ${MISSING_PACKAGES[*]}"
     echo "Estas herramientas son requeridas para la compilación de Pulsar OS ($BOOTLOADER)."
+    
+    # SAFETY GUARD: never touch the host package manager by default.
+    # The ISO build runs on the user's own machine (often Arch), and host-level
+    # pacman/apt operations (especially 'pacman -Sy' partial upgrades) can break it.
+    # Only auto-install when explicitly requested with --install-host-deps.
+    # GUARDIA DE SEGURIDAD: por defecto nunca se toca el gestor de paquetes del host.
+    if [ "$ALLOW_HOST_INSTALL" != "true" ]; then
+        echo "❌ Dependencias del host faltantes. NO se auto-instalarán para proteger tu sistema."
+        echo "   Instala manualmente los paquetes que falten (p. ej. pacman -S ${MISSING_PACKAGES[*]})"
+        echo "   o repite el comando con la variable ALLOW_HOST_INSTALL=true para autorizar la instalación."
+        exit 1
+    fi
     
     # Auto-approve if in non-interactive environment (CI, pipeline, no TTY stdin)
     # Aprobación automática si estamos en un entorno no interactivo (CI, pipeline, sin TTY stdin)
@@ -557,8 +577,10 @@ $SUDO mount -t sysfs sys "$ROOTFS_TARGET/sys"
 $SUDO mount --bind /dev "$ROOTFS_TARGET/dev"
 $SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
 
-# Bind mount pacman cache dir in home (not root partition)
-$SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
+# Bind mount pacman cache dir in home (not root partition) if on Arch
+if [ "$DISTRO" = "arch" ]; then
+    $SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
+fi
 
 # Ensure working DNS in chroot / Asegurar DNS funcional en el chroot
 if [ -f "$ROOTFS_TARGET/etc/resolv.conf" ]; then
@@ -1035,8 +1057,19 @@ $SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 
 if [ "$DISTRO" = "arch" ]; then
     echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
+    # Create mkinitcpio hook configuration for live booting
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
+    echo 'HOOKS=(base udev modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         mkinitcpio -P
+    "
+    # Copy skeleton files to live user home directory to ensure all dconf settings and GTK4 themes are applied
+    echo "⚙️ Configurando el directorio home del usuario live..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        if [ -d /home/live ]; then
+            cp -rf /etc/skel/. /home/live/ 2>/dev/null || true
+            chown -R live:live /home/live 2>/dev/null || true
+        fi
     "
 else
     echo "--- 🔄 Finalizando y actualizando initramfs ---"
@@ -1070,22 +1103,33 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... / Compressing rootfs into SquashFS..."
 # Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
 # Excluimos directorios dinámicos, temporales y sistemas de archivos virtuales para ahorrar espacio y evitar errores
-$SUDO mksquashfs "$ROOTFS_TARGET" "$ISO_STAGING/live/filesystem.squashfs" \
-    -noappend \
-    -comp xz \
-    -e proc/* \
-    -e sys/* \
-    -e dev/* \
-    -e run/* \
-    -e tmp/* \
-    -e var/tmp/* \
-    -e var/log/* \
-    -e root/.bash_history
+    if [ "$DISTRO" = "arch" ]; then
+        SQUASHFS_OUT="$ISO_STAGING/live/x86_64/airootfs.sfs"
+        $SUDO mkdir -p "$ISO_STAGING/live/x86_64"
+    else
+        SQUASHFS_OUT="$ISO_STAGING/live/filesystem.squashfs"
+    fi
+    $SUDO mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
+        -noappend \
+        -comp xz \
+        -e proc/* \
+        -e sys/* \
+        -e dev/* \
+        -e run/* \
+        -e tmp/* \
+        -e var/tmp/* \
+        -e var/log/* \
+        -e root/.bash_history
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 echo "🐧 Copiando Kernel e Initrd... / Copying Kernel and Initrd..."
-KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
-INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initrd.img-* 2>/dev/null | head -n 1)
+if [ "$DISTRO" = "arch" ]; then
+    KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+    INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initramfs-*.img 2>/dev/null | grep -v fallback | head -n 1)
+else
+    KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+    INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initrd.img-* 2>/dev/null | head -n 1)
+fi
 
 if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
     echo "❌ Error: No se encontró kernel o initrd en el chroot target. / Error: Kernel or initrd not found in target chroot."
@@ -1103,10 +1147,10 @@ if [ "$BOOTLOADER" = "grub" ]; then
     $SUDO mkdir -p "$ISO_STAGING/boot/grub"
     
     # Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
-    if [ -d "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" ]; then
+    if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
         echo "🎨 Copiando tema de GRUB de Pulsar OS a la ISO staging..."
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
-        $SUDO cp -r "$ROOTFS_TARGET/usr/share/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+        $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
     fi
     
     # Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
@@ -1119,6 +1163,13 @@ if [ "$BOOTLOADER" = "grub" ]; then
     
     # Create GRUB bootloader configuration / Crear menú de arranque de GRUB
     echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
+    
+    if [ "$DISTRO" = "arch" ]; then
+        KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
+    else
+        KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+    fi
+
     cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
 set default="0"
 set timeout=10
@@ -1144,7 +1195,7 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz boot=live components username=live autologin quiet splash loglevel=3 noprompt --
+    linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd
 }
 EOF
@@ -1154,8 +1205,17 @@ EOF
     else
         ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}.iso"
     fi
+    # Create a temporary xorriso wrapper to force -iso-level 3
+    # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
+    # We also set the volume label to PULSAR_ISO so the archiso hook can locate it
+    WRAPPER_PATH="/tmp/xorriso-wrapper"
+    echo '#!/bin/bash' > "$WRAPPER_PATH"
+    echo 'exec xorriso "$@" -iso-level 3 -volid PULSAR_ISO' >> "$WRAPPER_PATH"
+    chmod +x "$WRAPPER_PATH"
+
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
-    $SUDO grub-mkrescue -o "$ISO_OUTPUT" "$ISO_STAGING"
+    $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
+    rm -f "$WRAPPER_PATH"
 
 else
     # --------------------------------------------------------------------------
