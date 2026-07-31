@@ -110,3 +110,20 @@ linux-headers
 dkms
 # Firmware
 linux-firmware
+# Controladores de vídeo de código abierto
+xf86-video-amdgpu
+xf86-video-ati
+xf86-video-intel
+xf86-video-nouveau
+# Soporte de Vulkan
+vulkan-intel
+vulkan-radeon
+# Firmware de sonido (crucial para portátiles modernos)
+sof-firmware
+alsa-firmware
+# Integración con Máquinas Virtuales (QEMU, VirtualBox, VMware)
+xf86-video-qxl
+open-vm-tools
+virtualbox-guest-utils
+# Soporte de Wi-Fi para NetworkManager
+wpa_supplicant

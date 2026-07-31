@@ -11,18 +11,47 @@ on:
         description: 'Title for the release / Título de la release'
         required: true
         default: 'Pulsar OS Tahoe Latest'
+      branch:
+        description: 'Branch to build / Rama a compilar'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - forky
+          - rolling
 
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Build ISO (${{ matrix.name }})
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository / Descargar repositorio
-        uses: actions/checkout@v4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'debian-grub'
+            args: '--debian --grub'
+            use_docker: false
+          - name: 'debian-refind'
+            args: '--debian --refind'
+            use_docker: false
+          - name: 'arch-grub'
+            args: '--arch --grub'
+            use_docker: true
 
-      - name: Install build dependencies on host / Instalar dependencias en el host
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      # 2. Build on host (for Debian)
+      - name: Build Debian ISO on Host
+        if: matrix.use_docker == false
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -34,24 +63,83 @@ jobs:
             xorriso \
             mtools \
             binutils
-
-      - name: Build Pulsar OS ISO / Compilar la ISO de Pulsar OS
-        run: |
           chmod +x build-iso.sh
-          # Run the build script in production mode (will pull packages from the Inled APT repo)
-          # Ejecutar el script en modo de producción (descargará los paquetes del repo APT de Inled)
-          ./build-iso.sh
+          sudo ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
 
-      - name: Create Release and Upload ISO / Crear Release y subir archivo ISO
+      # 3. Build inside privileged Docker container (for Arch)
+      - name: Build Arch ISO inside Docker
+        if: matrix.use_docker == true
+        run: |
+          sudo docker run --privileged --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            archlinux:latest bash -c "
+              pacman-key --init
+              pacman-key --populate archlinux
+              pacman -Syu --noconfirm base-devel git arch-install-scripts squashfs-tools grub xorriso mtools binutils dosfstools libisoburn rsync jq curl wget
+              
+              chmod +x ./build-iso.sh
+              ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
+            "
+
+      # 4. Upload built ISO as run artifact
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-${{ matrix.name }}
+          path: build/pulsaros-*.iso
+          retention-days: 1
+
+  release:
+    name: Create Release and Upload ISOs
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Download all ISO artifacts
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # 2. Gather ISOs into a single directory and rename them to match the release version
+      - name: Gather and Rename ISO Files
+        run: |
+          mkdir dist
+          find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
+          cd dist
+          for f in *.iso; do
+            # Replace the branch name with the user-specified release tag
+            new_name=$(echo "$f" | sed "s/${{ github.event.inputs.branch }}/${{ github.event.inputs.release_tag }}/g")
+            if [ "$f" != "$new_name" ]; then
+              mv -v "$f" "$new_name"
+            fi
+          done
+          echo "📦 ISOs gathered and renamed:"
+          ls -la
+
+      # 3. Create Release and Upload all ISOs
+      - name: Create Release and Upload ISOs
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: ${{ github.event.inputs.release_title }}
           body: |
-            Automatic build of Pulsar OS Live ISO.
+            Automatic build of Pulsar OS Live ISOs.
             
-            Compilación automática de la imagen Live ISO de Pulsar OS.
-          files: build/pulsaros.iso
+            This release contains the following editions:
+            - **Debian (GRUB)**: Classic Debian-based edition with GRUB bootloader.
+            - **Debian (rEFInd)**: Debian-based edition with modern rEFInd bootloader.
+            - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
+            
+            ---
+            
+            Compilación automática de las imágenes Live ISO de Pulsar OS.
+            
+            Esta entrega contiene las siguientes ediciones:
+            - **Debian (GRUB)**: Edición clásica basada en Debian con cargador de arranque GRUB.
+            - **Debian (rEFInd)**: Edición basada en Debian con el cargador de arranque moderno rEFInd.
+            - **Arch Linux (GRUB)**: Edición basada en Arch Linux con cargador de arranque GRUB.
+          files: dist/*.iso
           draft: false
           prerelease: false
         env:

@@ -708,9 +708,7 @@ EOF
             exit 1
         fi
 
-        # Compile and gather AUR dependencies on the host, saving them directly into LOCAL_PKGS_DIR
-        # so they are copied and installed inside the chroot
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-common" "autokey-gtk")
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -732,11 +730,29 @@ EOF
                 mkdir -p "$BUILD_TEMP_DIR"
                 $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$BUILD_TEMP_DIR"
                 
-                # Download PKGBUILD using helper
-                run_as_user bash -c "cd '$BUILD_TEMP_DIR' && $aur_helper -G '$dep'"
+                # Resolve package base name for split packages
+                pkg_base="$dep"
+                if [ "$dep" = "autokey-gtk" ]; then
+                    pkg_base="autokey"
+                fi
+
+                # Download PKGBUILD using git clone directly for reliability and speed
+                run_as_user bash -c "cd '$BUILD_TEMP_DIR' && git clone https://aur.archlinux.org/${pkg_base}.git"
                 
-                dep_dir=$(find "$BUILD_TEMP_DIR" -maxdepth 2 -type d -name "$dep")
+                # Dynamically locate the directory containing the PKGBUILD
+                dep_dir=$(find "$BUILD_TEMP_DIR" -maxdepth 2 -name "PKGBUILD" -exec dirname {} \; | head -n 1)
+
                 if [ -n "$dep_dir" ]; then
+                    # If we are building autokey, strip autokey-qt to avoid unresolvable Qt5/QScintilla dependencies
+                    if [ "$pkg_base" = "autokey" ]; then
+                        echo "⚙️ Quitando autokey-qt del PKGBUILD para evitar fallos de dependencias..."
+                        sed -i "s/'autokey-qt'//g" "$dep_dir/PKGBUILD"
+                        sed -i 's/"autokey-qt"//g' "$dep_dir/PKGBUILD"
+                        sed -i 's/ autokey-qt//g' "$dep_dir/PKGBUILD"
+                        sed -i "s/''//g" "$dep_dir/PKGBUILD"
+                        sed -i 's/""//g' "$dep_dir/PKGBUILD"
+                    fi
+
                     # Build package and save to LOCAL_PKGS_DIR
                     # We run as ORIGINAL_USER since makepkg cannot run as root.
                     # -sf resolves deps from official repos; if a runtime dep is
@@ -771,6 +787,11 @@ EOF
         echo "📂 Usando paquetes locales desde: $LOCAL_PKGS_DIR"
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
+        
+        # Clean up packages that are not needed or cause dependency issues inside the chroot
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/autokey-qt-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
+
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
         else
