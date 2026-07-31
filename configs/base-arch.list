@@ -127,3 +127,4 @@ open-vm-tools
 virtualbox-guest-utils
 # Soporte de Wi-Fi para NetworkManager
 wpa_supplicant
+python-yaml

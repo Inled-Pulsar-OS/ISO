@@ -708,7 +708,7 @@ EOF
             exit 1
         fi
 
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk")
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "gnome-shell-extension-gsconnect" "winboat-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
