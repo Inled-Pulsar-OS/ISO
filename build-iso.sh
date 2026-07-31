@@ -650,7 +650,7 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
 
 [inled]
-SigLevel = PackageRequired
+SigLevel = Optional TrustAll
 Server = https://apt.inled.es/arch/
 EOF
 
@@ -774,14 +774,13 @@ EOF
             done
         fi
 
-        # Compile spotlight-gtk local package if it exists on the host
+        # Compile spotlight-gtk local package if it exists on the host (always rebuild to catch changes)
         SPOTLIGHT_REPO_DIR="/home/jaime/Documentos/spotlight-gtk"
         if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
-            if ! ls "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst >/dev/null 2>&1; then
-                echo "🔨 Compilando spotlight-gtk localmente..."
-                run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
-                echo "✅ spotlight-gtk compilado con éxito."
-            fi
+            echo "🔨 Compilando spotlight-gtk localmente..."
+            rm -f "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst
+            run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+            echo "✅ spotlight-gtk compilado con éxito."
         fi
 
         echo "📂 Usando paquetes locales desde: $LOCAL_PKGS_DIR"
@@ -1211,6 +1210,12 @@ fi
 $SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
 $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
 
+if [ "$DISTRO" = "arch" ]; then
+    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
+else
+    KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+fi
+
 if [ "$BOOTLOADER" = "grub" ]; then
     # --------------------------------------------------------------------------
     # GRUB BOOTLOADER PACKAGING
@@ -1236,11 +1241,7 @@ if [ "$BOOTLOADER" = "grub" ]; then
     # Create GRUB bootloader configuration / Crear menú de arranque de GRUB
     echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
     
-    if [ "$DISTRO" = "arch" ]; then
-        KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
-    else
-        KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
-    fi
+
 
     cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
 set default="0"
@@ -1298,9 +1299,9 @@ else
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
     EFI_IMG="$ISO_STAGING/boot/efi.img"
 
-    # Create a 150MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
-    # Crear un archivo vacío de 150MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
-    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=150 2>/dev/null
+    # Create a 350MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
+    # Crear un archivo vacío de 350MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
+    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=350 2>/dev/null
     $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
 
     # Create temporary refind.conf for the ISO boot (full config with theme — goes inside efi.img)
@@ -1318,7 +1319,7 @@ menuentry "Pulsar OS Live" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+    options "$KERNEL_PARAMS"
 }
 EOF
 
@@ -1332,7 +1333,7 @@ default_selection "+,pulsaros,Pulsar OS Live"
 menuentry "Pulsar OS Live" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+    options "$KERNEL_PARAMS"
 }
 EOF
 
@@ -1349,14 +1350,20 @@ EOF
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
 
+    # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
+    REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind"
+    if [ -d "$ROOTFS_TARGET/usr/share/refind/refind" ]; then
+        REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind/refind"
+    fi
+
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
     # NOTE: refind.conf, icons and theme go ONLY inside efi.img to avoid rEFInd
     # processing showtools from two filesystems and duplicating tool buttons.
     # Solo el bootloader, driver, kernel e initrd van en la raíz ISO.
     echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
-    $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
+    $SUDO cp "$REFIND_SHARE_DIR/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
-    $SUDO cp "$ROOTFS_TARGET/usr/share/refind/refind/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
+    $SUDO cp "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
     $SUDO cp "$BUILD_DIR/refind-minimal.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
     # Copy kernel and initrd directly to the UEFI boot folder on the ISO
     # Copiar kernel e initrd directamente al directorio de arranque UEFI en la ISO
@@ -1371,10 +1378,10 @@ EOF
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/icons
 
-    $SUDO mcopy -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/refind_x64.efi" ::/EFI/BOOT/bootx64.efi
-    $SUDO mcopy -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/drivers_x64/"*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
+    $SUDO mcopy -i "$EFI_IMG" "$REFIND_SHARE_DIR/refind_x64.efi" ::/EFI/BOOT/bootx64.efi
+    $SUDO mcopy -i "$EFI_IMG" "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
     $SUDO mcopy -i "$EFI_IMG" "$BUILD_DIR/refind.conf" ::/EFI/BOOT/refind.conf
-    $SUDO mcopy -s -i "$EFI_IMG" "$ROOTFS_TARGET/usr/share/refind/refind/icons"/* ::/EFI/BOOT/icons/
+    $SUDO mcopy -s -i "$EFI_IMG" "$REFIND_SHARE_DIR/icons"/* ::/EFI/BOOT/icons/
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes/rEFInd-Regular-Dark
     $SUDO mcopy -s -i "$EFI_IMG" "$BUILD_DIR/refind-mac-theme"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
     # Copy kernel and initrd directly to the efi.img FAT volume using mtools
@@ -1395,7 +1402,7 @@ EOF
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \
       -o "$ISO_OUTPUT" \
-      -J -R -V "Pulsar OS" \
+      -J -R -V "PULSAR_ISO" \
       -eltorito-alt-boot \
       -e "boot/efi.img" \
       -no-emul-boot \
