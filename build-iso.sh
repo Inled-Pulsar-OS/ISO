@@ -710,7 +710,7 @@ EOF
 
         # Compile and gather AUR dependencies on the host, saving them directly into LOCAL_PKGS_DIR
         # so they are copied and installed inside the chroot
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin")
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-common" "autokey-gtk")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -739,7 +739,16 @@ EOF
                 if [ -n "$dep_dir" ]; then
                     # Build package and save to LOCAL_PKGS_DIR
                     # We run as ORIGINAL_USER since makepkg cannot run as root.
-                    run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                    # -sf resolves deps from official repos; if a runtime dep is
+                    # itself AUR (e.g. autokey-gtk -> autokey-common), -sf fails,
+                    # so install the AUR packages already built on the host and retry.
+                    if ! run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"; then
+                        echo "⚠️ $dep necesita deps AUR ya compiladas; instalándolas en el host y reintentando..."
+                        for p in "$LOCAL_PKGS_DIR"/*.pkg.tar.zst; do
+                            $SUDO pacman -U --noconfirm --needed "$p" 2>/dev/null || true
+                        done
+                        run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                    fi
                     echo "✅ Dependencia AUR $dep compilada con éxito."
                 else
                     echo "❌ Error: No se pudo obtener el PKGBUILD para $dep."
