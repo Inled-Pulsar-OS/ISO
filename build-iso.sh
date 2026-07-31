@@ -443,7 +443,45 @@ cleanup() {
         $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
     fi
 }
+
+# Preflight: release any leftover mounts from previous interrupted builds.
+# This runs once at startup so a fresh build never fails on stale mounts.
+# Prelanzamiento: libera montajes residuales de builds interrumpidos.
+# Se ejecuta una vez al inicio para que un build nuevo nunca falle por montajes viejos.
+preflight_cleanup() {
+    echo "🔍 Comprobando montajes residuales de builds anteriores..."
+    # Unmount anything mounted under the build directory (leftover chroot mounts)
+    # Desmontar todo lo montado bajo el directorio de build (montajes chroot residuales)
+    awk '$2 ~ "^'"$BUILD_DIR"'/" || $2 == "'"$BUILD_DIR"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
+        echo "   Desmontando residual: $mp"
+        $SUDO umount -l "$mp" 2>/dev/null || true
+    done
+    # Free known helper mount points (e.g. ISO verification leftovers)
+    # Liberar puntos de montaje auxiliares conocidos (p.ej. sobras de verificación ISO)
+    for mp in /tmp/iso-mnt /tmp/pulsar-verify /tmp/pulsar-iso; do
+        if mountpoint -q "$mp" 2>/dev/null; then
+            echo "   Desmontando residual: $mp"
+            $SUDO umount -l "$mp" 2>/dev/null || true
+        fi
+    done
+    echo "✅ Comprobación de montajes residuales completada."
+}
+
+# Run a command as the original non-root user without requiring a pty.
+# runuser does not need a controlling terminal, so it works when this script
+# is re-executed under pkexec (where 'sudo -u' fails to allocate a pty).
+# Ejecuta un comando como el usuario original sin requerir una pty.
+# runuser no necesita terminal de control, por lo que funciona cuando este
+# script se re-ejecuta bajo pkexec (donde 'sudo -u' no puede asignar una pty).
+run_as_user() {
+    if command -v runuser >/dev/null 2>&1; then
+        runuser -u "$ORIGINAL_USER" -- "$@"
+    else
+        sudo -u "$ORIGINAL_USER" -- "$@"
+    fi
+}
 trap cleanup EXIT INT TERM
+preflight_cleanup
 
 # ==============================================================================
 # PHASE 2: Build and Maintain Base Cache / FASE 2: Caché Base Virgen
@@ -641,7 +679,7 @@ EOF
             chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
             # Run as the original non-root user since makepkg cannot run as root
             if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
-                sudo -u "$ORIGINAL_USER" bash -c "cd '$pkg_dir_source' && ./package-and-deploy.sh all"
+                run_as_user bash -c "cd '$pkg_dir_source' && ./package-and-deploy.sh all"
             else
                 (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
             fi
@@ -695,13 +733,13 @@ EOF
                 $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$BUILD_TEMP_DIR"
                 
                 # Download PKGBUILD using helper
-                sudo -u "$ORIGINAL_USER" bash -c "cd '$BUILD_TEMP_DIR' && $aur_helper -G '$dep'"
+                run_as_user bash -c "cd '$BUILD_TEMP_DIR' && $aur_helper -G '$dep'"
                 
                 dep_dir=$(find "$BUILD_TEMP_DIR" -maxdepth 2 -type d -name "$dep")
                 if [ -n "$dep_dir" ]; then
                     # Build package and save to LOCAL_PKGS_DIR
                     # We run as ORIGINAL_USER since makepkg cannot run as root.
-                    sudo -u "$ORIGINAL_USER" bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                    run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
                     echo "✅ Dependencia AUR $dep compilada con éxito."
                 else
                     echo "❌ Error: No se pudo obtener el PKGBUILD para $dep."
@@ -716,7 +754,7 @@ EOF
         if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
             if ! ls "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst >/dev/null 2>&1; then
                 echo "🔨 Compilando spotlight-gtk localmente..."
-                sudo -u "$ORIGINAL_USER" bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
                 echo "✅ spotlight-gtk compilado con éxito."
             fi
         fi
@@ -1060,6 +1098,10 @@ if [ "$DISTRO" = "arch" ]; then
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
+    # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
+    if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
+        $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
+    fi
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         mkinitcpio -P
     "
