@@ -41,6 +41,9 @@ jobs:
           - name: 'arch-grub'
             args: '--arch --grub'
             use_docker: true
+          - name: 'arch-refind'
+            args: '--arch --refind'
+            use_docker: true
 
     steps:
       # 1. Checkout repository
@@ -58,10 +61,12 @@ jobs:
             mmdebstrap \
             rsync \
             squashfs-tools \
+            grub-common \
             grub-efi-amd64-bin \
             grub-pc-bin \
             xorriso \
             mtools \
+            dosfstools \
             binutils
           chmod +x build-iso.sh
           sudo ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
@@ -119,7 +124,7 @@ jobs:
 
       # 3. Create Release and Upload all ISOs
       - name: Create Release and Upload ISOs
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: ${{ github.event.inputs.release_title }}
@@ -130,6 +135,7 @@ jobs:
             - **Debian (GRUB)**: Classic Debian-based edition with GRUB bootloader.
             - **Debian (rEFInd)**: Debian-based edition with modern rEFInd bootloader.
             - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
+            - **Arch Linux (rEFInd)**: Arch-based edition with modern rEFInd bootloader.
             
             ---
             
@@ -139,6 +145,7 @@ jobs:
             - **Debian (GRUB)**: Edición clásica basada en Debian con cargador de arranque GRUB.
             - **Debian (rEFInd)**: Edición basada en Debian con el cargador de arranque moderno rEFInd.
             - **Arch Linux (GRUB)**: Edición basada en Arch Linux con cargador de arranque GRUB.
+            - **Arch Linux (rEFInd)**: Edición basada en Arch Linux con el cargador de arranque moderno rEFInd.
           files: dist/*.iso
           draft: false
           prerelease: false
