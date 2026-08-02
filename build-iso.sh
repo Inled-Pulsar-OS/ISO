@@ -660,6 +660,12 @@ EOF
     # which is not recognized as a valid directive under the [inled] section.
     $SUDO sed -i 's/^[[:space:]]*CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
 
+    # Trust all repositories globally: on a freshly bootstrapped chroot the core/extra
+    # database signature check can silently drop the database, making pacman report
+    # packages as 'target not found' (e.g. 'error: target not found: archlinux-keyring').
+    # Only the first SigLevel line belongs to [options]; the [inled] one is left as-is.
+    $SUDO sed -i '0,/^[[:space:]]*SigLevel/s/^[[:space:]]*SigLevel.*/SigLevel = Optional TrustAll/' "$ROOTFS_TARGET/etc/pacman.conf"
+
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub"
@@ -1053,7 +1059,7 @@ EOF
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
                 pulsaros-plymouth \
-                pulsaros-\$BOOTLOADER \
+                pulsaros-$BOOTLOADER \
                 pulsaros-calamares \
                 pulsaros-essential \
                 pulsaros-welcome \
