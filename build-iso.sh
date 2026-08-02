@@ -646,6 +646,30 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
     $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
+    # The archlinux:latest docker image now ships a pacman.conf with
+    # 'NoExtract = etc/pacman.conf', so pacstrap leaves the chroot WITHOUT a
+    # pacman.conf. Write a complete default one (if missing) so the official
+    # [core]/[extra] repos and their mirrorlist Include are enabled; the Inled
+    # repo is appended below.
+    if [ ! -s "$ROOTFS_TARGET/etc/pacman.conf" ] || ! grep -q '^\[core\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
+        $SUDO tee "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<'EOF'
+[options]
+HoldPkg = pacman glibc
+Architecture = auto
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Optional
+#CheckSpace
+NoProgressBar
+ParallelDownloads = 5
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+EOF
+    fi
+
     # Configure Inled pacman repository
     $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
 
@@ -839,8 +863,9 @@ $pkg_name"
             pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
             pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
 
-            # Sync databases and install keyring
-            pacman -Sy --noconfirm archlinux-keyring
+            # Sync databases and install keyring. -Syy forces a full refresh so the
+            # target downloads fresh core/extra databases for its own pacman.
+            pacman -Syy --noconfirm archlinux-keyring
 
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
@@ -876,8 +901,9 @@ $pkg_name"
             pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
             pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
 
-            # Sync databases and install keyring
-            pacman -Sy --noconfirm archlinux-keyring
+            # Sync databases and install keyring. -Syy forces a full refresh so the
+            # target downloads fresh core/extra databases for its own pacman.
+            pacman -Syy --noconfirm archlinux-keyring
 
             # Install Pulsar OS packages and bootloader
             pacman -S --noconfirm --overwrite '*' \
