@@ -708,6 +708,24 @@ EOF
             exit 1
         fi
 
+        # Deduplicate local packages keeping only the newest version of each
+        # package. pacman -U rejects two versions of the same package with
+        # "duplicate target", and the package build directory accumulates old
+        # builds over time.
+        echo "🧹 Eliminando versiones antiguas de paquetes locales..."
+        for pkg_file in $(ls -rv "$LOCAL_PKGS_DIR"/*.pkg.tar.zst 2>/dev/null); do
+            pkg_name=$(LC_ALL=C pacman -Qip "$pkg_file" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
+            [ -z "$pkg_name" ] && continue
+            if echo "$seen_pkg_names" | grep -qx "$pkg_name"; then
+                echo "   Eliminando versión anterior de $pkg_name: $(basename "$pkg_file")"
+                rm -f "$pkg_file"
+            else
+                seen_pkg_names="$seen_pkg_names
+$pkg_name"
+            fi
+        done
+        unset seen_pkg_names
+
         AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "gnome-shell-extension-gsconnect" "winboat-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
