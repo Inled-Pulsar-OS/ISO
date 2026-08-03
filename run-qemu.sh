@@ -130,9 +130,9 @@ esac
 if $USE_ISO; then
     if [ "$BOOTLOADER" = "refind" ]; then
         if $WITH_NVIDIA; then
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-${DISTRO}-nvidia.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-${DISTRO}-refind-nvidia.iso"
         else
-            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-refind-${DISTRO}.iso"
+            ISO_PATH="$ISO_DIR/build/pulsaros-${BRANCH}-${DISTRO}-refind.iso"
         fi
     else
         if $WITH_NVIDIA; then

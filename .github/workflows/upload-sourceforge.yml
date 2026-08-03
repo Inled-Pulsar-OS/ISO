@@ -10,10 +10,10 @@ on:
         description: 'Branch that was built (used to rename the artifacts)'
         required: true
         default: 'stable'
-      release_tag:
-        description: 'Release tag to rename the artifacts to'
+      version:
+        description: 'ISO version used in the filenames (e.g. 0.1-beta-pear)'
         required: true
-        default: 'latest'
+        default: '0.1-beta-pear'
 
 permissions:
   actions: read
@@ -39,7 +39,7 @@ jobs:
           find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
           cd dist
           for f in *.iso; do
-            new_name=$(echo "$f" | sed "s/${{ github.event.inputs.branch }}/${{ github.event.inputs.release_tag }}/g")
+            new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
             if [ "$f" != "$new_name" ]; then
               mv -v "$f" "$new_name"
             fi

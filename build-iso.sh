@@ -1445,9 +1445,9 @@ EOF
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-${DISTRO}-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-refind-${DISTRO}.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind.iso"
     fi
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \

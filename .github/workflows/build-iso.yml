@@ -3,16 +3,16 @@ name: Build and Release ISO
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Tag name for the release / Nombre del tag de la release'
+      version:
+        description: 'ISO version used in the filenames (e.g. 0.1-beta-pear)'
         required: true
-        default: 'latest'
+        default: '0.1-beta-pear'
       release_title:
-        description: 'Title for the release / Título de la release'
+        description: 'Title for the GitHub release'
         required: true
         default: 'Pulsar OS Tahoe Latest'
       branch:
-        description: 'Branch to build / Rama a compilar'
+        description: 'Branch to build'
         required: true
         default: 'stable'
         type: choice
@@ -115,20 +115,20 @@ jobs:
         with:
           path: artifacts
 
-      # 2. Gather ISOs into a single directory and rename them to match the release version
+      # 2. Gather ISOs into a single directory and rename them with the version
       - name: Gather and Rename ISO Files
         run: |
           mkdir dist
           find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
           cd dist
           for f in *.iso; do
-            # Replace the branch name with the user-specified release tag
-            new_name=$(echo "$f" | sed "s/${{ github.event.inputs.branch }}/${{ github.event.inputs.release_tag }}/g")
+            # Replace the branch name with the user-specified version (literal, no regex)
+            new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
             if [ "$f" != "$new_name" ]; then
               mv -v "$f" "$new_name"
             fi
           done
-          echo "📦 ISOs gathered and renamed:"
+          echo "ISOs gathered and renamed:"
           ls -la
 
       # 3. Generate checksums for all ISOs
@@ -148,54 +148,51 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 5. Generate the release body, appending SourceForge links when configured
+      # 5. Generate the release body (English), with SourceForge links and SHA-256 checksums
       - name: Generate Release Body
         env:
           SF_CONFIGURED: ${{ steps.sfconfig.outputs.configured }}
         run: |
           {
             cat <<'EOF'
-          Automatic build of Pulsar OS Live ISOs.
+          Pulsar OS Live ISO release.
 
-          This release contains the following editions:
-          - **Debian (GRUB)**: Classic Debian-based edition with GRUB bootloader.
-          - **Debian (rEFInd)**: Debian-based edition with modern rEFInd bootloader.
+          This release publishes the following editions:
+          - **Debian (GRUB)**: Debian-based edition with GRUB bootloader.
+          - **Debian (rEFInd)**: Debian-based edition with the modern rEFInd bootloader.
           - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
-          - **Arch Linux (rEFInd)**: Arch-based edition with modern rEFInd bootloader.
+          - **Arch Linux (rEFInd)**: Arch-based edition with the modern rEFInd bootloader.
 
           ---
-
-          Compilación automática de las imágenes Live ISO de Pulsar OS.
-
-          Esta entrega contiene las siguientes ediciones:
-          - **Debian (GRUB)**: Edición clásica basada en Debian con cargador de arranque GRUB.
-          - **Debian (rEFInd)**: Edición basada en Debian con el cargador de arranque moderno rEFInd.
-          - **Arch Linux (GRUB)**: Edición basada en Arch Linux con cargador de arranque GRUB.
-          - **Arch Linux (rEFInd)**: Edición basada en Arch Linux con el cargador de arranque moderno rEFInd.
           EOF
           } > body.md
           if [ "$SF_CONFIGURED" = "true" ]; then
             {
-              printf '\n---\n\n### Descarga directa (SourceForge)\n\n'
+              printf '\n### Downloads\n\n'
+              printf 'The ISO images are hosted on SourceForge:\n\n'
               for f in dist/*.iso; do
                 name=$(basename "$f")
                 printf -- '- [%s](https://downloads.sourceforge.net/project/%s/%s)\n' "$name" "$SF_PROJECT" "$name"
               done
             } >> body.md
           fi
+          {
+            printf '\n### Verification (SHA-256)\n\n```\n'
+            cat dist/SHA256SUMS
+            printf '```\n'
+          } >> body.md
           cat body.md
 
-      # 6. Create the GitHub release with the ISOs that fit within GitHub's 2 GiB per-asset limit.
-      #    Arch ISOs exceed that limit, so they are published to SourceForge instead (step 7).
-      - name: Create GitHub Release and Upload ISOs
+      # 6. Create the GitHub release. The release is always tagged 'latest' and
+      #    carries no ISO: the ISOs are published to SourceForge (step 7). Only
+      #    the SHA256SUMS file is attached for verification.
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event.inputs.release_tag }}
+          tag_name: latest
           name: ${{ github.event.inputs.release_title }}
           body_path: body.md
-          files: |
-            dist/*debian*.iso
-            dist/SHA256SUMS
+          files: dist/SHA256SUMS
           draft: false
           prerelease: false
         env:
@@ -215,7 +212,6 @@ jobs:
           chmod 600 ~/.ssh/sourceforge
           # OpenSSH refuses keys that do not end with a newline; ensure it.
           [ -n "$(tail -c 1 ~/.ssh/sourceforge)" ] && printf '\n' >> ~/.ssh/sourceforge
-          chmod 600 ~/.ssh/sourceforge
           if ! head -1 ~/.ssh/sourceforge | grep -q '^-----BEGIN'; then
             echo "::error::SF_SSH_KEY is not a private key (no PEM header). Re-add the secret with the full private key content."
             exit 1
