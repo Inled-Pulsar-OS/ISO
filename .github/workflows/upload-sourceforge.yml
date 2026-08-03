@@ -1,0 +1,86 @@
+name: Upload ISOs to SourceForge
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID of the "Build and Release ISO" workflow to take the ISOs from'
+        required: true
+      branch:
+        description: 'Branch that was built (used to rename the artifacts)'
+        required: true
+        default: 'stable'
+      release_tag:
+        description: 'Release tag to rename the artifacts to'
+        required: true
+        default: 'latest'
+
+permissions:
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    env:
+      SF_HOST: frs.sourceforge.net
+      SF_USER: ${{ secrets.SF_USER }}
+      SF_PROJECT: ${{ secrets.SF_PROJECT }}
+    steps:
+      - name: Download artifacts from build run
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gather, Rename and Checksum ISO Files
+        run: |
+          mkdir dist
+          find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
+          cd dist
+          for f in *.iso; do
+            new_name=$(echo "$f" | sed "s/${{ github.event.inputs.branch }}/${{ github.event.inputs.release_tag }}/g")
+            if [ "$f" != "$new_name" ]; then
+              mv -v "$f" "$new_name"
+            fi
+          done
+          sha256sum *.iso > SHA256SUMS
+          echo "ISOs to upload:"
+          ls -la
+
+      - name: Upload ISOs to SourceForge
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          # Secrets sometimes get flattened into one line with literal "\n".
+          # printf %b turns those into real newlines; stray CR chars are stripped.
+          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' > ~/.ssh/sourceforge
+          chmod 600 ~/.ssh/sourceforge
+          if ! head -1 ~/.ssh/sourceforge | grep -q '^-----BEGIN'; then
+            echo "::error::SF_SSH_KEY is not a private key (no PEM header). Re-add the secret with the full private key content."
+            exit 1
+          fi
+          if ! ssh-keygen -y -f ~/.ssh/sourceforge >/dev/null 2>&1; then
+            echo "::error::SF_SSH_KEY could not be parsed. Use an UNENCRYPTED private key (not the .pub file, no passphrase)."
+            exit 1
+          fi
+          # Quick auth check so auth problems fail here with a clear message
+          # instead of mid-rsync.
+          if ! printf 'quit\n' | sftp -i ~/.ssh/sourceforge -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$SF_USER@$SF_HOST" >/dev/null 2>&1; then
+            echo "::error::SSH auth to SourceForge failed. Check the PUBLIC key is registered in the SourceForge account (Account Settings > SSH Public Keys) for user $SF_USER."
+            exit 1
+          fi
+          ssh-keyscan -H "$SF_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -avz -e "ssh -i ~/.ssh/sourceforge -o StrictHostKeyChecking=accept-new" \
+            dist/ \
+            "$SF_USER@$SF_HOST:/home/frs/project/$SF_PROJECT/"
+
+      - name: Verify SourceForge Upload
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          printf 'ls -la /home/frs/project/%s/\nquit\n' "$SF_PROJECT" | \
+            sftp -i ~/.ssh/sourceforge -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$SF_USER@$SF_HOST"
