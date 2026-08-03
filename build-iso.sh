@@ -930,6 +930,27 @@ $pkg_name"
         "
         echo "✅ Paquetes de Arch instalados desde el repositorio Inled."
     fi
+
+    # The archlinux:latest Docker image ships a /etc/pacman.conf with
+    # 'NoExtract = usr/share/i18n/*' (only en_* locales, C/POSIX and two
+    # charmaps are whitelisted), so the pacstrap base never writes
+    # /usr/share/i18n/SUPPORTED nor most locale sources. The OOTB assistant
+    # reads /usr/share/i18n/SUPPORTED and aborts without it. Restore the full
+    # i18n subtree from the glibc package (the chroot's pacman.conf is clean,
+    # so the download is not affected by the image's NoExtract).
+    echo "🔤 Restaurando fuentes de locales completas de glibc..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
+        pacman -Sw --noconfirm glibc >/dev/null 2>&1
+        glibc_pkg=\$(ls -1 /var/cache/pacman/pkg/glibc-*.pkg.tar.zst 2>/dev/null | tail -n 1)
+        if [ -z \"\$glibc_pkg\" ]; then
+            echo '❌ No se pudo descargar glibc para restaurar i18n' >&2
+            exit 1
+        fi
+        tar --zstd -xf \"\$glibc_pkg\" -C / usr/share/i18n
+        rm -f \"\$glibc_pkg\" \"\$glibc_pkg.sig\"
+        echo '✅ Locales de glibc restaurados.'
+    "
 else
     # ==========================================================================
     # DEBIAN PATH (original)
