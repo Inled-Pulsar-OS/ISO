@@ -48,21 +48,25 @@ jobs:
           echo "ISOs to upload:"
           ls -la
 
-      - name: Upload ISOs to SourceForge
+      - name: Prepare and Diagnose SSH Key
         env:
           SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
         run: |
           install -m 700 -d ~/.ssh
           # Secrets sometimes get flattened into one line with literal "\n".
-          # printf %b turns those into real newlines; stray CR chars are stripped.
-          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' > ~/.ssh/sourceforge
+          # printf %b turns those into real newlines; blank/CR chars are removed.
+          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > ~/.ssh/sourceforge
           chmod 600 ~/.ssh/sourceforge
-          if ! head -1 ~/.ssh/sourceforge | grep -q '^-----BEGIN'; then
-            echo "::error::SF_SSH_KEY is not a private key (no PEM header). Re-add the secret with the full private key content."
-            exit 1
-          fi
+          echo "normalized bytes: $(wc -c < ~/.ssh/sourceforge)"
+          echo "normalized lines: $(wc -l < ~/.ssh/sourceforge)"
+          echo "first line: $(head -1 ~/.ssh/sourceforge)"
+          echo "has PEM header: $(grep -c '^-----BEGIN' ~/.ssh/sourceforge || true)"
+          echo "looks like a public key: $(grep -cE '^(ssh-|ecdsa-)' ~/.ssh/sourceforge || true)"
+
+      - name: Upload ISOs to SourceForge
+        run: |
           if ! ssh-keygen -y -f ~/.ssh/sourceforge >/dev/null 2>&1; then
-            echo "::error::SF_SSH_KEY could not be parsed. Use an UNENCRYPTED private key (not the .pub file, no passphrase)."
+            echo "::error::SF_SSH_KEY could not be parsed as a private key (see the diagnostics step). Re-add the secret with the full UNENCRYPTED private key content."
             exit 1
           fi
           # Quick auth check so auth problems fail here with a clear message

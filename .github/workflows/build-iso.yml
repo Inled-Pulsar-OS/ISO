@@ -210,8 +210,8 @@ jobs:
         run: |
           install -m 700 -d ~/.ssh
           # Secrets sometimes get flattened into one line with literal "\n".
-          # printf %b turns those into real newlines; stray CR chars are stripped.
-          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' > ~/.ssh/sourceforge
+          # printf %b turns those into real newlines; blank/CR chars are removed.
+          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > ~/.ssh/sourceforge
           chmod 600 ~/.ssh/sourceforge
           if ! head -1 ~/.ssh/sourceforge | grep -q '^-----BEGIN'; then
             echo "::error::SF_SSH_KEY is not a private key (no PEM header). Re-add the secret with the full private key content."
