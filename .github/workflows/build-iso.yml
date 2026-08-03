@@ -87,7 +87,7 @@ jobs:
               pacman-key --init
               pacman-key --populate archlinux
               pacman -Syu --noconfirm base-devel git arch-install-scripts squashfs-tools grub xorriso mtools binutils dosfstools libisoburn rsync jq curl wget unzip sassc imagemagick psmisc
-              
+
               chmod +x ./build-iso.sh
               ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
             "
@@ -104,6 +104,10 @@ jobs:
     name: Create Release and Upload ISOs
     needs: build
     runs-on: ubuntu-latest
+    env:
+      SF_HOST: frs.sourceforge.net
+      SF_USER: ${{ secrets.SF_USER }}
+      SF_PROJECT: ${{ secrets.SF_PROJECT }}
     steps:
       # 1. Download all ISO artifacts
       - name: Download Artifacts
@@ -127,32 +131,96 @@ jobs:
           echo "📦 ISOs gathered and renamed:"
           ls -la
 
-      # 3. Create Release and Upload all ISOs
-      - name: Create Release and Upload ISOs
+      # 3. Generate checksums for all ISOs
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum *.iso > SHA256SUMS
+          cat SHA256SUMS
+
+      # 4. Check whether the SourceForge upload is configured via secrets
+      - name: Check SourceForge Configuration
+        id: sfconfig
+        run: |
+          if [ -n "$SF_USER" ] && [ -n "$SF_PROJECT" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 5. Generate the release body, appending SourceForge links when configured
+      - name: Generate Release Body
+        env:
+          SF_CONFIGURED: ${{ steps.sfconfig.outputs.configured }}
+        run: |
+          {
+            cat <<'EOF'
+          Automatic build of Pulsar OS Live ISOs.
+
+          This release contains the following editions:
+          - **Debian (GRUB)**: Classic Debian-based edition with GRUB bootloader.
+          - **Debian (rEFInd)**: Debian-based edition with modern rEFInd bootloader.
+          - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
+          - **Arch Linux (rEFInd)**: Arch-based edition with modern rEFInd bootloader.
+
+          ---
+
+          Compilación automática de las imágenes Live ISO de Pulsar OS.
+
+          Esta entrega contiene las siguientes ediciones:
+          - **Debian (GRUB)**: Edición clásica basada en Debian con cargador de arranque GRUB.
+          - **Debian (rEFInd)**: Edición basada en Debian con el cargador de arranque moderno rEFInd.
+          - **Arch Linux (GRUB)**: Edición basada en Arch Linux con cargador de arranque GRUB.
+          - **Arch Linux (rEFInd)**: Edición basada en Arch Linux con el cargador de arranque moderno rEFInd.
+          EOF
+          } > body.md
+          if [ "$SF_CONFIGURED" = "true" ]; then
+            {
+              printf '\n---\n\n### Descarga directa (SourceForge)\n\n'
+              for f in dist/*.iso; do
+                name=$(basename "$f")
+                printf -- '- [%s](https://downloads.sourceforge.net/project/%s/%s)\n' "$name" "$SF_PROJECT" "$name"
+              done
+            } >> body.md
+          fi
+          cat body.md
+
+      # 6. Create the GitHub release with the ISOs that fit within GitHub's 2 GiB per-asset limit.
+      #    Arch ISOs exceed that limit, so they are published to SourceForge instead (step 7).
+      - name: Create GitHub Release and Upload ISOs
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: ${{ github.event.inputs.release_title }}
-          body: |
-            Automatic build of Pulsar OS Live ISOs.
-            
-            This release contains the following editions:
-            - **Debian (GRUB)**: Classic Debian-based edition with GRUB bootloader.
-            - **Debian (rEFInd)**: Debian-based edition with modern rEFInd bootloader.
-            - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
-            - **Arch Linux (rEFInd)**: Arch-based edition with modern rEFInd bootloader.
-            
-            ---
-            
-            Compilación automática de las imágenes Live ISO de Pulsar OS.
-            
-            Esta entrega contiene las siguientes ediciones:
-            - **Debian (GRUB)**: Edición clásica basada en Debian con cargador de arranque GRUB.
-            - **Debian (rEFInd)**: Edición basada en Debian con el cargador de arranque moderno rEFInd.
-            - **Arch Linux (GRUB)**: Edición basada en Arch Linux con cargador de arranque GRUB.
-            - **Arch Linux (rEFInd)**: Edición basada en Arch Linux con el cargador de arranque moderno rEFInd.
-          files: dist/*.iso
+          body_path: body.md
+          files: |
+            dist/*debian*.iso
+            dist/SHA256SUMS
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 7. Upload all ISOs to SourceForge FRS via rsync over SSH.
+      #    SourceForge has no REST upload API; uploads go to frs.sourceforge.net.
+      - name: Upload ISOs to SourceForge
+        if: steps.sfconfig.outputs.configured == 'true'
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SF_SSH_KEY" > ~/.ssh/sourceforge
+          chmod 600 ~/.ssh/sourceforge
+          ssh-keyscan -H "$SF_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -avz -e "ssh -i ~/.ssh/sourceforge -o StrictHostKeyChecking=accept-new" \
+            dist/ \
+            "$SF_USER@$SF_HOST:/home/frs/project/$SF_PROJECT/"
+
+      # 8. Verify the files are present on SourceForge
+      - name: Verify SourceForge Upload
+        if: steps.sfconfig.outputs.configured == 'true'
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          ssh -i ~/.ssh/sourceforge -o StrictHostKeyChecking=accept-new \
+            "$SF_USER@$SF_HOST" "ls -la /home/frs/project/$SF_PROJECT/"
