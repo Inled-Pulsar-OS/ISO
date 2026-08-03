@@ -57,6 +57,8 @@ jobs:
           # printf %b turns those into real newlines; blank/CR chars are removed.
           printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > ~/.ssh/sourceforge
           chmod 600 ~/.ssh/sourceforge
+          # OpenSSH refuses keys that do not end with a newline; ensure it.
+          [ -n "$(tail -c 1 ~/.ssh/sourceforge)" ] && printf '\n' >> ~/.ssh/sourceforge
           echo "normalized bytes: $(wc -c < ~/.ssh/sourceforge)"
           echo "normalized lines: $(wc -l < ~/.ssh/sourceforge)"
           echo "first line: $(head -1 ~/.ssh/sourceforge)"
