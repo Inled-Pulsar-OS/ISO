@@ -618,6 +618,19 @@ $SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
 # Bind mount pacman cache dir in home (not root partition) if on Arch
 if [ "$DISTRO" = "arch" ]; then
     $SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
+    # Purge previously cached Inled-repo packages: an interrupted download
+    # (e.g. while a release asset is being re-uploaded to GitHub) leaves a
+    # truncated .pkg.tar.zst in the bind-mounted cache that fails its PGP
+    # signature check and aborts the build with
+    # "paquete no válido o dañado (firma PGP)".
+    for p in pulsaros-branding pulsaros-theme pulsaros-gnome pulsaros-global-menu \
+             pulsaros-spotlight-launcher pulsaros-sddm pulsaros-plymouth \
+             pulsaros-refind pulsaros-grub pulsaros-calamares pulsaros-essential \
+             pulsaros-welcome pulsaros-recovery pulsaros-bootsound \
+             gnome-macos-remap-wayland droidtux macboat appinstall seafari \
+             spotlight-gtk; do
+        $SUDO rm -f "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst.sig 2>/dev/null || true
+    done
 fi
 
 # Ensure working DNS in chroot / Asegurar DNS funcional en el chroot
