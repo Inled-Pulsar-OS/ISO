@@ -46,6 +46,7 @@ BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
 WITH_NVIDIA=false
 DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
+PULSAR_VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -79,6 +80,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --branch|-b)
             BRANCH="$2"
+            shift 2
+            ;;
+        --version|-v)
+            PULSAR_VERSION="$2"
+            export PULSAR_VERSION
             shift 2
             ;;
         *)
@@ -1210,7 +1216,7 @@ if [ "$DISTRO" = "arch" ]; then
     echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
-    echo 'HOOKS=(base udev modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
+    echo 'HOOKS=(base udev plymouth modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
     # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
         $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
@@ -1357,10 +1363,15 @@ menuentry "Pulsar OS Live (RAM)" {
 }
 EOF
 
+    VER_SUFFIX=""
+    if [ -n "$PULSAR_VERSION" ]; then
+        VER_SUFFIX="-${PULSAR_VERSION}"
+    fi
+
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}${VER_SUFFIX}-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}${VER_SUFFIX}.iso"
     fi
     # Create a temporary xorriso wrapper to force -iso-level 3
     # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
@@ -1478,10 +1489,15 @@ EOF
     $SUDO rm -f "$BUILD_DIR/refind-minimal.conf"
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
+    VER_SUFFIX=""
+    if [ -n "$PULSAR_VERSION" ]; then
+        VER_SUFFIX="-${PULSAR_VERSION}"
+    fi
+
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind${VER_SUFFIX}-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind${VER_SUFFIX}.iso"
     fi
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     $SUDO xorriso -as mkisofs \

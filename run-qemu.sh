@@ -158,9 +158,17 @@ if $USE_ISO; then
     # English: Detect if OVMF UEFI BIOS is available on the host to boot the UEFI ISO
     # Español: Detectar si la BIOS OVMF UEFI está disponible en el host para arrancar la ISO UEFI
     BIOS_ARG=""
-    if [ "$HOST_ARCH" = "x86_64" ] && [ -f "/usr/share/ovmf/OVMF.fd" ]; then
-        BIOS_ARG="-bios /usr/share/ovmf/OVMF.fd"
-        echo "🔒 UEFI: Cargando firmware OVMF UEFI ($BIOS_ARG) / UEFI: Loading OVMF UEFI firmware..."
+    if [ "$HOST_ARCH" = "x86_64" ]; then
+        if [ -f "/usr/share/edk2/x64/OVMF.4m.fd" ]; then
+            BIOS_ARG="-bios /usr/share/edk2/x64/OVMF.4m.fd"
+        elif [ -f "/usr/share/ovmf/OVMF.fd" ]; then
+            BIOS_ARG="-bios /usr/share/ovmf/OVMF.fd"
+        elif [ -f "/usr/share/edk2-ovmf/x64/OVMF.fd" ]; then
+            BIOS_ARG="-bios /usr/share/edk2-ovmf/x64/OVMF.fd"
+        fi
+        if [ -n "$BIOS_ARG" ]; then
+            echo "🔒 UEFI: Cargando firmware OVMF UEFI ($BIOS_ARG) / UEFI: Loading OVMF UEFI firmware..."
+        fi
     fi
 
     # Create a temporary virtual disk if it does not exist (needed for testing the Calamares installer)
@@ -177,8 +185,8 @@ if $USE_ISO; then
         XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
         PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
         PULSE_COOKIE="$HOME/.config/pulse/cookie" \
-        __NV_PRIME_RENDER_OFFLOAD=1 \
-        __GLX_VENDOR_LIBRARY_NAME=nvidia \
+        SDL_VIDEODRIVER="x11" \
+        SDL_VIDEO_DRIVER="x11" \
         "$QEMU_BIN" \
         -m 4G \
         -smp 4 \
@@ -211,8 +219,8 @@ else
         XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
         PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
         PULSE_COOKIE="$HOME/.config/pulse/cookie" \
-        __NV_PRIME_RENDER_OFFLOAD=1 \
-        __GLX_VENDOR_LIBRARY_NAME=nvidia \
+        SDL_VIDEODRIVER="x11" \
+        SDL_VIDEO_DRIVER="x11" \
         "$QEMU_BIN" \
         -m 4G \
         -smp 4 \
