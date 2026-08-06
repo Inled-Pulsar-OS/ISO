@@ -1319,7 +1319,7 @@ if [ "$DISTRO" = "arch" ]; then
     echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
-    echo 'HOOKS=(base udev plymouth modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
+    echo 'HOOKS=(base udev modconf kms plymouth archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
     echo 'MODULES=(amdgpu radeon i915 xe nouveau virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
     
     # Ensure kms hook is in the main /etc/mkinitcpio.conf HOOKS array (for the installed system)
