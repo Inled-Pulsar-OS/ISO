@@ -1403,38 +1403,44 @@ old_block = """    if [ "${copytoram}" = "y" ]; then
 new_block = """    if [ "${copytoram}" = "y" ]; then
         msg ":: Copying rootfs image to RAM with progress..."
         total_size=$(stat -c %s "${img}")
-        (
-            img_dest="/run/archiso/copytoram/${img_fullname}"
-            sleep 1
-            while [ -f "${img_dest}" ]; do
-                curr_size=$(stat -c %s "${img_dest}" 2>/dev/null || echo 0)
-                if [ "$curr_size" -ge "$total_size" ] 2>/dev/null || [ ! -f "${img_dest}" ]; then
-                    break
-                fi
-                pct=$((curr_size * 100 / total_size))
-                curr_mb=$((curr_size / 1048576))
-                total_mb=$((total_size / 1048576))
-                
-                printf "\\r:: Copying rootfs to RAM: %d%% (%d MB / %d MB)..." "$pct" "$curr_mb" "$total_mb"
-                
-                if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
-                    plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
-                fi
-                sleep 0.5
-            done
-            total_mb=$((total_size / 1048576))
-            printf "\\r:: Copying rootfs to RAM: 100%% (%d MB / %d MB)...\\n" "$total_mb" "$total_mb"
-            if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
-                plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
-            fi
-        ) &
-        bg_pid=$!
+        img_dest="/run/archiso/copytoram/${img_fullname}"
 
-        cp -- "${img}" "/run/archiso/copytoram/${img_fullname}"
+        # Start copy in the background
+        cp -- "${img}" "${img_dest}" &
+        cp_pid=$!
+
+        # Monitor progress in the foreground (avoids background subshell TTY/race issues)
+        while kill -0 $cp_pid 2>/dev/null; do
+            curr_size=$(stat -c %s "${img_dest}" 2>/dev/null || echo 0)
+            if [ "$total_size" -gt 0 ] 2>/dev/null; then
+                pct=$((curr_size * 100 / total_size))
+            else
+                pct=0
+            fi
+            curr_mb=$((curr_size / 1048576))
+            total_mb=$((total_size / 1048576))
+
+            # Force output to physical screen console
+            printf "\\r:: Copying rootfs to RAM: %d%% (%d MB / %d MB)..." "$pct" "$curr_mb" "$total_mb" > /dev/console
+
+            if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+                plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
+                plymouth system-update --progress="$pct" 2>/dev/null
+            fi
+            sleep 0.5
+        done
+
+        # Re-attach and get exit status of cp
+        wait $cp_pid
         rc=$?
 
-        kill $bg_pid 2>/dev/null
-        wait $bg_pid 2>/dev/null
+        # Print final status
+        total_mb=$((total_size / 1048576))
+        printf "\\r:: Copying rootfs to RAM: 100%% (%d MB / %d MB)...\\n" "$total_mb" "$total_mb" > /dev/console
+        if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+            plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
+            plymouth system-update --progress=100 2>/dev/null
+        fi
 
         if [ "$rc" != 0 ]; then
             echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
