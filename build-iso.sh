@@ -1553,9 +1553,11 @@ fi
 
 if [ "$DISTRO" = "arch" ]; then
     KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
+    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash loglevel=3 --"
     DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO loglevel=7 rd.debug plymouth.enable=0 --"
 else
     KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+    RAM_PARAMS="boot=live components username=live autologin toram quiet splash loglevel=3 noprompt --"
     DEBUG_PARAMS="boot=live components username=live autologin loglevel=7 rd.debug plymouth.enable=0 noprompt --"
 fi
 
@@ -1611,6 +1613,11 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
+    linux /live/vmlinuz $RAM_PARAMS
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Normal)" {
     linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd
 }
@@ -1745,11 +1752,18 @@ enable_mouse
 mouse_speed 4
 mouse_size 16
 resolution 1024 768
-default_selection "+,pulsaros,Pulsar OS Live"
+default_selection "+,pulsaros,Pulsar OS Live (RAM)"
 #showtools about,reboot,shutdown,firmware,hidden_tags
 include themes/rEFInd-Regular-Dark/theme.conf
 
-menuentry "Pulsar OS Live" {
+menuentry "Pulsar OS Live (RAM)" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$RAM_PARAMS"
+}
+
+menuentry "Pulsar OS Live (Normal)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
@@ -1769,9 +1783,15 @@ EOF
     cat <<EOF > "$BUILD_DIR/refind-minimal.conf"
 timeout 10
 resolution 1024 768
-default_selection "+,pulsaros,Pulsar OS Live"
+default_selection "+,pulsaros,Pulsar OS Live (RAM)"
 
-menuentry "Pulsar OS Live" {
+menuentry "Pulsar OS Live (RAM)" {
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$RAM_PARAMS"
+}
+
+menuentry "Pulsar OS Live (Normal)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
