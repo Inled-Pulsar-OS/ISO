@@ -1321,6 +1321,14 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev plymouth modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
     echo 'MODULES=(amdgpu radeon i915 xe nouveau virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    
+    # Ensure kms hook is in the main /etc/mkinitcpio.conf HOOKS array (for the installed system)
+    if [ -f "$ROOTFS_TARGET/etc/mkinitcpio.conf" ]; then
+        if ! grep -q "kms" "$ROOTFS_TARGET/etc/mkinitcpio.conf" 2>/dev/null; then
+            echo "⚙️ Añadiendo el hook 'kms' a /etc/mkinitcpio.conf..."
+            $SUDO sed -i 's/\(^HOOKS=([^)]*\)\(block\)/\1kms \2/' "$ROOTFS_TARGET/etc/mkinitcpio.conf"
+        fi
+    fi
     # Force Plymouth to use the simpledrm device (from the EFI firmware framebuffer)
     # so the splash appears immediately instead of waiting up to DeviceTimeout for
     # the real GPU driver (amdgpu is huge and slow to load on hybrid laptops, which
