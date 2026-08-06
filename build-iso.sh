@@ -1329,18 +1329,6 @@ if [ "$DISTRO" = "arch" ]; then
             $SUDO sed -i 's/\(^HOOKS=([^)]*\)\(block\)/\1kms \2/' "$ROOTFS_TARGET/etc/mkinitcpio.conf"
         fi
     fi
-    # Force Plymouth to use the simpledrm device (from the EFI firmware framebuffer)
-    # so the splash appears immediately instead of waiting up to DeviceTimeout for
-    # the real GPU driver (amdgpu is huge and slow to load on hybrid laptops, which
-    # leaves the splash frozen/fallback). Also set via the 'plymouth.use-simpledrm=1'
-    # kernel command line in the boot menu entries.
-    # Forzar a Plymouth a usar simpledrm (framebuffer EFI) para que el splash
-    # aparezca al instante y no se quede congelado esperando a amdgpu/i915.
-    $SUDO mkdir -p "$ROOTFS_TARGET/etc/plymouth"
-    if [ -f "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" ]; then
-        $SUDO sed -i '/^UseSimpledrm=/d' "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf"
-        echo 'UseSimpledrm=true' | $SUDO tee -a "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" > /dev/null
-    fi
     # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
         $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
@@ -1579,12 +1567,12 @@ else
 fi
 
 if [ "$DISTRO" = "arch" ]; then
-    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
-    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
+    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
+    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
     DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO loglevel=7 rd.debug plymouth.enable=0 --"
 else
-    KERNEL_PARAMS="boot=live components username=live autologin quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
-    RAM_PARAMS="boot=live components username=live autologin toram quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components username=live autologin quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
+    RAM_PARAMS="boot=live components username=live autologin toram quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
     DEBUG_PARAMS="boot=live components username=live autologin loglevel=7 rd.debug plymouth.enable=0 noprompt --"
 fi
 
@@ -1687,12 +1675,12 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
     initrd /live/initrd
 }
 
@@ -1933,12 +1921,12 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash plymouth.use-simpledrm=1 amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
     initrd /live/initrd
 }
 
