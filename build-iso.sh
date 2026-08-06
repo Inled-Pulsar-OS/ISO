@@ -1399,6 +1399,24 @@ $SUDO rm -rf "$ISO_STAGING"
 mkdir -p "$ISO_STAGING/live"
 mkdir -p "$ISO_STAGING/boot/grub"
 
+if [ "$DISTRO" = "arch" ]; then
+    echo "🐧 Copiando Kernel e Initrd para la ISO Live (con hooks de archiso)..."
+    KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+    INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initramfs-*.img 2>/dev/null | grep -v fallback | head -n 1)
+    
+    if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
+        echo "❌ Error: No se encontró kernel o initrd para copiar a la ISO live."
+        exit 1
+    fi
+    
+    $SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
+    $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
+
+    echo "🧹 Quitando hooks de archiso y regenerando initramfs para el sistema instalado..."
+    $SUDO rm -f "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf"
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P"
+fi
+
 # 0. Unmount virtual filesystems prior to packaging / Desmontar sistemas de archivos virtuales antes de empaquetar
 echo "🧹 Desmontando sistemas de archivos virtuales en el target... / Unmounting virtual filesystems in target..."
 $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
@@ -1430,22 +1448,23 @@ echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... /
         -e root/.bash_history
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
-echo "🐧 Copiando Kernel e Initrd... / Copying Kernel and Initrd..."
 if [ "$DISTRO" = "arch" ]; then
-    KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
-    INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initramfs-*.img 2>/dev/null | grep -v fallback | head -n 1)
+    # Already copied and configured above, just define the variables for subsequent steps
+    KERNEL_FILE="$ISO_STAGING/live/vmlinuz"
+    INITRD_FILE="$ISO_STAGING/live/initrd"
 else
+    echo "🐧 Copiando Kernel e Initrd... / Copying Kernel and Initrd..."
     KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
     INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initrd.img-* 2>/dev/null | head -n 1)
-fi
 
-if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
-    echo "❌ Error: No se encontró kernel o initrd en el chroot target. / Error: Kernel or initrd not found in target chroot."
-    exit 1
-fi
+    if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
+        echo "❌ Error: No se encontró kernel o initrd en el chroot target. / Error: Kernel or initrd not found in target chroot."
+        exit 1
+    fi
 
-$SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
-$SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
+    $SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
+    $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
+fi
 
 if [ "$DISTRO" = "arch" ]; then
     KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
