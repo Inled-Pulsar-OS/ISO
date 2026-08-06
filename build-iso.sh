@@ -1368,6 +1368,91 @@ AWK
         fi
         rm -f /tmp/patch-plymouth-clear.awk
     "
+    # Patch the archiso hook to support progress bar/updates on copytoram
+    if [ -f "$ROOTFS_TARGET/usr/lib/initcpio/hooks/archiso" ]; then
+        echo "--- 🔄 Parcheando hook de archiso para progreso de copytoram ---"
+        $SUDO python3 -c '
+import sys
+target = sys.argv[1]
+with open(target, "r") as f:
+    content = f.read()
+
+old_block = """    if [ "${copytoram}" = "y" ]; then
+        msg -n ":: Copying rootfs image to RAM..."
+
+        # in case we have pv use it to display copy progress feedback otherwise
+        # fallback to using plain cp
+        if command -v pv >/dev/null 2>&1; then
+            echo ""
+            (pv "${img}" -o "/run/archiso/copytoram/${img_fullname}")
+            local rc=$?
+        else
+            (cp -- "${img}" "/run/archiso/copytoram/${img_fullname}")
+            local rc=$?
+        fi
+
+        if [ "$rc" != 0 ]; then
+            echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
+            launch_interactive_shell
+        fi
+
+        img="/run/archiso/copytoram/${img_fullname}"
+        msg "done."
+    fi"""
+
+new_block = """    if [ "${copytoram}" = "y" ]; then
+        msg ":: Copying rootfs image to RAM with progress..."
+        total_size=$(stat -c %s "${img}")
+        (
+            img_dest="/run/archiso/copytoram/${img_fullname}"
+            sleep 1
+            while [ -f "${img_dest}" ]; do
+                curr_size=$(stat -c %s "${img_dest}" 2>/dev/null || echo 0)
+                if [ "$curr_size" -ge "$total_size" ] 2>/dev/null || [ ! -f "${img_dest}" ]; then
+                    break
+                fi
+                pct=$((curr_size * 100 / total_size))
+                curr_mb=$((curr_size / 1048576))
+                total_mb=$((total_size / 1048576))
+                
+                printf "\\r:: Copying rootfs to RAM: %d%% (%d MB / %d MB)..." "$pct" "$curr_mb" "$total_mb"
+                
+                if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+                    plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
+                fi
+                sleep 0.5
+            done
+            total_mb=$((total_size / 1048576))
+            printf "\\r:: Copying rootfs to RAM: 100%% (%d MB / %d MB)...\\n" "$total_mb" "$total_mb"
+            if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+                plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
+            fi
+        ) &
+        bg_pid=$!
+
+        cp -- "${img}" "/run/archiso/copytoram/${img_fullname}"
+        rc=$?
+
+        kill $bg_pid 2>/dev/null
+        wait $bg_pid 2>/dev/null
+
+        if [ "$rc" != 0 ]; then
+            echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
+            launch_interactive_shell
+        fi
+
+        img="/run/archiso/copytoram/${img_fullname}"
+    fi"""
+
+if old_block in content:
+    content = content.replace(old_block, new_block)
+    with open(target, "w") as f:
+        f.write(content)
+    print("Patch applied successfully")
+else:
+    print("Old block not found!")
+' "$ROOTFS_TARGET/usr/lib/initcpio/hooks/archiso"
+    fi
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         mkinitcpio -P
     "
@@ -1532,6 +1617,53 @@ menuentry "Pulsar OS Live (RAM)" {
 
 menuentry "Pulsar OS Debug (sin splash / logs completos)" {
     linux /live/vmlinuz $DEBUG_PARAMS
+    initrd /live/initrd
+}
+EOF
+
+    # Create GRUB loopback configuration for Ventoy compatibility
+    echo "⚙️ Creando el menú de arranque loopback.cfg para Ventoy... / Creating loopback.cfg for Ventoy..."
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub"
+    cat <<'EOF' | $SUDO tee "$ISO_STAGING/boot/grub/loopback.cfg" > /dev/null
+# Search for the device containing the ISO file
+search --no-floppy --set=imgdev --file $isofile
+probe -u $imgdev --set=imgdevuuid
+
+set default="0"
+set timeout=10
+
+insmod all_video
+insmod font
+insmod gfxterm
+insmod png
+insmod jpeg
+insmod gfxmenu
+
+if loadfont /boot/grub/fonts/unicode.pf2; then
+    set gfxmode=auto
+    keep_gfxmode=keep
+    terminal_output gfxterm
+fi
+
+loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+
+menuentry "Pulsar OS Live (RAM)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Normal)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Debug (sin splash / logs completos)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile loglevel=7 rd.debug plymouth.enable=0 --
     initrd /live/initrd
 }
 EOF
@@ -1708,6 +1840,66 @@ EOF
     $SUDO rm -f "$BUILD_DIR/refind.conf"
     $SUDO rm -f "$BUILD_DIR/refind-minimal.conf"
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
+
+    # Copy the custom GRUB theme to the ISO staging directory for Ventoy compatibility
+    if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
+        $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+    fi
+    # Copy unicode.pf2 for Ventoy's GRUB menus
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
+    if [ -f "/usr/share/grub/unicode.pf2" ]; then
+        $SUDO cp "/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+    elif [ -f "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" ]; then
+        $SUDO cp "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" "$ISO_STAGING/boot/grub/fonts/"
+    fi
+
+    # Create GRUB loopback configuration for Ventoy compatibility
+    echo "⚙️ Creando el menú de arranque loopback.cfg para Ventoy... / Creating loopback.cfg for Ventoy..."
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub"
+    cat <<'EOF' | $SUDO tee "$ISO_STAGING/boot/grub/loopback.cfg" > /dev/null
+# Search for the device containing the ISO file
+search --no-floppy --set=imgdev --file $isofile
+probe -u $imgdev --set=imgdevuuid
+
+set default="0"
+set timeout=10
+
+insmod all_video
+insmod font
+insmod gfxterm
+insmod png
+insmod jpeg
+insmod gfxmenu
+
+if loadfont /boot/grub/fonts/unicode.pf2; then
+    set gfxmode=auto
+    keep_gfxmode=keep
+    terminal_output gfxterm
+fi
+
+loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+
+menuentry "Pulsar OS Live (RAM)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Normal)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Debug (sin splash / logs completos)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile loglevel=7 rd.debug plymouth.enable=0 --
+    initrd /live/initrd
+}
+EOF
 
     VER_SUFFIX=""
     if [ -n "$PULSAR_VERSION" ]; then
