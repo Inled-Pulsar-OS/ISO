@@ -1548,10 +1548,44 @@ EOF
     fi
     # Create a temporary xorriso wrapper to force -iso-level 3
     # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
-    # We also set the volume label to PULSAR_ISO so the archiso hook can locate it
+    # We also set the volume label to PULSAR_ISO so the archiso hook can locate it,
+    # and strip out Apple/HFS+/APM arguments to prevent label collision on physical USB drives.
     WRAPPER_PATH="/tmp/xorriso-wrapper"
-    echo '#!/bin/bash' > "$WRAPPER_PATH"
-    echo 'exec xorriso "$@" -iso-level 3 -volid PULSAR_ISO' >> "$WRAPPER_PATH"
+    cat <<'EOF' > "$WRAPPER_PATH"
+#!/bin/bash
+args=()
+i=1
+while [ $i -le $# ]; do
+    arg="${!i}"
+    case "$arg" in
+        -hfsplus)
+            # Skip this argument
+            ;;
+        -apm-block-size)
+            # Skip this and the next argument (the size)
+            i=$((i + 1))
+            ;;
+        -hfsplus-file-creator-type)
+            # Skip this and the next three arguments
+            i=$((i + 3))
+            ;;
+        -hfs-bless-by)
+            # Skip this and the next two arguments
+            i=$((i + 2))
+            ;;
+        -hfsplus-serial-number)
+            # Skip this and the next argument
+            i=$((i + 1))
+            ;;
+        *)
+            args+=("$arg")
+            ;;
+    esac
+    i=$((i + 1))
+done
+
+exec xorriso "${args[@]}" -iso-level 3 -volid PULSAR_ISO
+EOF
     chmod +x "$WRAPPER_PATH"
 
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
