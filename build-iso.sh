@@ -1755,9 +1755,9 @@ else
     # rEFInd BOOTLOADER PACKAGING
     # --------------------------------------------------------------------------
     echo "💿 Creando imagen EFI bootable con rEFInd... / Creating bootable EFI image with rEFInd..."
+    $SUDO mkdir -p "$ISO_STAGING/boot"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
-    EFI_IMG="$BUILD_DIR/efi.img"
-    $SUDO rm -f "$EFI_IMG"
+    EFI_IMG="$ISO_STAGING/boot/efi.img"
 
     # Create a 350MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
     # Crear un archivo vacío de 350MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
@@ -1974,10 +1974,8 @@ EOF
       -o "$ISO_OUTPUT" \
       -J -R -V "PULSAR_ISO" \
       -isohybrid-mbr "$HYBRID_MBR" \
-      -partition_cyl_align all \
-      -append_partition 2 0xef "$EFI_IMG" \
       -eltorito-alt-boot \
-      -e --interval:appended_partition_2:all:: \
+      -e "boot/efi.img" \
       -no-emul-boot \
       -isohybrid-gpt-basdat \
       "$ISO_STAGING"
