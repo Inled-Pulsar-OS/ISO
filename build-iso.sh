@@ -711,9 +711,9 @@ EOF
 
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
-        BOOTLOADER_PKGS="grub"
+        BOOTLOADER_PKGS="grub efibootmgr"
     else
-        BOOTLOADER_PKGS="refind efibootmgr"
+        BOOTLOADER_PKGS="refind efibootmgr grub"
     fi
 
     if $USE_LOCAL_DEBS; then
@@ -1072,9 +1072,9 @@ EOF
         fi
 
         if [ "$BOOTLOADER" = "grub" ]; then
-            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr"
         else
-            BOOTLOADER_PKGS="refind efibootmgr"
+            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin"
         fi
 
         $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
@@ -1105,9 +1105,9 @@ EOF
     else
         echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
         if [ "$BOOTLOADER" = "grub" ]; then
-            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin"
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr"
         else
-            BOOTLOADER_PKGS="refind efibootmgr"
+            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin"
         fi
 
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -1154,15 +1154,118 @@ EOF
     "
 fi
 
-# Dynamically adjust Calamares configuration inside chroot based on selected bootloader
+# Dynamically adjust Calamares configuration inside chroot based on distribution and selected bootloader
+echo "⚙️ Configurando Calamares en el chroot target..."
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/calamares/modules"
+
+# 1. Adjust modules search path in settings.conf to support both Arch and Debian module paths
+if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
+    $SUDO sed -i 's|modules-search: \[ local, /usr/lib/x86_64-linux-gnu/calamares/modules, /usr/share/calamares/modules \]|modules-search: [ local, /usr/lib/x86_64-linux-gnu/calamares/modules, /usr/lib/calamares/modules, /usr/share/calamares/modules ]|' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+fi
+
+# 2. Configure bootloader sequence in settings.conf
 if [ "$BOOTLOADER" = "refind" ]; then
-    echo "⚙️ Configurando Calamares para rEFInd (removiendo módulos de GRUB)..."
+    echo "⚙️ Configurando secuencia de arranque Calamares para rEFInd..."
     if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
-        $SUDO sed -i 's/- grubcfg/- shellprocess@refind/' "$ROOTFS_TARGET/etc/calamares/settings.conf"
-        $SUDO sed -i '/- bootloader/d' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+        # Check if shellprocess@refind is already in settings.conf, if not add it right after bootloader
+        if ! grep -q "shellprocess@refind" "$ROOTFS_TARGET/etc/calamares/settings.conf"; then
+            $SUDO sed -i 's/- bootloader/- bootloader\n  - shellprocess@refind/' "$ROOTFS_TARGET/etc/calamares/settings.conf"
+        fi
     fi
 else
-    echo "⚙️ Calamares configurado para GRUB (módulos por defecto)."
+    echo "⚙️ Secuencia de Calamares configurada para GRUB."
+fi
+
+# 3. Create distro-specific unpackfs.conf, packages.conf, and users.conf
+if [ "$DISTRO" = "arch" ]; then
+    echo "⚙️ Generando configuraciones de Calamares para Arch Linux..."
+    
+    # unpackfs.conf for Arch
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
+---
+unpack:
+    - source: "/run/archiso/bootmnt/live/x86_64/airootfs.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+EOF
+
+    # packages.conf for Arch
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/packages.conf" > /dev/null
+---
+backend: pacman
+
+operations:
+  - try_remove:
+      - calamares
+      - pulsaros-calamares
+EOF
+
+    # users.conf for Arch
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/users.conf" > /dev/null
+---
+makeuproot: true
+defaultGroups:
+    - wheel
+    - docker
+    - users
+autologinUserWithWelcome: true
+writeUsersPageToDummy: false
+userShell: /bin/bash
+EOF
+
+else
+    echo "⚙️ Generando configuraciones de Calamares para Debian..."
+    
+    # unpackfs.conf for Debian
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
+---
+unpack:
+    - source: "/lib/live/mount/medium/live/filesystem.squashfs"
+      sourcefs: "squashfs"
+      destination: ""
+    - source: "/run/live/medium/live/filesystem.squashfs"
+      sourcefs: "squashfs"
+      destination: ""
+      optional: true
+EOF
+
+    # packages.conf for Debian
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/packages.conf" > /dev/null
+---
+backend: apt
+
+operations:
+  - install:
+      - firmware-linux
+      - firmware-linux-nonfree
+      - firmware-misc-nonfree
+      - firmware-iwlwifi
+      - firmware-realtek
+      - firmware-atheros
+      - firmware-brcm80211
+      - intel-microcode
+      - amd64-microcode
+      - firmware-amd-graphics
+  - try_remove:
+      - calamares
+      - calamares-settings-debian
+      - pulsaros-calamares
+EOF
+
+    # users.conf for Debian
+    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/users.conf" > /dev/null
+---
+makeuproot: true
+defaultGroups:
+    - docker
+    - sudo
+    - users
+    - lpadmin
+    - sambashare
+autologinUserWithWelcome: true
+writeUsersPageToDummy: false
+userShell: /bin/bash
+EOF
 fi
 
 # ==============================================================================
@@ -1221,6 +1324,50 @@ if [ "$DISTRO" = "arch" ]; then
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
         $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
     fi
+    # Forward initramfs boot messages to Plymouth so the splash always shows the
+    # last log line at the bottom. Also done by the pulsaros-plymouth install
+    # hook; this second pass guarantees it survives the package install order.
+    # Reenviar los mensajes del initramfs a Plymouth para mostrar la última
+    # línea de log en el splash. Se repite aquí por si el paquete se reordena.
+    $SUDO tee "$ROOTFS_TARGET/tmp/patch-plymouth-msg.awk" > /dev/null <<'AWK'
+/^msg\(\) \{/ { inmsg=1 }
+inmsg && /^}/ {
+    print "    if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then"
+    print "        plymouth message --text=\"${*#-n }\" >/dev/null 2>&1 || true"
+    print "    fi"
+    inmsg=0
+}
+{ print }
+AWK
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        INITCPIO_FUNCTIONS=/usr/lib/initcpio/init_functions
+        if [ -f \"\$INITCPIO_FUNCTIONS\" ] && ! grep -q 'plymouth message' \"\$INITCPIO_FUNCTIONS\"; then
+            awk -f /tmp/patch-plymouth-msg.awk \"\$INITCPIO_FUNCTIONS\" > \"\$INITCPIO_FUNCTIONS.tmp\" && mv \"\$INITCPIO_FUNCTIONS.tmp\" \"\$INITCPIO_FUNCTIONS\"
+        fi
+        rm -f /tmp/patch-plymouth-msg.awk
+    "
+    # Clear the Plymouth message line right after the initramfs cleanup hooks,
+    # before switch_root, so the splash doesn't freeze showing the last initramfs
+    # message once forwarding stops. Also done by the pulsaros-plymouth install
+    # hook; this second pass guarantees it survives the package install order.
+    # Limpiar la línea de Plymouth tras los cleanup hooks del initramfs, antes
+    # del switch_root, para que el splash no se quede congelado en el último
+    # mensaje del initramfs. Se repite aquí por si el paquete se reordena.
+    $SUDO tee "$ROOTFS_TARGET/tmp/patch-plymouth-clear.awk" > /dev/null <<'AWK'
+/^run_hookfunctions .run_cleanuphook. .cleanup hook. .CLEANUPHOOKS$/ {
+    print
+    print "command -v plymouth >/dev/null 2>&1 && plymouth message --text=\"\" >/dev/null 2>&1 || true"
+    next
+}
+{ print }
+AWK
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        INITCPIO_INIT=/usr/lib/initcpio/init
+        if [ -f \"\$INITCPIO_INIT\" ] && ! grep -q 'plymouth message --text=\"\"' \"\$INITCPIO_INIT\"; then
+            awk -f /tmp/patch-plymouth-clear.awk \"\$INITCPIO_INIT\" > \"\$INITCPIO_INIT.tmp\" && mv \"\$INITCPIO_INIT.tmp\" \"\$INITCPIO_INIT\"
+        fi
+        rm -f /tmp/patch-plymouth-clear.awk
+    "
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         mkinitcpio -P
     "
@@ -1302,8 +1449,10 @@ $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
 
 if [ "$DISTRO" = "arch" ]; then
     KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
+    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO loglevel=7 rd.debug plymouth.enable=0 --"
 else
     KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
+    DEBUG_PARAMS="boot=live components username=live autologin loglevel=7 rd.debug plymouth.enable=0 noprompt --"
 fi
 
 if [ "$BOOTLOADER" = "grub" ]; then
@@ -1361,6 +1510,11 @@ menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd
 }
+
+menuentry "Pulsar OS Debug (sin splash / logs completos)" {
+    linux /live/vmlinuz $DEBUG_PARAMS
+    initrd /live/initrd
+}
 EOF
 
     VER_SUFFIX=""
@@ -1416,6 +1570,13 @@ menuentry "Pulsar OS Live" {
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
 }
+
+menuentry "Pulsar OS Debug" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$DEBUG_PARAMS"
+}
 EOF
 
     # Minimal refind.conf for the ISO root (no showtools, no theme — avoids duplicate tool buttons
@@ -1429,6 +1590,12 @@ menuentry "Pulsar OS Live" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
+}
+
+menuentry "Pulsar OS Debug" {
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$DEBUG_PARAMS"
 }
 EOF
 
