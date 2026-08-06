@@ -1321,6 +1321,18 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev plymouth modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
     echo 'MODULES=(amdgpu radeon i915 xe nouveau virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    # Force Plymouth to use the simpledrm device (from the EFI firmware framebuffer)
+    # so the splash appears immediately instead of waiting up to DeviceTimeout for
+    # the real GPU driver (amdgpu is huge and slow to load on hybrid laptops, which
+    # leaves the splash frozen/fallback). Also set via the 'plymouth.use-simpledrm=1'
+    # kernel command line in the boot menu entries.
+    # Forzar a Plymouth a usar simpledrm (framebuffer EFI) para que el splash
+    # aparezca al instante y no se quede congelado esperando a amdgpu/i915.
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/plymouth"
+    if [ -f "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" ]; then
+        $SUDO sed -i '/^UseSimpledrm=/d' "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf"
+        echo 'UseSimpledrm=true' | $SUDO tee -a "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" > /dev/null
+    fi
     # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
         $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
@@ -1559,12 +1571,12 @@ else
 fi
 
 if [ "$DISTRO" = "arch" ]; then
-    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash loglevel=3 --"
-    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash loglevel=3 --"
+    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash plymouth.use-simpledrm=1 loglevel=3 --"
+    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash plymouth.use-simpledrm=1 loglevel=3 --"
     DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO loglevel=7 rd.debug plymouth.enable=0 --"
 else
-    KERNEL_PARAMS="boot=live components username=live autologin quiet splash loglevel=3 noprompt --"
-    RAM_PARAMS="boot=live components username=live autologin toram quiet splash loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components username=live autologin quiet splash plymouth.use-simpledrm=1 loglevel=3 noprompt --"
+    RAM_PARAMS="boot=live components username=live autologin toram quiet splash plymouth.use-simpledrm=1 loglevel=3 noprompt --"
     DEBUG_PARAMS="boot=live components username=live autologin loglevel=7 rd.debug plymouth.enable=0 noprompt --"
 fi
 
@@ -1667,12 +1679,12 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash plymouth.use-simpledrm=1 loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash plymouth.use-simpledrm=1 loglevel=3 --
     initrd /live/initrd
 }
 
@@ -1743,9 +1755,9 @@ else
     # rEFInd BOOTLOADER PACKAGING
     # --------------------------------------------------------------------------
     echo "💿 Creando imagen EFI bootable con rEFInd... / Creating bootable EFI image with rEFInd..."
-    $SUDO mkdir -p "$ISO_STAGING/boot"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
-    EFI_IMG="$ISO_STAGING/boot/efi.img"
+    EFI_IMG="$BUILD_DIR/efi.img"
+    $SUDO rm -f "$EFI_IMG"
 
     # Create a 350MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
     # Crear un archivo vacío de 350MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
@@ -1913,12 +1925,12 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash plymouth.use-simpledrm=1 loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash plymouth.use-simpledrm=1 loglevel=3 --
     initrd /live/initrd
 }
 
@@ -1939,11 +1951,33 @@ EOF
         ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind${VER_SUFFIX}.iso"
     fi
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
+    # Add a hybrid MBR so the ISO is a valid disk image: balenaEtcher requires it
+    # and direct USB flashing (dd) needs it for UEFI to find the GPT ESP partition.
+    # grub-mkrescue uses boot_hybrid.img; fall back to the syslinux isohdpfx.bin.
+    # Añadir un MBR híbrido para que la ISO sea una imagen de disco válida: lo exige
+    # balenaEtcher y el volcado con dd (UEFI arranca desde la partición GPT ESP).
+    HYBRID_MBR=""
+    for mbr in \
+        "/usr/lib/grub/i386-pc/boot_hybrid.img" \
+        "/usr/lib/ISOLINUX/isohdpfx.bin" \
+        "/usr/lib/syslinux/mbr/isohdpfx.bin"; do
+        if [ -f "$mbr" ]; then
+            HYBRID_MBR="$mbr"
+            break
+        fi
+    done
+    if [ -z "$HYBRID_MBR" ]; then
+        echo "❌ Error: No se encontró un template MBR híbrido (boot_hybrid.img de GRUB o isohdpfx.bin de syslinux). Instala 'grub' o 'syslinux' en el host."
+        exit 1
+    fi
     $SUDO xorriso -as mkisofs \
       -o "$ISO_OUTPUT" \
       -J -R -V "PULSAR_ISO" \
+      -isohybrid-mbr "$HYBRID_MBR" \
+      -partition_cyl_align all \
+      -append_partition 2 0xef "$EFI_IMG" \
       -eltorito-alt-boot \
-      -e "boot/efi.img" \
+      -e --interval:appended_partition_2:all:: \
       -no-emul-boot \
       -isohybrid-gpt-basdat \
       "$ISO_STAGING"
