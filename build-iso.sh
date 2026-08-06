@@ -1320,6 +1320,7 @@ if [ "$DISTRO" = "arch" ]; then
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev plymouth modconf kms archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
+    echo 'MODULES=(amdgpu radeon i915 xe nouveau virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
     # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
         $SUDO sed -i 's/^#*GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Pulsar OS"/' "$ROOTFS_TARGET/etc/default/grub"
