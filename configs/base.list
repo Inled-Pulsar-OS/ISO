@@ -124,7 +124,7 @@ libgbm1
 mesa-utils
 live-boot
 squashfs-tools
-# NVIDIA Drivers & Headers
+# NVIDIA Drivers & Headers (solo se incluyen con --nvidia; ver build-iso.sh)
 nvidia-driver
 nvidia-settings
 linux-headers-amd64
@@ -134,4 +134,19 @@ dkms
 # Firmware Packages for Hardware/Graphics Compatibility
 firmware-linux
 firmware-misc-nonfree
+# Firmware Wi-Fi/Bluetooth adicional para el arranque en vivo (mismos que instala Calamares)
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+firmware-amd-graphics
+# Controladores X.Org para AMD, ATI e Intel (NVIDIA vía nvidia-driver con --nvidia;
+# nouveau lo cubre modesetting, y evita conflictos con nvidia-driver en build --nvidia)
+xserver-xorg-video-amdgpu
+xserver-xorg-video-ati
+xserver-xorg-video-intel
+# Aceleración de vídeo por hardware (VA-API) y Vulkan de Mesa
+mesa-va-drivers
+mesa-vulkan-drivers
+intel-media-driver
 

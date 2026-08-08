@@ -1567,6 +1567,7 @@ echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... /
     $SUDO mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
         -comp xz \
+        -Xbcj x86 \
         -e proc/* \
         -e sys/* \
         -e dev/* \

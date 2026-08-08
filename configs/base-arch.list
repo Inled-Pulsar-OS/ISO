@@ -101,15 +101,19 @@ squashfs-tools
 # Arch Linux ISO live
 archiso
 mkinitcpio-archiso
-# NVIDIA Drivers (open source driver modern)
+# NVIDIA Drivers (open source driver modern, Turing y posteriores)
+# nvidia-open is prebuilt for the default kernel; the legacy proprietary
+# 'nvidia' package is NOT bundled to keep the ISO light (install it later
+# with Driver Manager if needed for pre-Turing cards).
 nvidia-open
 nvidia-settings
-linux-headers
 # Broadcom Drivers (AUR - descomentar si se necesita)
 # broadcom-wl-dkms
-dkms
 # Firmware
 linux-firmware
+# Microcódigo de CPU (Intel y AMD)
+intel-ucode
+amd-ucode
 # Controladores de vídeo de código abierto
 xf86-video-amdgpu
 xf86-video-ati
@@ -118,6 +122,9 @@ xf86-video-nouveau
 # Soporte de Vulkan
 vulkan-intel
 vulkan-radeon
+# Aceleración de vídeo por hardware (VA-API): AMD (Mesa) e Intel (Intel Media Driver)
+libva-mesa-driver
+intel-media-driver
 # Firmware de sonido (crucial para portátiles modernos)
 sof-firmware
 alsa-firmware
