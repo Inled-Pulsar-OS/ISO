@@ -886,11 +886,14 @@ $pkg_name"
             # target downloads fresh core/extra databases for its own pacman.
             pacman -Syy --noconfirm archlinux-keyring
 
+            # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
+            pacman -Syu --noconfirm --overwrite '*'
+
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
             # Install remaining dependencies and packages
-            pacman -S --noconfirm --overwrite '*' \
+            pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 droidtux \
                 macboat \
@@ -925,7 +928,7 @@ $pkg_name"
             pacman -Syy --noconfirm archlinux-keyring
 
             # Install Pulsar OS packages and bootloader
-            pacman -S --noconfirm --overwrite '*' \
+            pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 pulsaros-branding \
                 pulsaros-theme \
@@ -1310,6 +1313,12 @@ Session=gnome
 EOF
 $SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 
+# Force Plymouth to not use SimpleDRM in the configuration file to prevent early boot graphics freezes
+if [ -f "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" ]; then
+    echo "⚙️ Forzando UseSimpledrm=false en /etc/plymouth/plymouthd.conf..."
+    $SUDO sed -i 's/^UseSimpledrm=.*/UseSimpledrm=false/' "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf"
+fi
+
 # ==============================================================================
 # PHASE 6: Final Tasks (Initramfs regeneration and cleanup)
 # FASE 6: Tareas Finales del Sistema (Generación de Kernel y Limpieza)
@@ -1319,8 +1328,8 @@ if [ "$DISTRO" = "arch" ]; then
     echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
-    echo 'HOOKS=(base udev modconf kms plymouth archiso archiso_loop_mnt block filesystems keyboard)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
-    echo 'MODULES=(amdgpu radeon i915 xe nouveau virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
+    echo 'MODULES=(amdgpu radeon i915 xe virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
     
     # Ensure kms hook is in the main /etc/mkinitcpio.conf HOOKS array (for the installed system)
     if [ -f "$ROOTFS_TARGET/etc/mkinitcpio.conf" ]; then
@@ -1341,9 +1350,7 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO tee "$ROOTFS_TARGET/tmp/patch-plymouth-msg.awk" > /dev/null <<'AWK'
 /^msg\(\) \{/ { inmsg=1 }
 inmsg && /^}/ {
-    print "    if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then"
-    print "        plymouth message --text=\"${*#-n }\" >/dev/null 2>&1 || true"
-    print "    fi"
+    print "    ( command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth --ping >/dev/null 2>&1 && timeout 2 plymouth message --text=\"${*#-n }\" >/dev/null 2>&1 ) &"
     inmsg=0
 }
 { print }
@@ -1365,7 +1372,7 @@ AWK
     $SUDO tee "$ROOTFS_TARGET/tmp/patch-plymouth-clear.awk" > /dev/null <<'AWK'
 /^run_hookfunctions .run_cleanuphook. .cleanup hook. .CLEANUPHOOKS$/ {
     print
-    print "command -v plymouth >/dev/null 2>&1 && plymouth message --text=\"\" >/dev/null 2>&1 || true"
+    print "( command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth message --text=\"\" >/dev/null 2>&1 ) &"
     next
 }
 { print }
@@ -1429,13 +1436,13 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
             curr_mb=$((curr_size / 1048576))
             total_mb=$((total_size / 1048576))
 
-            # Force output to physical screen console
-            printf "\\r:: Copying rootfs to RAM: %d%% (%d MB / %d MB)..." "$pct" "$curr_mb" "$total_mb" > /dev/console
-
-            if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
-                plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
-                plymouth system-update --progress="$pct" 2>/dev/null
-            fi
+            # Send status update to Plymouth in a non-blocking background job with a timeout
+            (
+                if command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth --ping >/dev/null 2>&1; then
+                    timeout 2 plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
+                    timeout 2 plymouth --progress="$pct" 2>/dev/null
+                fi
+            ) &
             sleep 0.5
         done
 
@@ -1445,11 +1452,12 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
 
         # Print final status
         total_mb=$((total_size / 1048576))
-        printf "\\r:: Copying rootfs to RAM: 100%% (%d MB / %d MB)...\\n" "$total_mb" "$total_mb" > /dev/console
-        if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
-            plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
-            plymouth system-update --progress=100 2>/dev/null
-        fi
+        (
+            if command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth --ping >/dev/null 2>&1; then
+                timeout 2 plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
+                timeout 2 plymouth --progress=100 2>/dev/null
+            fi
+        ) &
 
         if [ "$rc" != 0 ]; then
             echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
@@ -1468,9 +1476,30 @@ else:
     print("Old block not found!")
 ' "$ROOTFS_TARGET/usr/lib/initcpio/hooks/archiso"
     fi
+    # Create a temporary modprobe config to blacklist Nvidia modules inside the initramfs.
+    # This prevents the kms/udev hooks from loading nouveau or nvidia drivers during the
+    # initramfs stage (avoiding Plymouth freezes on hybrid laptops).
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/modprobe.d"
+    cat <<'EOF' | $SUDO tee "$ROOTFS_TARGET/etc/modprobe.d/nvidia-initramfs-blacklist.conf" > /dev/null
+blacklist nouveau
+blacklist nvidia
+blacklist nvidia_modeset
+blacklist nvidia_uvm
+blacklist nvidia_drm
+install nouveau /bin/false
+install nvidia /bin/false
+install nvidia_modeset /bin/false
+install nvidia_uvm /bin/false
+install nvidia_drm /bin/false
+EOF
+
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         mkinitcpio -P
     "
+
+    # Remove the temporary modprobe config so that the Nvidia drivers can still load
+    # normally in the final booted system.
+    $SUDO rm -f "$ROOTFS_TARGET/etc/modprobe.d/nvidia-initramfs-blacklist.conf"
     # Copy skeleton files to live user home directory to ensure all dconf settings and GTK4 themes are applied
     echo "⚙️ Configurando el directorio home del usuario live..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -1567,13 +1596,15 @@ else
 fi
 
 if [ "$DISTRO" = "arch" ]; then
-    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
-    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --"
-    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO loglevel=7 rd.debug plymouth.enable=0 --"
+    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
+    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
+    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --"
+    LEGACY_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --"
 else
-    KERNEL_PARAMS="boot=live components username=live autologin quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
-    RAM_PARAMS="boot=live components username=live autologin toram quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 noprompt --"
-    DEBUG_PARAMS="boot=live components username=live autologin loglevel=7 rd.debug plymouth.enable=0 noprompt --"
+    KERNEL_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    RAM_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    DEBUG_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
+    LEGACY_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
 if [ "$BOOTLOADER" = "grub" ]; then
@@ -1637,8 +1668,13 @@ menuentry "Pulsar OS Live (Normal)" {
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Debug (sin splash / logs completos)" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     linux /live/vmlinuz $DEBUG_PARAMS
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+    linux /live/vmlinuz $LEGACY_PARAMS
     initrd /live/initrd
 }
 EOF
@@ -1675,17 +1711,22 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Debug (sin splash / logs completos)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile loglevel=7 rd.debug plymouth.enable=0 --
+menuentry "Pulsar OS Live (No Plymouth / Debug)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
 EOF
@@ -1785,11 +1826,18 @@ menuentry "Pulsar OS Live (Normal)" {
     options "$KERNEL_PARAMS"
 }
 
-menuentry "Pulsar OS Debug" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$DEBUG_PARAMS"
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$LEGACY_PARAMS"
 }
 EOF
 
@@ -1812,10 +1860,16 @@ menuentry "Pulsar OS Live (Normal)" {
     options "$KERNEL_PARAMS"
 }
 
-menuentry "Pulsar OS Debug" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$DEBUG_PARAMS"
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+    loader /EFI/BOOT/vmlinuz
+    initrd /EFI/BOOT/initrd
+    options "$LEGACY_PARAMS"
 }
 EOF
 
@@ -1921,17 +1975,22 @@ loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
 menuentry "Pulsar OS Live (RAM)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile copytoram=y quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile quiet splash amdgpu.modeset=1 nouveau.modeset=1 nvidia-drm.modeset=1 nvidia-drm.fbdev=1 loglevel=3 --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Debug (sin splash / logs completos)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile loglevel=7 rd.debug plymouth.enable=0 --
+menuentry "Pulsar OS Live (No Plymouth / Debug)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
 EOF
