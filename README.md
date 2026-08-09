@@ -3,6 +3,58 @@
 This repository contains the ISO build script, the configuration files for preinstalled packages, and the Github Actions workflows.  
 PulsarOS is built 100% by Github Actions, fully auditable end-to-end, and the ISO images are uploaded to Sourceforge (since Github Releases has very low size limits).
 
+## Prerequisites
+
+The build script checks for missing dependencies and tells you what to install. But if you want to set everything up beforehand:
+
+### Arch Linux / CachyOS / Manjaro
+
+```bash
+sudo pacman -S --needed \
+  arch-install-scripts squashfs-tools grub xorriso mtools dosfstools \
+  binutils libisoburn sassc imagemagick psmisc \
+  fakeroot rsync jq curl unzip wget git
+```
+
+### Debian / Ubuntu / Pop!_OS
+
+```bash
+sudo apt-get install -y \
+  mmdebstrap squashfs-tools grub-common grub-efi-amd64-bin grub-pc-bin \
+  xorriso mtools dosfstools binutils unzip sassc imagemagick psmisc \
+  debian-archive-keyring rsync jq curl wget fakeroot git
+```
+
+### What each package does
+
+| Package | Purpose |
+|---------|---------|
+| `arch-install-scripts` / `mmdebstrap` | Bootstrap the base chroot (pacstrap / mmdebstrap) |
+| `squashfs-tools` | Compress the rootfs into a SquashFS image |
+| `grub` / `grub-common` + `grub-pc-bin` + `grub-efi-amd64-bin` | Build the GRUB bootloader for the ISO |
+| `xorriso` | Create hybrid ISO images (BIOS + UEFI) |
+| `mtools` | Manipulate FAT filesystems (EFI image inside ISO) |
+| `dosfstools` | Format FAT partitions (EFI image) |
+| `binutils` / `libisoburn` | Linker and ISO manipulation tools |
+| `sassc` | SCSS compiler for GRUB and Plymouth themes |
+| `imagemagick` | Image processing for branding assets |
+| `psmisc` | Provides `fuser` to kill leftover processes on port 5900 |
+| `fakeroot` | Build packages without real root privileges |
+| `rsync` | Sync the base chroot into the working target |
+| `jq` / `curl` / `wget` / `unzip` / `git` | Download and extract resources during build |
+
+### For QEMU testing (optional)
+
+If you want to test ISOs without burning real hardware:
+
+```bash
+# Arch
+sudo pacman -S qemu-full edk2-ovmf
+
+# Debian/Ubuntu
+sudo apt-get install -y qemu-system-x86 ovmf
+```
+
 ## Building the ISO  
 The main file for the build is `build-iso.sh`, which accepts the following flags:
 - `--branch stable`, replacing stable with any other Debian branch; currently only stable can be used.
