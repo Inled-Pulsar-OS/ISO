@@ -148,5 +148,5 @@ xserver-xorg-video-intel
 # Aceleración de vídeo por hardware (VA-API) y Vulkan de Mesa
 mesa-va-drivers
 mesa-vulkan-drivers
-intel-media-driver
+intel-media-va-driver-non-free
 
