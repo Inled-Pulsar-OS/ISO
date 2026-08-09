@@ -545,9 +545,31 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
         
         # Bootstrap Arch Linux using pacstrap
-        # Note: without -c, package cache goes to target (in home) instead of host's /var/cache/pacman (root)
+        # Create clean pacman.conf with only official Arch repos to avoid
+        # conflicts from third-party repos
+        CLEAN_PACMAN_CONF="/tmp/pulsaros-pacman-$$.conf"
+        cat > "$CLEAN_PACMAN_CONF" <<'CLEANEof'
+[options]
+HoldPkg = pacman glibc
+Architecture = auto
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Optional
+NoProgressBar
+ParallelDownloads = 5
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+CLEANEof
+
         mkdir -p "$ROOTFS_BASE"
-        $SUDO pacstrap -c -K "$ROOTFS_BASE" $PACKAGE_LIST
+        $SUDO pacstrap -c -C "$CLEAN_PACMAN_CONF" -K "$ROOTFS_BASE" $PACKAGE_LIST
+        rm -f "$CLEAN_PACMAN_CONF"
         
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
