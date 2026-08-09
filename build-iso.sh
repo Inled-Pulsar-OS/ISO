@@ -546,7 +546,7 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         
         # Bootstrap Arch Linux using pacstrap
         # Create clean pacman.conf with only official Arch repos to avoid
-        # conflicts from third-party repos (e.g. CachyOS mesa-git vs mesa)
+        # conflicts from third-party repos
         CLEAN_PACMAN_CONF="/tmp/pulsaros-pacman-$$.conf"
         cat > "$CLEAN_PACMAN_CONF" <<'CLEANEof'
 [options]
