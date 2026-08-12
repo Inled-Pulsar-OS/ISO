@@ -7,3 +7,4 @@ build/
 
 # Archivos temporales de QEMU
 .qemu_9p/
+__pycache__/
