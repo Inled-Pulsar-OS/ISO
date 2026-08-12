@@ -138,7 +138,7 @@ MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
 if [ "$DISTRO" = "arch" ]; then
-    CMDS=("arch-install-scripts" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+    CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 else
     CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 fi
@@ -277,9 +277,9 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                 if [ ${#pacman_official[@]} -gt 0 ]; then
                     echo "📥 Installing official dependencies using pacman..."
                     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-                        pkexec pacman -Sy --noconfirm "${pacman_official[@]}"
+                        pkexec pacman -S --needed --noconfirm "${pacman_official[@]}"
                     else
-                        sudo pacman -Sy --noconfirm "${pacman_official[@]}"
+                        sudo pacman -S --needed --noconfirm "${pacman_official[@]}"
                     fi
                 fi
 
@@ -797,7 +797,7 @@ $pkg_name"
         done
         unset seen_pkg_names
 
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "gnome-shell-extension-gsconnect" "winboat-bin")
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -844,15 +844,11 @@ $pkg_name"
 
                     # Build package and save to LOCAL_PKGS_DIR
                     # We run as ORIGINAL_USER since makepkg cannot run as root.
-                    # -sf resolves deps from official repos; if a runtime dep is
-                    # itself AUR (e.g. autokey-gtk -> autokey-common), -sf fails,
-                    # so install the AUR packages already built on the host and retry.
-                    if ! run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"; then
-                        echo "⚠️ $dep necesita deps AUR ya compiladas; instalándolas en el host y reintentando..."
-                        for p in "$LOCAL_PKGS_DIR"/*.pkg.tar.zst; do
-                            $SUDO pacman -U --noconfirm --needed "$p" 2>/dev/null || true
-                        done
-                        run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+                    # Use -cfd to build without checking or installing dependencies on the host system.
+                    # Local AUR dependencies are installed inside the target chroot, never on the host.
+                    if ! run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign"; then
+                        echo "❌ Error: Could not compile AUR dependency: $dep"
+                        exit 1
                     fi
                     echo "✅ AUR dependency $dep compiled successfully."
                 else
@@ -868,7 +864,7 @@ $pkg_name"
         if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
             echo "🔨 Compiling spotlight-gtk locally..."
             rm -f "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst
-            run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
+            run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign"
             echo "✅ spotlight-gtk compiled successfully."
         fi
 
@@ -891,7 +887,7 @@ $pkg_name"
 
             # Init pacman keyring
             mkdir -p /etc/pacman.d/gnupg
-            chmod 700 /etc/pacman.d/gnupg
+            chmod 755 /etc/pacman.d/gnupg
 
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
@@ -901,8 +897,12 @@ $pkg_name"
             pacman-key --populate archlinux
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
-            pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-            pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+            if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
+                pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+                pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+            fi
+            chmod 755 /etc/pacman.d/gnupg
+            chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
             # Sync databases and install keyring. -Syy forces a full refresh so the
             # target downloads fresh core/extra databases for its own pacman.
@@ -932,7 +932,7 @@ $pkg_name"
 
             # Init pacman keyring
             mkdir -p /etc/pacman.d/gnupg
-            chmod 700 /etc/pacman.d/gnupg
+            chmod 755 /etc/pacman.d/gnupg
 
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
@@ -942,8 +942,12 @@ $pkg_name"
             pacman-key --populate archlinux
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
-            pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-            pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F
+            if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
+                pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+                pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+            fi
+            chmod 755 /etc/pacman.d/gnupg
+            chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
             # Sync databases and install keyring. -Syy forces a full refresh so the
             # target downloads fresh core/extra databases for its own pacman.
@@ -1209,9 +1213,26 @@ if [ "$DISTRO" = "arch" ]; then
     cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
 ---
 unpack:
+    - source: "/run/archiso/copytoram/airootfs.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+      optional: true
     - source: "/run/archiso/bootmnt/live/x86_64/airootfs.sfs"
       sourcefs: "squashfs"
       destination: ""
+      optional: true
+    - source: "/run/archiso/bootmnt/live/airootfs.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+      optional: true
+    - source: "/run/archiso/bootmnt/airootfs.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+      optional: true
+    - source: "/run/archiso/airootfs.sfs"
+      sourcefs: "squashfs"
+      destination: ""
+      optional: true
 EOF
 
     # packages.conf for Arch
@@ -1351,7 +1372,17 @@ if [ "$DISTRO" = "arch" ]; then
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
-    echo 'MODULES=(amdgpu radeon i915 xe virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    echo 'MODULES=(amdgpu radeon i915 virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    
+    # Ensure /usr/share/pixmaps/archlinux-logo.png exists so mkinitcpio's plymouth hook does not error out
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/pixmaps"
+    if [ ! -f "$ROOTFS_TARGET/usr/share/pixmaps/archlinux-logo.png" ]; then
+        if [ -f "$ROOTFS_TARGET/usr/share/plymouth/themes/pulsar-plymouth/pulsar-logo.png" ]; then
+            $SUDO cp "$ROOTFS_TARGET/usr/share/plymouth/themes/pulsar-plymouth/pulsar-logo.png" "$ROOTFS_TARGET/usr/share/pixmaps/archlinux-logo.png"
+        else
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d | $SUDO tee "$ROOTFS_TARGET/usr/share/pixmaps/archlinux-logo.png" > /dev/null
+        fi
+    fi
     
     # Ensure kms hook is in the main /etc/mkinitcpio.conf HOOKS array (for the installed system)
     if [ -f "$ROOTFS_TARGET/etc/mkinitcpio.conf" ]; then
