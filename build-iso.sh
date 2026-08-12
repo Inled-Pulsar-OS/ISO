@@ -88,14 +88,14 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         *)
-            echo "❌ Opción desconocida: $1"
+            echo "❌ Unknown option: $1"
             exit 1
             ;;
     esac
 done
 
 if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
-    echo "❌ Error: La rama debe ser 'stable', 'forky' o 'rolling'. Valor recibido: $BRANCH"
+    echo "❌ Error: Branch must be 'stable', 'forky' or 'rolling'. Value received: $BRANCH"
     exit 1
 fi
 
@@ -103,7 +103,7 @@ fi
 # Detect distribution type from branch suffix or explicit flag
 # ==============================================================================
 if [ "$DISTRO" = "arch" ]; then
-    echo "🏗️  Modo Arch Linux activado / Arch Linux mode enabled"
+    echo "🏗️  Arch Mode Enabled | Building arch image"
 fi
 
 # ==============================================================================
@@ -138,7 +138,7 @@ MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
 if [ "$DISTRO" = "arch" ]; then
-    CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+    CMDS=("arch-install-scripts" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 else
     CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 fi
@@ -185,8 +185,8 @@ fi
 
 # Install dependencies if they are missing / Instalar dependencias si faltan
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
-    echo "⚠️ Se ha detectado que faltan dependencias esenciales en el host: ${MISSING_PACKAGES[*]}"
-    echo "Estas herramientas son requeridas para la compilación de Pulsar OS ($BOOTLOADER)."
+    echo "⚠️ Essential dependencies detected to be missing from the host: ${MISSING_PACKAGES[*]}"
+    echo "These tools are required for Pulsar OS build ($BOOTLOADER)."
     
     # SAFETY GUARD: never touch the host package manager by default.
     # The ISO build runs on the user's own machine (often Arch), and host-level
@@ -194,9 +194,9 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     # Only auto-install when explicitly requested with --install-host-deps.
     # GUARDIA DE SEGURIDAD: por defecto nunca se toca el gestor de paquetes del host.
     if [ "$ALLOW_HOST_INSTALL" != "true" ]; then
-        echo "❌ Dependencias del host faltantes. NO se auto-instalarán para proteger tu sistema."
-        echo "   Instala manualmente los paquetes que falten (p. ej. pacman -S ${MISSING_PACKAGES[*]})"
-        echo "   o repite el comando con la variable ALLOW_HOST_INSTALL=true para autorizar la instalación."
+        echo "❌ Missing host dependencies. They will NOT auto-install to protect your system."
+        echo "   Manually install missing packages (e.g. sudo pacman -S ${MISSING_PACKAGES[*]})"
+        echo "   or repeat the command with the variable ALLOW_HOST_INSTALL=true to authorize the installation."
         exit 1
     fi
     
@@ -206,7 +206,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     if [ "$GITHUB_ACTIONS" = "true" ] || [ ! -t 0 ]; then
         auto_install=true
     else
-        read -p "¿Deseas instalar las dependencias faltantes ahora? (s/n): " confirm
+        read -p "Do you want to install the missing dependencies now? (y/n):" confirm
         confirm=$(echo "$confirm" | tr -d '\r')
         if [[ "$confirm" =~ ^[sSyY]$ ]] || [ -z "$confirm" ]; then
             auto_install=true
@@ -223,7 +223,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         fi
 
         if [ -z "$pkg_manager" ]; then
-            echo "❌ Error: No se detectó un gestor de paquetes soportado (apt o pacman)."
+            echo "❌ Error: A supported package manager (apt or pacman) was not detected."
             exit 1
         fi
 
@@ -261,7 +261,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         packages_to_install=($(echo "${packages_to_install[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
 
         if [ ${#packages_to_install[@]} -gt 0 ]; then
-            echo "📥 Instalando dependencias en el host usando $pkg_manager..."
+            echo "📥 Installing dependencies on the host using $pkg_manager..."
             if [ "$pkg_manager" = "pacman" ]; then
                 # Separate official pacman packages from AUR packages
                 pacman_official=()
@@ -275,7 +275,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                 done
 
                 if [ ${#pacman_official[@]} -gt 0 ]; then
-                    echo "📥 Instalando dependencias oficiales usando pacman..."
+                    echo "📥 Installing official dependencies using pacman..."
                     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
                         pkexec pacman -Sy --noconfirm "${pacman_official[@]}"
                     else
@@ -284,7 +284,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                 fi
 
                 if [ ${#aur_packages[@]} -gt 0 ]; then
-                    echo "⚠️ Los siguientes paquetes son del repositorio AUR y no están en los repos oficiales:"
+                    echo "⚠️ The following packages are from the AUR repository and are not in the official repos:"
                     echo "   ${aur_packages[*]}"
                     
                     # Try to locate an AUR helper
@@ -296,7 +296,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                     fi
 
                     if [ -n "$aur_helper" ]; then
-                        echo "🚀 Se ha detectado el ayudante de AUR: $aur_helper. Instalando..."
+                        echo "🚀 An AUR helper has been detected: $aur_helper. Installing..."
                         # Run AUR helper as the original non-root user if SUDO_USER is defined
                         if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
                             sudo -u "$SUDO_USER" "$aur_helper" -S --noconfirm "${aur_packages[@]}"
@@ -304,8 +304,8 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                             "$aur_helper" -S --noconfirm "${aur_packages[@]}"
                         fi
                     else
-                        echo "❌ No se detectó ningún asistente de AUR (como yay o paru)."
-                        echo "Por favor, instala estos paquetes manualmente antes de continuar:"
+                        echo "❌ No AUR helper (like yay or paru) detected."
+                        echo "Please install these packages manually before continuing:"
                         echo "   yay -S ${aur_packages[*]}"
                         exit 1
                     fi
@@ -317,12 +317,12 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
                     sudo apt-get update && sudo apt-get install -y "${packages_to_install[@]}"
                 fi
             fi
-            echo "✅ Dependencias instaladas con éxito."
+            echo "✅ Successfully installed dependencies."
         else
-            echo "✅ No hay paquetes que instalar para tu plataforma."
+            echo "✅ There are no packages to install for your platform."
         fi
     else
-        echo "❌ Error: No se pueden cumplir los requisitos del host. Saliendo..."
+        echo "❌ Error: Host requirements cannot be met. Going out..."
         exit 1
     fi
 fi
@@ -332,7 +332,7 @@ fi
 # Ayudante: Auto-elevación a privilegios de superusuario
 # ==============================================================================
 if [ "$EUID" -ne 0 ]; then
-    echo "🔐 Este script requiere privilegios de superusuario para ejecutarse."
+    echo "🔐 This script requires superuser privileges to run."
     echo "Re-ejecutando con pkexec..."
     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
         exec pkexec "$0" "${ORIGINAL_ARGS[@]}"
@@ -436,7 +436,7 @@ CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
 # Preventative cleanup function to ensure filesystems are unmounted on interruption
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
-    echo "🧹 Finalizando y liberando recursos montados en el chroot..."
+    echo "🧹 Terminating and freeing chroot-mounted resources..."
     $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
@@ -455,11 +455,11 @@ cleanup() {
 # Prelanzamiento: libera montajes residuales de builds interrumpidos.
 # Se ejecuta una vez al inicio para que un build nuevo nunca falle por montajes viejos.
 preflight_cleanup() {
-    echo "🔍 Comprobando montajes residuales de builds anteriores..."
+    echo "🔍 Checking residual mounts from previous builds..."
     # Unmount anything mounted under the build directory (leftover chroot mounts)
     # Desmontar todo lo montado bajo el directorio de build (montajes chroot residuales)
     awk '$2 ~ "^'"$BUILD_DIR"'/" || $2 == "'"$BUILD_DIR"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
-        echo "   Desmontando residual: $mp"
+        echo "   Unmounting $mp"
         $SUDO umount -l "$mp" 2>/dev/null || true
     done
     # Free known helper mount points (e.g. ISO verification leftovers)
@@ -470,7 +470,7 @@ preflight_cleanup() {
             $SUDO umount -l "$mp" 2>/dev/null || true
         fi
     done
-    echo "✅ Comprobación de montajes residuales completada."
+    echo "✅ Residual mnt check completed."
 }
 
 # Run a command as the original non-root user without requiring a pty.
@@ -496,7 +496,7 @@ preflight_cleanup
 # Auto-cleanup if previous bootstrap was incomplete or corrupted
 # Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
 if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BASE/proc" ] || [ ! -d "$ROOTFS_BASE/boot" ]; }; then
-    echo "⚠️ Caché base incompleta o corrupta detectada. Limpiando para regenerar..."
+    echo "⚠️ Incomplete or corrupt base cache detected. Cleaning to regenerate..."
     cleanup
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
@@ -515,19 +515,19 @@ if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
     fi
     
     if [ ! -f "$ROOTFS_BASE/etc/pulsaros-base.list" ]; then
-        echo "🔄 No se encontró pulsaros-base.list en la caché. Regenerando base..."
+        echo "🔄 Pulros-base.list was not found in the cache. Regenerating base..."
         base_list_changed=true
     else
         cached_list=$(cat "$ROOTFS_BASE/etc/pulsaros-base.list")
         if [ "$current_list" != "$cached_list" ]; then
-            echo "🔄 Se ha detectado un cambio en la lista de paquetes requerida con respecto a la base en caché. Regenerando base..."
+            echo "🔄 A change has been detected in the required package list with respect to the cached base. Regenerating base..."
             base_list_changed=true
         fi
     fi
 fi
 
 if $CLEAN_BASE || [ "$base_list_changed" = true ]; then
-    echo "🚨 Limpieza total de la caché base solicitada o cambio de lista de paquetes detectado..."
+    echo "🚨 Base cache cleanup requested or package list change detected..."
     cleanup
     $SUDO rm -rf "$ROOTFS_BASE"
 fi
@@ -536,12 +536,12 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
     mkdir -p "$BUILD_DIR"
     
     if [ ! -f "$PACKAGE_LIST_FILE" ]; then
-        echo "❌ Error: No se encontró el archivo de paquetes base en: $PACKAGE_LIST_FILE"
+        echo "❌ Error: Base packages file not found in: $PACKAGE_LIST_FILE"
         exit 1
     fi
     
     if [ "$DISTRO" = "arch" ]; then
-        echo "--- 📥 Creando Arch Linux Base (pacstrap) ---"
+        echo "--- 📥 Creating Arch Linux base ---"
         PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
         
         # Bootstrap Arch Linux using pacstrap
@@ -574,15 +574,15 @@ CLEANEof
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
         
-        echo "✅ Bootstrap de Arch base completado en: $ROOTFS_BASE"
+        echo "✅ Arch base bootstraping completed on $ROOTFS_BASE"
     else
-        echo "--- 📥 Creando Debian Base Limpio (mmdebstrap) ---"
+        echo "--- 📥 Creating Clean Debian Base (mmdebstrap) ---"
         
         if $WITH_NVIDIA; then
-            echo "💚 Incluyendo controladores de hardware propietarios (NVIDIA, Broadcom STA, DKMS, Headers) en la instalación..."
+            echo "💚 Including proprietary hardware drivers (NVIDIA, Broadcom STA, DKMS, Headers) in the installation..."
             PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
         else
-            echo "💙 Excluyendo controladores propietarios (NVIDIA, Broadcom STA, DKMS, Headers) de la instalación..."
+            echo "💙 Excluding proprietary drivers (NVIDIA, Broadcom STA, DKMS, Headers) from installation..."
             PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
         fi
         
@@ -611,10 +611,10 @@ CLEANEof
             grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
         fi
         
-        echo "✅ Bootstrap de Debian base completado en: $ROOTFS_BASE"
+        echo "✅ Base Debian Bootstrap completed in: $ROOTFS_BASE"
     fi
 else
-    echo "✨ Base virgen detectada en caché. Saltando bootstrap."
+    echo "✨ Virgin base detected in cache. Jumping bootstrap."
 fi
 
 # ==============================================================================
@@ -622,9 +622,9 @@ fi
 # ==============================================================================
 
 if [ "$DISTRO" = "arch" ]; then
-    echo "--- 🔄 Clonando Arch base en el directorio de trabajo (target) ---"
+    echo "--- 🔄 Cloning Arch base in the working directory (target) ---"
 else
-    echo "--- 🔄 Clonando Debian base en el directorio de trabajo (target) ---"
+    echo "--- 🔄 Cloning Debian base in the working directory (target) ---"
 fi
 cleanup
 $SUDO rm -rf "$ROOTFS_TARGET"
@@ -637,7 +637,7 @@ $SUDO rsync -aHAXx --delete "$ROOTFS_BASE/" "$ROOTFS_TARGET/"
 # PHASE 4: Mount virtual filesystems and network / FASE 4: Montar directorios y red
 # ==============================================================================
 
-echo "⚙️ Configurando montajes virtuales y DNS..."
+echo "⚙️ Configuring virtual mounts and DNS..."
 $SUDO mount -t proc proc "$ROOTFS_TARGET/proc"
 $SUDO mount -t sysfs sys "$ROOTFS_TARGET/sys"
 $SUDO mount --bind /dev "$ROOTFS_TARGET/dev"
@@ -681,7 +681,7 @@ if [ "$DISTRO" = "arch" ]; then
     # ==========================================================================
     # ARCH LINUX PATH
     # ==========================================================================
-    echo "--- 🐧 Configurando repositorios Arch Linux (Inled) ---"
+    echo "--- 🐧 Configuring Arch Linux (Inled) repositories ---"
 
     # Copy the Inled keyring to chroot
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
@@ -739,7 +739,7 @@ EOF
     fi
 
     if $USE_LOCAL_DEBS; then
-        echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes Arch locales ---"
+        echo "--- 🛠️ LOCAL DEVELOPMENT MODE: Installing local Arch packages ---"
         pkg_dir_source="$ISO_DIR/../PKG/arch"
         if [ ! -d "$pkg_dir_source" ]; then
             pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG/arch"
@@ -755,7 +755,7 @@ EOF
                 (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
             fi
         else
-            echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar paquetes pre-existentes."
+            echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing packages."
         fi
 
         LOCAL_PKGS_DIR=""
@@ -773,9 +773,9 @@ EOF
         done
 
         if [ -z "$LOCAL_PKGS_DIR" ]; then
-            echo "❌ Error: No se encontraron paquetes Arch locales en ninguna de las rutas de búsqueda:"
+            echo "❌ Error: No local Arch packages found in any of the search paths:"
             for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
-            echo "Ejecuta primero el empaquetador en la carpeta PKG/arch/."
+            echo "First run the packager in the PKG/arch/folder."
             exit 1
         fi
 
@@ -783,7 +783,7 @@ EOF
         # package. pacman -U rejects two versions of the same package with
         # "duplicate target", and the package build directory accumulates old
         # builds over time.
-        echo "🧹 Eliminando versiones antiguas de paquetes locales..."
+        echo "🧹 Removing old versions of local packages..."
         for pkg_file in $(ls -rv "$LOCAL_PKGS_DIR"/*.pkg.tar.zst 2>/dev/null); do
             pkg_name=$(LC_ALL=C pacman -Qip "$pkg_file" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
             [ -z "$pkg_name" ] && continue
@@ -809,11 +809,11 @@ $pkg_name"
             for dep in "${AUR_DEPS[@]}"; do
                 # Check if package is already built/present in LOCAL_PKGS_DIR
                 if ls "$LOCAL_PKGS_DIR"/$dep-*.pkg.tar.zst >/dev/null 2>&1; then
-                    echo "✅ Dependencia AUR ya compilada: $dep"
+                    echo "✅ AUR dependency already compiled: $dep"
                     continue
                 fi
                 
-                echo "🔨 Compilando dependencia AUR: $dep..."
+                echo "🔨 Compiling AUR dependency: $dep..."
                 BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep"
                 $SUDO rm -rf "$BUILD_TEMP_DIR"
                 mkdir -p "$BUILD_TEMP_DIR"
@@ -854,9 +854,9 @@ $pkg_name"
                         done
                         run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
                     fi
-                    echo "✅ Dependencia AUR $dep compilada con éxito."
+                    echo "✅ AUR dependency $dep compiled successfully."
                 else
-                    echo "❌ Error: No se pudo obtener el PKGBUILD para $dep."
+                    echo "❌ Error: Could not get the PKGBUILD for $dep."
                     exit 1
                 fi
                 $SUDO rm -rf "$BUILD_TEMP_DIR"
@@ -866,13 +866,13 @@ $pkg_name"
         # Compile spotlight-gtk local package if it exists on the host (always rebuild to catch changes)
         SPOTLIGHT_REPO_DIR="/home/jaime/Documentos/spotlight-gtk"
         if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
-            echo "🔨 Compilando spotlight-gtk localmente..."
+            echo "🔨 Compiling spotlight-gtk locally..."
             rm -f "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst
             run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -sf --noconfirm"
-            echo "✅ spotlight-gtk compilado con éxito."
+            echo "✅ spotlight-gtk compiled successfully."
         fi
 
-        echo "📂 Usando paquetes locales desde: $LOCAL_PKGS_DIR"
+        echo "📂 Using local packages from: $LOCAL_PKGS_DIR"
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
         
@@ -924,9 +924,9 @@ $pkg_name"
                 spotlight-gtk
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
-        echo "✅ Paquetes locales de Arch instalados con éxito."
+        echo "✅ Successfully installed local Arch packages."
     else
-        echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio Arch (Inled) ---"
+        echo "---🌐 PRODUCTION MODE: Installing packages from Arch repository (Inled) ---"
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
 
@@ -972,7 +972,7 @@ $pkg_name"
                 seafari \
                 spotlight-gtk
         "
-        echo "✅ Paquetes de Arch instalados desde el repositorio Inled."
+        echo "✅ Arch packages installed from the Inled repository."
     fi
 
     # The archlinux:latest Docker image ships a /etc/pacman.conf with
@@ -982,7 +982,7 @@ $pkg_name"
     # reads /usr/share/i18n/SUPPORTED and aborts without it. Restore the full
     # i18n subtree from the glibc package (the chroot's pacman.conf is clean,
     # so the download is not affected by the image's NoExtract).
-    echo "🔤 Restaurando fuentes de locales completas de glibc..."
+    echo "🔤 Restoring full glibc local sources..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         pacman -Sw --noconfirm glibc >/dev/null 2>&1
@@ -999,14 +999,14 @@ else
     # ==========================================================================
     # DEBIAN PATH (original)
     # ==========================================================================
-    echo "--- 🌐 Configurando repositorios APT (Debian Contrib/Backports e Inled) ---"
+    echo "--- 🌐 Configuring APT repositories (Debian Contrib/Backports and Inled) ---"
     $SUDO sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
     if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
         echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
     fi
 
     # Copy the bundled Inled APT GPG keyring directly to the chroot target
-    echo "🔑 Copiando el llavero GPG de Inled pre-empaquetado..."
+    echo "🔑 Copying the pre-packaged Inled GPG keychain..."
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
     $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
@@ -1014,7 +1014,7 @@ else
         $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
 
     # Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup
-    echo "⚙️ Configurando desvíos de dpkg temporales para DroidTux y AppInstall..."
+    echo "⚙️ Setting up temporary dpkg bypasses for DroidTux and AppInstall..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         dpkg-divert --add --rename --divert /usr/bin/curl.real /usr/bin/curl
         dpkg-divert --add --rename --divert /usr/bin/wget.real /usr/bin/wget
@@ -1051,7 +1051,7 @@ EOF
     $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/gpg"
 
     if $USE_LOCAL_DEBS; then
-        echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes .deb locales ---"
+        echo "--- 🛠️ LOCAL DEVELOPMENT MODE: Installing local .deb packages ---"
         pkg_dir_source="$ISO_DIR/../PKG"
         if [ ! -d "$pkg_dir_source" ]; then
             pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
@@ -1062,7 +1062,7 @@ EOF
             chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
             (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
         else
-            echo "⚠️ Advertencia: No se encontró el script de empaquetado en $pkg_dir_source/package-and-deploy.sh. Se intentará usar debs pre-existentes."
+            echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing debs."
         fi
 
         LOCAL_DEBS_DIR=""
@@ -1081,13 +1081,13 @@ EOF
         done
 
         if [ -z "$LOCAL_DEBS_DIR" ]; then
-            echo "❌ Error: No se encontraron paquetes .deb locales en ninguna de las rutas de búsqueda:"
+            echo "❌Error: No local .deb packages found in any of the search paths:"
             for dir in "${POSSIBLE_DIRS[@]}"; do echo "   - $dir"; done
             echo "Ejecuta primero el empaquetador en la carpeta PKG/."
             exit 1
         fi
 
-        echo "📂 Usando paquetes locales desde: $LOCAL_DEBS_DIR"
+        echo "📂 Using local packages from: $LOCAL_DEBS_DIR"
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
         if [ "$BOOTLOADER" = "grub" ]; then
@@ -1126,9 +1126,9 @@ EOF
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         $SUDO rm -f "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar"
-        echo "✅ Paquetes locales e instalados de forma cruzada con éxito."
+        echo "✅ Local and cross-installed packages successfully."
     else
-        echo "--- 🌐 MODO PRODUCCIÓN: Instalando paquetes desde repositorio APT ---"
+        echo "---🌐 PRODUCTION MODE: Installing packages from APT repository ---"
         if [ "$BOOTLOADER" = "grub" ]; then
             BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr"
         else
@@ -1167,7 +1167,7 @@ EOF
     fi
 
     # Clean up temporary DroidTux and AppInstall mocks and restore dpkg-diverts
-    echo "🧹 Limpiando mocks y desvíos de dpkg de DroidTux y AppInstall..."
+    echo "🧹 Cleaning DroidTux and AppInstall dpkg mocks and bypasses..."
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/curl"
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/wget"
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
@@ -1180,7 +1180,7 @@ EOF
 fi
 
 # Dynamically adjust Calamares configuration inside chroot based on distribution and selected bootloader
-echo "⚙️ Configurando Calamares en el chroot target..."
+echo "⚙️ Configuring Calamares in the chroot target..."
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/calamares/modules"
 
 # 1. Adjust modules search path in settings.conf to support both Arch and Debian module paths
@@ -1190,7 +1190,7 @@ fi
 
 # 2. Configure bootloader sequence in settings.conf
 if [ "$BOOTLOADER" = "refind" ]; then
-    echo "⚙️ Configurando secuencia de arranque Calamares para rEFInd..."
+    echo "⚙️ Configuring Calamares boot sequence for rEFInd..."
     if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
         # Check if shellprocess@refind is already in settings.conf, if not add it right after bootloader
         if ! grep -q "shellprocess@refind" "$ROOTFS_TARGET/etc/calamares/settings.conf"; then
@@ -1198,12 +1198,12 @@ if [ "$BOOTLOADER" = "refind" ]; then
         fi
     fi
 else
-    echo "⚙️ Secuencia de Calamares configurada para GRUB."
+    echo "⚙️ Squid sequence configured for GRUB."
 fi
 
 # 3. Create distro-specific unpackfs.conf, packages.conf, and users.conf
 if [ "$DISTRO" = "arch" ]; then
-    echo "⚙️ Generando configuraciones de Calamares para Arch Linux..."
+    echo "⚙️ Generating Calamares configurations for Arch Linux..."
     
     # unpackfs.conf for Arch
     cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
@@ -1239,7 +1239,7 @@ userShell: /bin/bash
 EOF
 
 else
-    echo "⚙️ Generando configuraciones de Calamares para Debian..."
+    echo "⚙️ Generating Calamares configurations for Debian..."
     
     # unpackfs.conf for Debian
     cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
@@ -1299,7 +1299,7 @@ fi
 # ==============================================================================
 
 # Configure spotlight icon / Configurar el icono de spotlight a 'view-app-grid'
-echo "⚙️ Personalizando lanzador de Spotlight..."
+echo "⚙️ Customizing Spotlight launcher..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
     if [ -f /usr/share/applications/spotlight-python.desktop ]; then
@@ -1311,12 +1311,12 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 
 if [ "$DISTRO" = "debian" ]; then
     # Download external winboat dependencies on host and copy to chroot
-    echo "📥 Descargando dependencias externas (Winboat) en el host..."
+    echo "📥 Downloading external dependencies (Winboat) on the host..."
     wget -q --timeout=15 --tries=3 -O "$BUILD_DIR/winboat.deb" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
     $SUDO cp "$BUILD_DIR/winboat.deb" "$ROOTFS_TARGET/tmp/winboat.deb"
     rm -f "$BUILD_DIR/winboat.deb"
 
-    echo "📥 Instalando Winboat..."
+    echo "📥 Installing Winboat..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
         apt-get install -y /tmp/winboat.deb
@@ -1326,7 +1326,7 @@ fi
 
 # English: Configure static autologin for SDDM live user inside the rootfs (using GNOME Wayland)
 # Español: Configurar autologin estático para el usuario live de SDDM en el rootfs (usando GNOME Wayland)
-echo "⚙️ Configurando autologin estático para la sesión en vivo (Wayland)..."
+echo "⚙️ Configuring static autologin for the live session (Wayland)..."
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/sddm.conf.d"
 cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null
 [Autologin]
@@ -1347,7 +1347,7 @@ fi
 # ==============================================================================
 
 if [ "$DISTRO" = "arch" ]; then
-    echo "--- 🔄 Regenerando initramfs con mkinitcpio ---"
+    echo "---🔄 Regenerating initramfs with mkinitcpio ---"
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
@@ -1543,7 +1543,7 @@ echo "✨ Chroot rootfs listo y estructurado correctamente en: $ROOTFS_TARGET"
 # PHASE 7: Packaging and Live ISO Generation
 # FASE 7: Creación de la Imagen Live ISO
 # ==============================================================================
-echo "--- 💿 Creando la Imagen Live ISO de Pulsar OS / Creating Pulsar OS Live ISO ---"
+echo "---💿 Creating Pulsar OS Live ISO Image /Creating Pulsar OS Live ISO ---"
 
 ISO_STAGING="$BUILD_DIR/iso-staging"
 $SUDO rm -rf "$ISO_STAGING"
@@ -1551,25 +1551,25 @@ mkdir -p "$ISO_STAGING/live"
 mkdir -p "$ISO_STAGING/boot/grub"
 
 if [ "$DISTRO" = "arch" ]; then
-    echo "🐧 Copiando Kernel e Initrd para la ISO Live (con hooks de archiso)..."
+    echo "🐧 Copying Kernel and Initrd to the Live ISO (with archiso hooks)..."
     KERNEL_FILE=$(ls "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
     INITRD_FILE=$(ls "$ROOTFS_TARGET"/boot/initramfs-*.img 2>/dev/null | grep -v fallback | head -n 1)
     
     if [ -z "$KERNEL_FILE" ] || [ -z "$INITRD_FILE" ]; then
-        echo "❌ Error: No se encontró kernel o initrd para copiar a la ISO live."
+        echo "❌ Error: No kernel or initrd found to copy to the live ISO."
         exit 1
     fi
     
     $SUDO cp "$KERNEL_FILE" "$ISO_STAGING/live/vmlinuz"
     $SUDO cp "$INITRD_FILE" "$ISO_STAGING/live/initrd"
 
-    echo "🧹 Quitando hooks de archiso y regenerando initramfs para el sistema instalado..."
+    echo "🧹 Removing file hooks and regenerating initramfs for the installed system..."
     $SUDO rm -f "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf"
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P"
 fi
 
 # 0. Unmount virtual filesystems prior to packaging / Desmontar sistemas de archivos virtuales antes de empaquetar
-echo "🧹 Desmontando sistemas de archivos virtuales en el target... / Unmounting virtual filesystems in target..."
+echo "Unmounting virtual filesystems in target..."
 $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
@@ -1577,7 +1577,7 @@ $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
-echo "📦 Comprimiendo rootfs en SquashFS (esto puede tardar unos minutos)... / Compressing rootfs into SquashFS..."
+echo "📦 Compressing rootfs into SquashFS..."
 # Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
 # Excluimos directorios dinámicos, temporales y sistemas de archivos virtuales para ahorrar espacio y evitar errores
     if [ "$DISTRO" = "arch" ]; then
@@ -1634,12 +1634,12 @@ if [ "$BOOTLOADER" = "grub" ]; then
     # --------------------------------------------------------------------------
     # GRUB BOOTLOADER PACKAGING
     # --------------------------------------------------------------------------
-    echo "⚙️ Configurando GRUB para la ISO... / Configuring GRUB for ISO..."
+    echo "⚙️ Configuring GRUB for ISO..."
     $SUDO mkdir -p "$ISO_STAGING/boot/grub"
     
     # Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
     if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
-        echo "🎨 Copiando tema de GRUB de Pulsar OS a la ISO staging..."
+        echo "🎨 Copying Pulsar OS GRUB theme to the ISO staging..."
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
         $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
     fi

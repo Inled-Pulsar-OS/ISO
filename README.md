@@ -62,6 +62,7 @@ The main file for the build is `build-iso.sh`, which accepts the following flags
 - `--refind` Indicates that the rEFInd version should be built
 - `--grub` Builds the GRUB version
 - `--arch` Builds the ARCH version (if this flag is absent, the Debian version is built)  
+- `--nvidia` Build ISO image with privative drivers (BROADCOM, NVIDIA, etc...)
 
 ## Testing in Chroot or the ISO quickly   
 The file for quickly testing the ISOs is `run-qemu.sh`, which accepts the following arguments:
