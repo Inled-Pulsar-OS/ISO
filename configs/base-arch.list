@@ -79,15 +79,49 @@ gnome-contacts
 gnome-music
 gnome-clocks
 gnome-weather
+# Editores de texto
+nano
+vim
+gnome-text-editor
+# Gestión de Archivos y Portales
+nautilus
+file-roller
+gnome-keyring
+xdg-desktop-portal-gnome
+xdg-desktop-portal
+xdg-user-dirs
+xdg-utils
+# Audio PipeWire
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pavucontrol
+# Red y Sistemas de Archivos GVFS
+network-manager-applet
+gvfs
+gvfs-mtp
+gvfs-smb
+gvfs-gphoto2
 # Utilidades de Sistema
 e2fsprogs
 dosfstools
 xfsprogs
 ntfs-3g
+gparted
 gnome-disk-utility
 gnome-system-monitor
 gnome-logs
+baobab
+loupe
+papers
+htop
+inxi
+wl-clipboard
+p7zip
+zip
 glibc
+pv
 docker
 bluez
 bluez-utils
