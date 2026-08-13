@@ -1345,6 +1345,13 @@ if [ "$DISTRO" = "debian" ]; then
     "
 fi
 
+# Configurar Flathub e instalar Hidamari para fondos animados
+echo "📦 Configurando repositorio Flathub e instalando Hidamari..."
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+    flatpak install -y --noninteractive flathub io.github.jeffshee.Hidamari 2>/dev/null || true
+"
+
 # English: Configure static autologin for SDDM live user inside the rootfs (using GNOME Wayland)
 # Español: Configurar autologin estático para el usuario live de SDDM en el rootfs (usando GNOME Wayland)
 echo "⚙️ Configuring static autologin for the live session (Wayland)..."
