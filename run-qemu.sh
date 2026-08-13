@@ -223,6 +223,11 @@ else
     echo "🐧 Kernel: $(basename "$KERNEL")"
     echo "📦 Initrd: $(basename "$INITRD")"
 
+    # Autorización de pantalla para root
+    if command -v xhost &>/dev/null; then
+        xhost +si:localuser:root 2>/dev/null || xhost +local: 2>/dev/null || true
+    fi
+    HOST_XAUTH="${XAUTHORITY:-$HOME/.Xauthority}"
     HOST_UID=$(id -u)
 
     # Detección de backend de audio
@@ -232,14 +237,18 @@ else
     fi
 
     # Lanzamiento de QEMU con soporte de vídeo VirtIO, audio redirigido y montaje del chroot en vivo
-    "$QEMU_BIN" \
+    pkexec env \
+        DISPLAY="${DISPLAY:-:0}" \
+        XAUTHORITY="$HOST_XAUTH" \
+        GDK_BACKEND="x11" \
+        "$QEMU_BIN" \
         -m 4G \
         -smp 4 \
         $ACCEL \
         -kernel "$KERNEL" \
         -initrd "$INITRD" \
         -append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,version=9p2000.L,msize=262144 console=$CONSOLE quiet splash plymouth.ignore-serial-consoles fbcon=nodefer loglevel=3" \
-        -fsdev local,id=rootfs,path="$ROOTFS",security_model=none \
+        -fsdev local,id=rootfs,path="$ROOTFS",security_model=passthrough \
         -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
         -device virtio-vga \
         -display gtk \
