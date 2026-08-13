@@ -1599,7 +1599,13 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P"
 fi
 
-# 0. Unmount virtual filesystems prior to packaging / Desmontar sistemas de archivos virtuales antes de empaquetar
+# 0. Clean temporary logs, test accounts, and unmount virtual filesystems prior to packaging
+echo "🧹 Sanitizing rootfs target (cleaning test logs, temporary accounts, and cache)..."
+$SUDO rm -rf "$ROOTFS_TARGET"/tmp/* "$ROOTFS_TARGET"/var/tmp/* "$ROOTFS_TARGET"/var/log/* 2>/dev/null || true
+$SUDO rm -f "$ROOTFS_TARGET"/etc/sudoers.d/pulsaros-user-* 2>/dev/null || true
+$SUDO rm -f "$ROOTFS_TARGET"/var/lib/AccountsService/users/* 2>/dev/null || true
+$SUDO find "$ROOTFS_TARGET/home" -mindepth 1 -maxdepth 1 ! -name 'live' -exec rm -rf {} + 2>/dev/null || true
+
 echo "Unmounting virtual filesystems in target..."
 $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
