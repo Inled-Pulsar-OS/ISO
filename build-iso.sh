@@ -1352,6 +1352,37 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     flatpak install -y --noninteractive flathub io.github.jeffshee.Hidamari 2>/dev/null || true
 "
 
+# Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
+echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    cat <<'EOF' > /etc/os-release
+NAME=\"Pulsar OS\"
+PRETTY_NAME=\"Pulsar OS Pear Edition\"
+VERSION_ID=\"rolling\"
+VERSION=\"Pear Edition\"
+ID=pulsaros
+ID_LIKE=arch
+HOME_URL=\"https://inled.es\"
+DOCUMENTATION_URL=\"https://inled.es\"
+SUPPORT_URL=\"https://inled.es\"
+BUG_REPORT_URL=\"https://github.com/InledGroup/pulsaros/issues\"
+PRIVACY_POLICY_URL=\"https://inled.es\"
+LOGO=pulsar-logo
+ANSI_COLOR=\"38;2;135;206;235\"
+EOF
+    mkdir -p /usr/lib
+    cp -f /etc/os-release /usr/lib/os-release
+    
+    # Reemplazar cualquier logo residual de Manjaro/Arch con el de Pulsar OS
+    if [ -f /usr/share/pixmaps/pulsar-logo.png ]; then
+        for alias in distributor-logo archlinux-logo manjarolinux-logo manjaro-logo; do
+            cp -f /usr/share/pixmaps/pulsar-logo.png /usr/share/pixmaps/\$alias.png 2>/dev/null || true
+        done
+    fi
+    
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+"
+
 # English: Configure static autologin for SDDM live user inside the rootfs (using GNOME Wayland)
 # Español: Configurar autologin estático para el usuario live de SDDM en el rootfs (usando GNOME Wayland)
 echo "⚙️ Configuring static autologin for the live session (Wayland)..."
