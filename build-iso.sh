@@ -1345,11 +1345,10 @@ if [ "$DISTRO" = "debian" ]; then
     "
 fi
 
-# Configurar Flathub e instalar Hidamari para fondos animados
-echo "📦 Configurando repositorio Flathub e instalando Hidamari..."
+# Configurar Flathub en el sistema
+echo "📦 Configurando repositorio Flathub..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-    flatpak install -y --noninteractive flathub io.github.jeffshee.Hidamari 2>/dev/null || true
 "
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
@@ -1378,6 +1377,9 @@ EOF
         for alias in distributor-logo archlinux-logo manjarolinux-logo manjaro-logo; do
             cp -f /usr/share/pixmaps/pulsar-logo.png /usr/share/pixmaps/\$alias.png 2>/dev/null || true
         done
+    fi
+    if [ -f /usr/share/icons/manjaro/manjarolinux-text-dark-rounded.svg ]; then
+        cp -f /usr/share/icons/manjaro/manjarolinux-text-dark-rounded.svg /usr/share/icons/manjaro/manjarolinux-text-rounded.svg 2>/dev/null || true
     fi
     
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
