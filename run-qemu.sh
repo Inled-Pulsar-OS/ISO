@@ -94,11 +94,26 @@ if ! $USE_ISO; then
         echo "❌ Error: No se encontró kernel o initrd en: $ROOTFS/boot/"
         exit 1
     fi
+
+    # Asegurar permisos de lectura para el kernel e initrd
+    if [ ! -r "$KERNEL" ] || [ ! -r "$INITRD" ]; then
+        pkexec chmod -R a+r "$ROOTFS/boot" 2>/dev/null || sudo chmod -R a+r "$ROOTFS/boot" 2>/dev/null || true
+    fi
 fi
 
-# 2. Limpieza preventiva de puertos y procesos de QEMU anteriores
+# 2. Configurar backend de pantalla y autorizaciones
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    export GDK_BACKEND="wayland"
+else
+    export GDK_BACKEND="x11"
+    if command -v xhost &>/dev/null; then
+        xhost +local: 2>/dev/null || true
+    fi
+fi
+
+# 3. Limpieza preventiva de puertos y procesos de QEMU anteriores
 echo "🧹 Liberando procesos anteriores de QEMU..."
-pkexec fuser -k 5900/tcp 2>/dev/null || true
+fuser -k 5900/tcp 2>/dev/null || true
 sleep 0.5
 
 # 3. Detección automática de la arquitectura del Host
@@ -178,25 +193,23 @@ if $USE_ISO; then
         qemu-img create -f qcow2 "$DISK_PATH" 30G
     fi
 
+    # Detección de backend de audio
+    AUDIO_ARGS="-audiodev none,id=snd0"
+    if [ -S "/run/user/$HOST_UID/pulse/native" ]; then
+        AUDIO_ARGS="-audiodev pa,id=snd0,server=unix:/run/user/$HOST_UID/pulse/native"
+    fi
+
     # Lanzamiento de QEMU con la ISO como CD-ROM
-    pkexec env \
-        DISPLAY="$DISPLAY" \
-        XAUTHORITY="$XAUTHORITY" \
-        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-        PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
-        PULSE_COOKIE="$HOME/.config/pulse/cookie" \
-        SDL_VIDEODRIVER="x11" \
-        SDL_VIDEO_DRIVER="x11" \
-        "$QEMU_BIN" \
+    "$QEMU_BIN" \
         -m 4G \
         -smp 4 \
         $ACCEL \
         $BIOS_ARG \
         -drive file="$DISK_PATH",format=qcow2,media=disk,if=virtio \
         -cdrom "$ISO_PATH" \
-        -device virtio-vga-gl \
-        -display sdl,gl=on \
-        -audiodev sdl,id=snd0 \
+        -device virtio-vga \
+        -display gtk \
+        $AUDIO_ARGS \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
@@ -210,29 +223,27 @@ else
     echo "🐧 Kernel: $(basename "$KERNEL")"
     echo "📦 Initrd: $(basename "$INITRD")"
 
-    # 4. Lanzamiento de QEMU con soporte GPU acelerado (VirGL), audio redirigido y montaje del chroot en vivo
-    # English: Configure PULSE_SERVER and PULSE_COOKIE to allow the root process (pkexec) to connect to host PulseAudio/PipeWire, bypassing ownership checks on XDG_RUNTIME_DIR.
-    # Español: Configurar PULSE_SERVER y PULSE_COOKIE para permitir que el proceso root (pkexec) se conecte a PulseAudio/PipeWire del host, evitando errores de propiedad en XDG_RUNTIME_DIR.
-    pkexec env \
-        DISPLAY="$DISPLAY" \
-        XAUTHORITY="$XAUTHORITY" \
-        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-        PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native" \
-        PULSE_COOKIE="$HOME/.config/pulse/cookie" \
-        SDL_VIDEODRIVER="x11" \
-        SDL_VIDEO_DRIVER="x11" \
-        "$QEMU_BIN" \
+    HOST_UID=$(id -u)
+
+    # Detección de backend de audio
+    AUDIO_ARGS="-audiodev none,id=snd0"
+    if [ -S "/run/user/$HOST_UID/pulse/native" ]; then
+        AUDIO_ARGS="-audiodev pa,id=snd0,server=unix:/run/user/$HOST_UID/pulse/native"
+    fi
+
+    # Lanzamiento de QEMU con soporte de vídeo VirtIO, audio redirigido y montaje del chroot en vivo
+    "$QEMU_BIN" \
         -m 4G \
         -smp 4 \
         $ACCEL \
         -kernel "$KERNEL" \
         -initrd "$INITRD" \
         -append "root=rootfs rw rootfstype=9p rootflags=trans=virtio,version=9p2000.L,msize=262144 console=$CONSOLE quiet splash plymouth.ignore-serial-consoles fbcon=nodefer loglevel=3" \
-        -fsdev local,id=rootfs,path="$ROOTFS",security_model=passthrough \
+        -fsdev local,id=rootfs,path="$ROOTFS",security_model=none \
         -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
-        -device virtio-vga-gl \
-        -display sdl,gl=on \
-        -audiodev sdl,id=snd0 \
+        -device virtio-vga \
+        -display gtk \
+        $AUDIO_ARGS \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
