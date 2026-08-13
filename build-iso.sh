@@ -1372,7 +1372,7 @@ if [ "$DISTRO" = "arch" ]; then
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
-    echo 'MODULES=(amdgpu radeon i915 virtio_gpu)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    echo 'MODULES=(amdgpu radeon i915 virtio_gpu 9p 9pnet 9pnet_virtio virtio_pci virtio_blk)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
     
     # Ensure /usr/share/pixmaps/archlinux-logo.png exists so mkinitcpio's plymouth hook does not error out
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/pixmaps"
