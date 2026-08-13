@@ -85,6 +85,7 @@ vim
 gnome-text-editor
 # Gestión de Archivos y Portales
 nautilus
+python-nautilus
 file-roller
 gnome-keyring
 xdg-desktop-portal-gnome
