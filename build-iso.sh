@@ -1679,6 +1679,10 @@ if [ "$BOOTLOADER" = "grub" ]; then
         echo "🎨 Copying Pulsar OS GRUB theme to the ISO staging..."
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
         $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+        if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons/grub" ]; then
+            $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+            $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
+        fi
     fi
     
     # Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
@@ -1718,22 +1722,22 @@ loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
 loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
 set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 
-menuentry "Pulsar OS Live (RAM)" {
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class gnu-linux --class os {
     linux /live/vmlinuz $RAM_PARAMS
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Normal)" {
+menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (No Plymouth / Debug)" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class terminal --class gnu-linux {
     linux /live/vmlinuz $DEBUG_PARAMS
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class driver --class gnu-linux {
     linux /live/vmlinuz $LEGACY_PARAMS
     initrd /live/initrd
 }
@@ -1873,28 +1877,28 @@ default_selection "+,pulsaros,Pulsar OS Live (RAM)"
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live (RAM)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_toram.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$RAM_PARAMS"
 }
 
 menuentry "Pulsar OS Live (Normal)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_debug.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$DEBUG_PARAMS"
 }
 
 menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_old.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$LEGACY_PARAMS"
@@ -1945,6 +1949,13 @@ EOF
         $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
+    if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
+        echo "📦 Instalando iconos de arranque live personalizados en rEFInd ISO..."
+        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/toram.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_toram.png" 2>/dev/null || true
+        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/normal.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_normal.png" 2>/dev/null || true
+        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/debug-noplymouth.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_debug.png" 2>/dev/null || true
+        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/old.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_old.png" 2>/dev/null || true
+    fi
 
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
     REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind"
@@ -1994,6 +2005,10 @@ EOF
     if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
         $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
+        if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons/grub" ]; then
+            $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+            $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
+        fi
     fi
     # Copy unicode.pf2 for Ventoy's GRUB menus
     $SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
