@@ -923,7 +923,7 @@ $pkg_name"
                 seafari \
                 spotlight-gtk \
                 qt6-multimedia \
-                qt6-multimedia-ffmpeg
+                qt6-multimedia-gstreamer
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         echo "✅ Successfully installed local Arch packages."
@@ -978,7 +978,7 @@ $pkg_name"
                 seafari \
                 spotlight-gtk \
                 qt6-multimedia \
-                qt6-multimedia-ffmpeg
+                qt6-multimedia-gstreamer
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
