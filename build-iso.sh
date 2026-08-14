@@ -921,7 +921,9 @@ $pkg_name"
                 macboat \
                 appinstall \
                 seafari \
-                spotlight-gtk
+                spotlight-gtk \
+                qt6-multimedia \
+                qt6-multimedia-ffmpeg
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         echo "✅ Successfully installed local Arch packages."
@@ -967,14 +969,16 @@ $pkg_name"
                 pulsaros-calamares \
                 pulsaros-essential \
                 pulsaros-welcome \
-                pulsaros-recovery \
+                pulsaros-live-wallpaper \
                 pulsaros-bootsound \
                 gnome-macos-remap-wayland \
                 droidtux \
                 macboat \
                 appinstall \
                 seafari \
-                spotlight-gtk
+                spotlight-gtk \
+                qt6-multimedia \
+                qt6-multimedia-ffmpeg
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
