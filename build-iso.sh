@@ -1349,10 +1349,11 @@ if [ "$DISTRO" = "debian" ]; then
     "
 fi
 
-# Configurar Flathub en el sistema
-echo "📦 Configurando repositorio Flathub..."
+# Configurar Flathub en el sistema e instalar Flatpaks esenciales
+echo "📦 Configurando repositorio Flathub e instalando Hidamari..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+    flatpak install --system -y --noninteractive flathub io.github.jeffshee.Hidamari || true
 "
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
