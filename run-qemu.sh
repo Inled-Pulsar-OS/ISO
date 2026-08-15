@@ -201,8 +201,8 @@ if $USE_ISO; then
 
     # Lanzamiento de QEMU con la ISO como CD-ROM
     "$QEMU_BIN" \
-        -m 4G \
-        -smp 4 \
+        -m 8G \
+        -smp 8 \
         $ACCEL \
         $BIOS_ARG \
         -drive file="$DISK_PATH",format=qcow2,media=disk,if=virtio \
@@ -242,8 +242,8 @@ else
         XAUTHORITY="$HOST_XAUTH" \
         GDK_BACKEND="x11" \
         "$QEMU_BIN" \
-        -m 4G \
-        -smp 4 \
+        -m 8G \
+        -smp 8 \
         $ACCEL \
         -kernel "$KERNEL" \
         -initrd "$INITRD" \
