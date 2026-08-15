@@ -1120,6 +1120,7 @@ EOF
             set -e
             export DEBIAN_FRONTEND=noninteractive
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
+            echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
             yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
@@ -1130,6 +1131,7 @@ EOF
                 appinstall \
                 seafari \
                 spotlight-python
+            rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
@@ -1147,6 +1149,7 @@ EOF
             set -e
             export DEBIAN_FRONTEND=noninteractive
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
+            echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
             yes | apt-get install -y --no-install-recommends \
@@ -1170,6 +1173,7 @@ EOF
                 appinstall \
                 seafari \
                 spotlight-python
+            rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
     fi
