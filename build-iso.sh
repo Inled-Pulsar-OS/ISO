@@ -972,6 +972,7 @@ $pkg_name"
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
                 pulsaros-bootsound \
+                pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
                 macboat \
@@ -1168,6 +1169,7 @@ EOF
                 pulsaros-welcome \
                 pulsaros-recovery \
                 pulsaros-bootsound \
+                pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
                 macboat \
@@ -1717,6 +1719,30 @@ else
     LEGACY_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
+resolve_boot_icons() {
+    if [ -d "$ROOTFS_TARGET/usr/share/pulsar-boot-icons" ]; then
+        echo "$ROOTFS_TARGET/usr/share/pulsar-boot-icons"
+        return
+    fi
+    if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
+        echo "$ISO_DIR/../PKG/pulsar-boot-icons"
+        return
+    fi
+    if [ -d "$ISO_DIR/boot-icons" ]; then
+        echo "$ISO_DIR/boot-icons"
+        return
+    fi
+    echo "🌐 Descargando pulsar-boot-icons desde Inled-Pulsar-OS/PKG..." >&2
+    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp" "$BUILD_DIR/pulsar-boot-icons"
+    $SUDO git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Inled-Pulsar-OS/PKG.git" "$BUILD_DIR/pkg-repo-temp" 2>/dev/null || true
+    if [ -d "$BUILD_DIR/pkg-repo-temp/pulsar-boot-icons" ]; then
+        $SUDO mkdir -p "$BUILD_DIR/pulsar-boot-icons"
+        $SUDO cp -rf "$BUILD_DIR/pkg-repo-temp/pulsar-boot-icons"/* "$BUILD_DIR/pulsar-boot-icons/"
+    fi
+    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp"
+    echo "$BUILD_DIR/pulsar-boot-icons"
+}
+
 if [ "$BOOTLOADER" = "grub" ]; then
     # --------------------------------------------------------------------------
     # GRUB BOOTLOADER PACKAGING
@@ -1736,10 +1762,7 @@ if [ "$BOOTLOADER" = "grub" ]; then
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
         $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
     fi
-    BOOT_ICONS_DIR="$ISO_DIR/boot-icons"
-    if [ ! -d "$BOOT_ICONS_DIR" ] && [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
-        BOOT_ICONS_DIR="$ISO_DIR/../PKG/pulsar-boot-icons"
-    fi
+    BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR/grub" ]; then
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
         $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
@@ -2012,10 +2035,7 @@ EOF
         $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
-    BOOT_ICONS_DIR="$ISO_DIR/boot-icons"
-    if [ ! -d "$BOOT_ICONS_DIR" ] && [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
-        BOOT_ICONS_DIR="$ISO_DIR/../PKG/pulsar-boot-icons"
-    fi
+    BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR" ]; then
         echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
         $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_toram.png" 2>/dev/null || true
