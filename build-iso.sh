@@ -961,7 +961,8 @@ $pkg_name"
                 seafari \
                 spotlight-gtk \
                 qt6-multimedia \
-                qt6-multimedia-gstreamer
+                qt6-multimedia-gstreamer \
+                winboat-bin
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
@@ -1341,6 +1342,21 @@ if [ "$DISTRO" = "debian" ]; then
         apt-get install -y /tmp/winboat.deb
         rm -f /tmp/winboat.deb
     "
+elif [ "$DISTRO" = "arch" ]; then
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        if ! command -v winboat >/dev/null 2>&1 && [ ! -f /opt/winboat/winboat ]; then
+            echo '📥 Installing Winboat on Arch (fallback)...'
+            pacman -S --noconfirm winboat-bin 2>/dev/null || {
+                mkdir -p /tmp/winboat-install
+                cd /tmp/winboat-install
+                curl -sL -o winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
+                bsdtar -xf winboat.deb data.tar.xz
+                bsdtar -xf data.tar.xz -C /
+                cd /
+                rm -rf /tmp/winboat-install
+            }
+        fi
+    "
 fi
 
 # Configurar Flathub en el sistema e instalar Flatpaks esenciales
@@ -1352,24 +1368,34 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    cat <<'EOF' > /etc/os-release
-NAME=\"Pulsar OS\"
-PRETTY_NAME=\"Pulsar OS Pear Edition\"
-VERSION_ID=\"rolling\"
-VERSION=\"Pear Edition\"
+    _iso_ver="${PULSAR_VERSION:-rolling}"
+    _iso_pretty="Pulsar OS Pear Edition"
+    if [ -n "$PULSAR_VERSION" ] && [ "$PULSAR_VERSION" != "rolling" ]; then
+        _iso_pretty="Pulsar OS Pear Edition ($PULSAR_VERSION)"
+    fi
+    _build_id="$(date +%Y%m%d%H%M)"
+
+    cat <<EOF > "$ROOTFS_TARGET/etc/os-release"
+NAME="Pulsar OS"
+PRETTY_NAME="${_iso_pretty}"
+VERSION_ID="${_iso_ver}"
+VERSION="${_iso_ver}"
+BUILD_ID="${_build_id}"
+IMAGE_VERSION="${_iso_ver}"
 ID=pulsaros
 ID_LIKE=arch
-HOME_URL=\"https://inled.es\"
-DOCUMENTATION_URL=\"https://inled.es\"
-SUPPORT_URL=\"https://inled.es\"
-BUG_REPORT_URL=\"https://github.com/InledGroup/pulsaros/issues\"
-PRIVACY_POLICY_URL=\"https://inled.es\"
+HOME_URL="https://inled.es"
+DOCUMENTATION_URL="https://inled.es"
+SUPPORT_URL="https://inled.es"
+BUG_REPORT_URL="https://github.com/InledGroup/pulsaros/issues"
+PRIVACY_POLICY_URL="https://inled.es"
 LOGO=pulsar-logo
-ANSI_COLOR=\"38;2;135;206;235\"
+ANSI_COLOR="38;2;135;206;235"
 EOF
-    mkdir -p /usr/lib
-    cp -f /etc/os-release /usr/lib/os-release
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/lib"
+    $SUDO cp -f "$ROOTFS_TARGET/etc/os-release" "$ROOTFS_TARGET/usr/lib/os-release"
+    
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     
     # Reemplazar cualquier logo residual de Manjaro/Arch con el de Pulsar OS
     if [ -f /usr/share/pixmaps/pulsar-logo.png ]; then
