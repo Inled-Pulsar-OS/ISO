@@ -874,8 +874,10 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init and populate keyring
+            # Init keyring, install keyring package, then populate
             pacman-key --init
+            pacman -Syy --noconfirm
+            pacman -S --noconfirm archlinux-keyring
             pacman-key --populate archlinux
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
@@ -885,10 +887,6 @@ $pkg_name"
             fi
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
-
-            # Sync databases and install keyring. -Syy forces a full refresh so the
-            # target downloads fresh core/extra databases for its own pacman.
-            pacman -Syy --noconfirm archlinux-keyring
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
@@ -921,9 +919,8 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init and populate keyring
+            # Init keyring, import Inled key, then sync and populate
             pacman-key --init
-            pacman-key --populate archlinux
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
@@ -933,9 +930,9 @@ $pkg_name"
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
-            # Sync databases and install keyring. -Syy forces a full refresh so the
-            # target downloads fresh core/extra databases for its own pacman.
-            pacman -Syy --noconfirm archlinux-keyring
+            pacman -Syy --noconfirm
+            pacman -S --noconfirm archlinux-keyring
+            pacman-key --populate archlinux
 
             # Install Pulsar OS packages and bootloader
             pacman -Syu --noconfirm --overwrite '*' \
@@ -1589,7 +1586,7 @@ install nvidia_drm /bin/false
 EOF
 
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        mkinitcpio -P
+        mkinitcpio -P 2>/dev/null
     "
 
     # Remove the temporary modprobe config so that the Nvidia drivers can still load
@@ -1638,7 +1635,7 @@ if [ "$DISTRO" = "arch" ]; then
 
     echo "🧹 Removing file hooks and regenerating initramfs for the installed system..."
     $SUDO rm -f "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf"
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P"
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P 2>/dev/null"
 fi
 
 # 0. Clean temporary logs, test accounts, and unmount virtual filesystems prior to packaging
