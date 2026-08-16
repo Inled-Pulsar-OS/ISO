@@ -81,3 +81,6 @@ The ISO version, release name, and branch must be specified.
 
 ## Packages  
 PulsarOS is fully declarative; packages are built and obtained from [repo PKG](https://github.com/Inled-Pulsar-OS/PKG)
+
+## License
+All the code is licensed under [MIT-INLED](https://license.inled.es)
