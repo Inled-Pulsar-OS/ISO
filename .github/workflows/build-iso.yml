@@ -74,7 +74,7 @@ jobs:
             psmisc \
             debian-archive-keyring
           chmod +x build-iso.sh
-          sudo ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
+          sudo ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version "${{ github.event.inputs.version }}"
 
       # 3. Build inside privileged Docker container (for Arch)
       - name: Build Arch ISO inside Docker
@@ -89,7 +89,7 @@ jobs:
               pacman -Syu --noconfirm base-devel git arch-install-scripts squashfs-tools grub xorriso mtools binutils dosfstools libisoburn rsync jq curl wget unzip sassc imagemagick psmisc
 
               chmod +x ./build-iso.sh
-              ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }}
+              ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version \"${{ github.event.inputs.version }}\"
             "
 
       # 4. Upload built ISO as run artifact
