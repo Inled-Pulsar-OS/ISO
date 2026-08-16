@@ -969,6 +969,7 @@ $pkg_name"
                 pulsaros-calamares \
                 pulsaros-essential \
                 pulsaros-welcome \
+                pulsaros-recovery \
                 pulsaros-live-wallpaper \
                 pulsaros-bootsound \
                 gnome-macos-remap-wayland \
@@ -1724,14 +1725,24 @@ if [ "$BOOTLOADER" = "grub" ]; then
     $SUDO mkdir -p "$ISO_STAGING/boot/grub"
     
     # Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
+    GRUB_THEME_SRC=""
     if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
-        echo "🎨 Copying Pulsar OS GRUB theme to the ISO staging..."
-        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
-        $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
-        if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons/grub" ]; then
-            $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
-            $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
-        fi
+        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
+    elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
+    fi
+    if [ -n "$GRUB_THEME_SRC" ]; then
+        echo "🎨 Copying Pulsar OS GRUB theme ($GRUB_THEME_SRC) to the ISO staging..."
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+        $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
+    fi
+    BOOT_ICONS_DIR="$ISO_DIR/boot-icons"
+    if [ ! -d "$BOOT_ICONS_DIR" ] && [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
+        BOOT_ICONS_DIR="$ISO_DIR/../PKG/pulsar-boot-icons"
+    fi
+    if [ -d "$BOOT_ICONS_DIR/grub" ]; then
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+        $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
     fi
     
     # Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
@@ -1986,10 +1997,13 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
 }
 EOF
 
-    # Get the theme (copy local if exists, else clone from GitHub)
+    # Get the theme (copy from installed rootfs package, local source, or GitHub fallback)
     echo "🎨 Obteniendo tema macOS de rEFInd..."
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
-    if [ -d "$ISO_DIR/../refind" ]; then
+    if [ -d "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" ]; then
+        echo "📂 Copiando tema rEFInd desde el paquete pulsaros-refind instalado en rootfs..."
+        $SUDO cp -r "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" "$BUILD_DIR/refind-mac-theme"
+    elif [ -d "$ISO_DIR/../refind" ]; then
         echo "📂 Copiando tema local desde: $ISO_DIR/../refind"
         $SUDO cp -r "$ISO_DIR/../refind" "$BUILD_DIR/refind-mac-theme"
         $SUDO rm -rf "$BUILD_DIR/refind-mac-theme/.git"
@@ -1998,12 +2012,16 @@ EOF
         $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
-    if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
-        echo "📦 Instalando iconos de arranque live personalizados en rEFInd ISO..."
-        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/toram.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_toram.png" 2>/dev/null || true
-        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/normal.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_normal.png" 2>/dev/null || true
-        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/debug-noplymouth.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_debug.png" 2>/dev/null || true
-        $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/old.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_old.png" 2>/dev/null || true
+    BOOT_ICONS_DIR="$ISO_DIR/boot-icons"
+    if [ ! -d "$BOOT_ICONS_DIR" ] && [ -d "$ISO_DIR/../PKG/pulsar-boot-icons" ]; then
+        BOOT_ICONS_DIR="$ISO_DIR/../PKG/pulsar-boot-icons"
+    fi
+    if [ -d "$BOOT_ICONS_DIR" ]; then
+        echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
+        $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_toram.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_normal.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_debug.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/old.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_old.png" 2>/dev/null || true
     fi
 
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
@@ -2051,12 +2069,18 @@ EOF
     $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
 
     # Copy the custom GRUB theme to the ISO staging directory for Ventoy compatibility
+    GRUB_THEME_SRC=""
     if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
-        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes"
-        $SUDO cp -r "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" "$ISO_STAGING/boot/grub/themes/"
-        if [ -d "$ISO_DIR/../PKG/pulsar-boot-icons/grub" ]; then
+        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
+    elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
+    fi
+    if [ -n "$GRUB_THEME_SRC" ]; then
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+        $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
+        if [ -d "$BOOT_ICONS_DIR/grub" ]; then
             $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
-            $SUDO cp -f "$ISO_DIR/../PKG/pulsar-boot-icons/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
+            $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
         fi
     fi
     # Copy unicode.pf2 for Ventoy's GRUB menus

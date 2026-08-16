@@ -17,6 +17,7 @@ dbus
 gnome-shell
 gnome-session
 gnome-session-xsession
+gnome-control-center
 # SDDM Base
 sddm
 qt6-image-formats-plugins
