@@ -143,7 +143,7 @@ if [ "$DISTRO" = "arch" ]; then
                 # Ensure 9p and virtio modules are included in initramfs for QEMU direct chroot booting
                 sed -i \"s/HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont plymouth block filesystems fsck)/\" /etc/mkinitcpio.conf
                 sed -i \"s/MODULES=.*/MODULES=(i915 amdgpu radeon nouveau 9p 9pnet 9pnet_virtio virtio_pci virtio_blk virtio_balloon)/\" /etc/mkinitcpio.conf
-                mkinitcpio -P
+                mkinitcpio -P 2>/dev/null
 
                 glib-compile-schemas /usr/share/glib-2.0/schemas/
                 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
