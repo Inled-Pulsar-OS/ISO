@@ -687,21 +687,20 @@ if [ "$DISTRO" = "arch" ]; then
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
     $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
-    # The archlinux:latest docker image now ships a pacman.conf with
-    # 'NoExtract = etc/pacman.conf', so pacstrap leaves the chroot WITHOUT a
-    # pacman.conf. Write a complete default one (if missing) so the official
-    # [core]/[extra] repos and their mirrorlist Include are enabled; the Inled
-    # repo is appended below.
-    if [ ! -s "$ROOTFS_TARGET/etc/pacman.conf" ] || ! grep -q '^\[core\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
-        $SUDO tee "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<'EOF'
+    # Write a complete default pacman.conf with [inled] repository at top priority
+    $SUDO tee "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<'EOF'
 [options]
 HoldPkg = pacman glibc
 Architecture = auto
-SigLevel = Required DatabaseOptional
+SigLevel = Optional TrustAll
 LocalFileSigLevel = Optional
 #CheckSpace
 NoProgressBar
 ParallelDownloads = 5
+
+[inled]
+SigLevel = Optional TrustAll
+Server = https://apt.inled.es/arch/
 
 [core]
 Include = /etc/pacman.d/mirrorlist
@@ -709,27 +708,10 @@ Include = /etc/pacman.d/mirrorlist
 [extra]
 Include = /etc/pacman.d/mirrorlist
 EOF
-    fi
-
-    # Configure Inled pacman repository
-    $SUDO tee -a "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
-
-[inled]
-SigLevel = Optional TrustAll
-Server = https://apt.inled.es/arch/
-EOF
 
     # Disable CheckSpace: inside chroot, pacman reads host's /proc/self/mountinfo
     # and can't find chroot root as a mountpoint, causing false 'not enough space' errors.
-    # We must comment it out in the [options] section rather than appending a 'CheckSpace = false'
-    # which is not recognized as a valid directive under the [inled] section.
     $SUDO sed -i 's/^[[:space:]]*CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
-
-    # Trust all repositories globally: on a freshly bootstrapped chroot the core/extra
-    # database signature check can silently drop the database, making pacman report
-    # packages as 'target not found' (e.g. 'error: target not found: archlinux-keyring').
-    # Only the first SigLevel line belongs to [options]; the [inled] one is left as-is.
-    $SUDO sed -i '0,/^[[:space:]]*SigLevel/s/^[[:space:]]*SigLevel.*/SigLevel = Optional TrustAll/' "$ROOTFS_TARGET/etc/pacman.conf"
 
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
@@ -958,6 +940,8 @@ $pkg_name"
             # Install Pulsar OS packages and bootloader
             pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
+                gnome-control-center \
+                gnome-keybindings \
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
@@ -1022,6 +1006,12 @@ else
 
     echo "deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es $BRANCH main" | \
         $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/inled.list" > /dev/null
+
+    $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/99inled" > /dev/null <<'EOF'
+Package: *
+Pin: origin "apt.inled.es"
+Pin-Priority: 1001
+EOF
 
     # Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup
     echo "⚙️ Setting up temporary dpkg bypasses for DroidTux and AppInstall..."
