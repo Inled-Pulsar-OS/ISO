@@ -841,15 +841,6 @@ $pkg_name"
             done
         fi
 
-        # Compile spotlight-gtk local package if it exists on the host (always rebuild to catch changes)
-        SPOTLIGHT_REPO_DIR="/home/jaime/Documentos/spotlight-gtk"
-        if [ -d "$SPOTLIGHT_REPO_DIR" ] && [ -f "$SPOTLIGHT_REPO_DIR/PKGBUILD" ]; then
-            echo "🔨 Compiling spotlight-gtk locally..."
-            rm -f "$LOCAL_PKGS_DIR"/spotlight-gtk-*.pkg.tar.zst
-            run_as_user bash -c "cd '$SPOTLIGHT_REPO_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign"
-            echo "✅ spotlight-gtk compiled successfully."
-        fi
-
         echo "📂 Using local packages from: $LOCAL_PKGS_DIR"
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
@@ -857,6 +848,7 @@ $pkg_name"
         # Clean up packages that are not needed or cause dependency issues inside the chroot
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/autokey-qt-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
 
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
@@ -874,11 +866,8 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init keyring, install keyring package, then populate
+            # Init keyring, import Inled repo key first, then sync and populate
             pacman-key --init
-            pacman -Syy --noconfirm
-            pacman -S --noconfirm archlinux-keyring
-            pacman-key --populate archlinux
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
@@ -887,6 +876,10 @@ $pkg_name"
             fi
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
+
+            pacman -Syy --noconfirm
+            pacman -S --noconfirm archlinux-keyring
+            pacman-key --populate archlinux
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
@@ -901,7 +894,6 @@ $pkg_name"
                 macboat \
                 appinstall \
                 seafari \
-                spotlight-gtk \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
         "
@@ -959,7 +951,6 @@ $pkg_name"
                 macboat \
                 appinstall \
                 seafari \
-                spotlight-gtk \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer \
                 winboat-bin
@@ -1322,7 +1313,9 @@ fi
 echo "⚙️ Customizing Spotlight launcher..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
-    if [ -f /usr/share/applications/spotlight-python.desktop ]; then
+    if [ -f /usr/share/applications/pulsaros-spotlight.desktop ]; then
+        sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/pulsaros-spotlight.desktop
+    elif [ -f /usr/share/applications/spotlight-python.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-python.desktop
     elif [ -f /usr/share/applications/spotlight-gtk.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/spotlight-gtk.desktop
