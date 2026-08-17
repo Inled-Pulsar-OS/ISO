@@ -22,10 +22,9 @@ jobs:
           VERSION="${RELEASE_NAME:-$INPUT_VERSION}"
           if [ -n "$VERSION" ]; then
             ESCAPED=$(echo "$VERSION" | sed 's/"/\\"/g')
-            MSG="💿 **New ISO available!**\nVersion: \`${ESCAPED}\`\n<https://github.com/Inled-Pulsar-OS/ISO/releases/latest>"
+            MSG=$(echo -e "💿 **New ISO available!**\nVersion: \`${ESCAPED}\`\n<https://github.com/Inled-Pulsar-OS/ISO/releases/latest>")
           else
-            MSG="💿 **New ISO available!**\n<https://github.com/Inled-Pulsar-OS/ISO/releases/latest>"
+            MSG=$(echo -e "💿 **New ISO available!**\n<https://github.com/Inled-Pulsar-OS/ISO/releases/latest>")
           fi
-          curl -s -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"$MSG\"}"
+          jq -n --arg msg "$MSG" '{"content": $msg}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
