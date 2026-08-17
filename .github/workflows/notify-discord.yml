@@ -1,0 +1,25 @@
+name: Notify Discord
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'ISO version'
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification for new ISO
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            💿 **New ISO available!**
+            {{#if release}}Version: {{release.name}}{{/if}}
+            {{#if github.event.inputs.version}}Version: {{github.event.inputs.version}}{{/if}}
+            Download: <https://github.com/Inled-Pulsar-OS/ISO/releases/latest>
