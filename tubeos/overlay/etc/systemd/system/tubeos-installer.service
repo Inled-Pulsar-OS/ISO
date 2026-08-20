@@ -1,0 +1,13 @@
+[Unit]
+Description=Tube OS Web Installer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/share/tubeos-installer/server.py --port 80
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

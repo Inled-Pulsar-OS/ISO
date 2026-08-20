@@ -1,0 +1,61 @@
+name: Build Tube OS ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: true
+        default: '0.1.0'
+      edition:
+        description: 'Edition to build'
+        required: true
+        type: choice
+        options:
+          - both
+          - debian
+          - arch
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Tube OS (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'debian'
+            args: '--debian --grub'
+          - name: 'arch'
+            args: '--arch --grub'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            squashfs-tools xorriso grub-pc-bin \
+            grub-efi-amd64-bin mtools dosfstools \
+            debootstrap arch-install-scripts \
+            pacman-container jq curl wget
+
+      - name: Build Tube OS ISO
+        run: |
+          chmod +x tubeos/build-tubeos.sh
+          ./tubeos/build-tubeos.sh ${{ matrix.args }} --local
+
+      - name: Upload ISO
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tubeos-${{ inputs.version }}
+          name: "Tube OS ${{ inputs.version }} (${{ matrix.name }})"
+          files: |
+            build/tubeos-*.iso
