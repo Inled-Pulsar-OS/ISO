@@ -208,13 +208,12 @@ if $USE_ISO; then
         -drive file="$DISK_PATH",format=qcow2,media=disk,if=virtio \
         -cdrom "$ISO_PATH" \
         -device virtio-vga \
-        -display gtk \
+        -display gtk,show-cursor=on \
         $AUDIO_ARGS \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
         -device usb-tablet \
-        -device usb-mouse \
         -boot d \
         -serial mon:stdio
 else
@@ -251,12 +250,11 @@ else
         -fsdev local,id=rootfs,path="$ROOTFS",security_model=passthrough \
         -device virtio-9p-pci,fsdev=rootfs,mount_tag=rootfs \
         -device virtio-vga \
-        -display gtk \
+        -display gtk,show-cursor=on \
         $AUDIO_ARGS \
         -device intel-hda \
         -device hda-duplex,audiodev=snd0 \
         -device qemu-xhci \
         -device usb-tablet \
-        -device usb-mouse \
         -serial mon:stdio
 fi

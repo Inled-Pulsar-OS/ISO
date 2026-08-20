@@ -1121,8 +1121,7 @@ EOF
                 droidtux \
                 macboat \
                 appinstall \
-                seafari \
-                pulsaros-control-center
+                seafari || yes | apt-get install -y /tmp/packages/*.deb
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
