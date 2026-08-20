@@ -989,13 +989,16 @@ $pkg_name"
         echo '✅ Locales de glibc restaurados.'
     "
 else
-    # ==========================================================================
-    # DEBIAN PATH (original)
-    # ==========================================================================
+    # Ensure solid DNS in chroot
+    $SUDO rm -f "$ROOTFS_TARGET/etc/resolv.conf"
+    printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 8.8.4.4\n" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+
     echo "--- 🌐 Configuring APT repositories (Debian Contrib/Backports and Inled) ---"
     $SUDO sed -i "s/$DEBIAN_VERSION main/$DEBIAN_VERSION main contrib non-free non-free-firmware/g" "$ROOTFS_TARGET/etc/apt/sources.list"
-    if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
-        echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
+    if [ "$DEBIAN_VERSION" != "trixie" ] && [ "$DEBIAN_VERSION" != "forky" ] && [ "$DEBIAN_VERSION" != "sid" ]; then
+        if ! grep -q "${DEBIAN_VERSION}-backports" "$ROOTFS_TARGET/etc/apt/sources.list"; then
+            echo "deb http://deb.debian.org/debian ${DEBIAN_VERSION}-backports main contrib non-free non-free-firmware" | $SUDO tee -a "$ROOTFS_TARGET/etc/apt/sources.list" > /dev/null
+        fi
     fi
 
     # Copy the bundled Inled APT GPG keyring directly to the chroot target
@@ -1107,15 +1110,19 @@ Pin: release *
 Pin-Priority: -1
 EOF
 
+        # Ensure working DNS right before entering chroot
+        $SUDO rm -f "$ROOTFS_TARGET/etc/resolv.conf"
+        printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 8.8.4.4\n" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
             export PULSAR_BUILD_CHROOT=1
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
-            echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
-            apt-get update
-            yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
-            yes | apt-get install -y --no-install-recommends $BOOTLOADER_PKGS
+            echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
+            apt-get update || true
+            apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
+            yes | apt-get install -y --no-install-recommends \$BOOTLOADER_PKGS
             yes | apt-get install -y \
                 /tmp/packages/*.deb \
                 droidtux \
