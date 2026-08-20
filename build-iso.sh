@@ -437,6 +437,13 @@ CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
     echo "🧹 Terminating and freeing chroot-mounted resources..."
+
+    # Desactivar swap del rootfs target si quedó activo (p.ej. creado por pulsaros-setup-hibernation)
+    # Deactivate any swap inside the rootfs target (e.g. created by pulsaros-setup-hibernation)
+    if [ -f "$ROOTFS_TARGET/swapfile" ]; then
+        $SUDO swapoff "$ROOTFS_TARGET/swapfile" 2>/dev/null || true
+    fi
+
     $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
@@ -849,6 +856,9 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/autokey-qt-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/dockermigrate-*.pkg.tar.zst
 
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
@@ -1100,6 +1110,7 @@ EOF
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
+            export PULSAR_BUILD_CHROOT=1
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
@@ -1111,7 +1122,7 @@ EOF
                 macboat \
                 appinstall \
                 seafari \
-                spotlight-python
+                pulsaros-control-center
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1129,6 +1140,7 @@ EOF
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
+            export PULSAR_BUILD_CHROOT=1
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
@@ -1138,6 +1150,7 @@ EOF
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
+                pulsaros-control-center \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1153,8 +1166,7 @@ EOF
                 droidtux \
                 macboat \
                 appinstall \
-                seafari \
-                spotlight-python
+                seafari
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "

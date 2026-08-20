@@ -1,0 +1,36 @@
+linux
+systemd
+systemd-sysvcompat
+udev
+iproute2
+procps-ng
+dhcpcd
+bash-completion
+sudo
+shadow
+mkinitcpio
+pam
+util-linux
+dbus
+networkmanager
+# Tube OS packages
+python
+python-fastapi
+python-uvicorn
+python-qrcode
+parted
+rsync
+grub
+efibootmgr
+dosfstools
+e2fsprogs
+docker
+tubeos-installer
+tubeos-branding
+tubeos-plymouth
+tube-os-dash
+dockermigrate
+# Plasma Bigscreen (Arch only)
+plasma-bigscreen
+plasma-remotecontrollers
+kodi
