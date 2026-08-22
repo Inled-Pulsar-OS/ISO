@@ -196,7 +196,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     if [ "$ALLOW_HOST_INSTALL" != "true" ]; then
         echo "❌ Missing host dependencies. They will NOT auto-install to protect your system."
         echo "   Manually install missing packages (e.g. sudo pacman -S ${MISSING_PACKAGES[*]})"
-        echo "   or repeat the command with the variable ALLOW_HOST_INSTALL=true to authorize the installation."
+        echo "   or repeat the command with the variable ALLOW_HOST_INSTALL=true to authorize the installation. To install pacstrap use arch-install-scripts"
         exit 1
     fi
     
