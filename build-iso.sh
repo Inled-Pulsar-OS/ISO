@@ -660,8 +660,8 @@ if [ "$DISTRO" = "arch" ]; then
     # "paquete no válido o dañado (firma PGP)".
     for p in pulsaros-branding pulsaros-theme pulsaros-gnome pulsaros-global-menu \
              pulsaros-spotlight-launcher pulsaros-sddm pulsaros-plymouth \
-             pulsaros-refind pulsaros-grub pulsaros-calamares pulsaros-essential \
-             pulsaros-welcome pulsaros-recovery pulsaros-bootsound \
+             pulsaros-refind pulsaros-grub pulsaros-calamares pulsaros-essential pulsaros-hibernate \
+             pulsaros-welcome pulsaros-recovery pulsaros-bootsound pulsar-pear-sound-theme \
              gnome-macos-remap-wayland droidtux macboat appinstall seafari \
              spotlight-gtk; do
         $SUDO rm -f "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst.sig 2>/dev/null || true
@@ -897,6 +897,11 @@ $pkg_name"
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
+            # Pin our custom nautilus so the following -Syu doesn't replace it with upstream
+            if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
+                echo 'IgnorePkg = nautilus' >> /etc/pacman.conf
+            fi
+
             # Install remaining dependencies and packages
             pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
@@ -940,6 +945,7 @@ $pkg_name"
             pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 gnome-control-center \
+                nautilus \
                 gnome-keybindings \
                 pulsaros-branding \
                 pulsaros-theme \
@@ -955,6 +961,8 @@ $pkg_name"
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
                 pulsaros-bootsound \
+                pulsaros-hibernate \
+                pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
@@ -1156,6 +1164,7 @@ EOF
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
+                nautilus \
                 pulsaros-control-center \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
@@ -1167,6 +1176,8 @@ EOF
                 pulsaros-welcome \
                 pulsaros-recovery \
                 pulsaros-bootsound \
+                pulsaros-hibernate \
+                pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
