@@ -894,6 +894,12 @@ $pkg_name"
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
 
+            # Arch now ships libnautilus-extension as a separate package, but our
+            # bundled nautilus build provides/conflicts with it; remove upstream copy first
+            if pacman -Q libnautilus-extension >/dev/null 2>&1; then
+                pacman -Rdd --noconfirm libnautilus-extension || true
+            fi
+
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
@@ -940,6 +946,12 @@ $pkg_name"
             pacman -Syy --noconfirm
             pacman -S --noconfirm archlinux-keyring
             pacman-key --populate archlinux
+
+            # Arch now ships libnautilus-extension as a separate package, but our
+            # bundled nautilus build provides/conflicts with it; remove upstream copy first
+            if pacman -Q libnautilus-extension >/dev/null 2>&1; then
+                pacman -Rdd --noconfirm libnautilus-extension || true
+            fi
 
             # Install Pulsar OS packages and bootloader
             pacman -Syu --noconfirm --overwrite '*' \

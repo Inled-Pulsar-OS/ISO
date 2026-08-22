@@ -13,8 +13,14 @@ The build script checks for missing dependencies and tells you what to install. 
 sudo pacman -S --needed \
   arch-install-scripts squashfs-tools grub xorriso mtools dosfstools \
   binutils libisoburn sassc imagemagick psmisc \
-  fakeroot rsync jq curl unzip wget git
+  fakeroot rsync jq curl unzip wget git \
+  meson ninja blueprint-compiler gettext gobject-introspection gtk-update-icon-cache cmake \
+  cargo rust
 ```
+
+The last two lines are only needed for `--local` builds, which compile the
+packages from the `/PKG` folder (custom Nautilus needs meson/ninja; the
+Spotlight launcher is a Rust/GTK4 app built with cargo).
 
 ### Debian / Ubuntu / Pop!_OS
 
@@ -42,6 +48,8 @@ sudo apt-get install -y \
 | `fakeroot` | Build packages without real root privileges |
 | `rsync` | Sync the base chroot into the working target |
 | `jq` / `curl` / `wget` / `unzip` / `git` | Download and extract resources during build |
+| `meson` / `ninja` / `blueprint-compiler` / `gettext` / `gobject-introspection` | Build the custom Nautilus (Finder) from source (`--local`) |
+| `cargo` / `rust` | Build the native Spotlight launcher (Rust/GTK4, no Python) (`--local`) |
 
 ### For QEMU testing (optional)
 
