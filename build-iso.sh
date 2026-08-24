@@ -196,9 +196,11 @@ if [ "$BOOTLOADER" = "grub" ]; then
     fi
 fi
 
-# IMPORTANT: Check Debian archive keyring on non-Debian host distros (like Ubuntu/Mint)
-# IMPORTANTE: Comprobar el llavero de Debian en hosts Ubuntu/Debian no oficiales
-if [ "$DISTRO" != "arch" ] && [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+if ! command -v debootstrap >/dev/null 2>&1 && ! command -v mmdebstrap >/dev/null 2>&1; then
+    MISSING_PACKAGES+=("debootstrap")
+fi
+
+if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
     MISSING_PACKAGES+=("debian-archive-keyring")
 fi
 
