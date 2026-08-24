@@ -353,6 +353,10 @@ if [ "$EUID" -ne 0 ]; then
     fi
 fi
 
+# Build timing: captured after auto-elevation so they survive the re-exec
+BUILD_START_TS=$(date '+%Y-%m-%d %H:%M:%S')
+BUILD_START_EPOCH=$(date +%s)
+
 SUDO=""
 
 # ==============================================================================
@@ -2291,7 +2295,15 @@ EOF
       "$ISO_STAGING"
 fi
 
+BUILD_END_TS=$(date '+%Y-%m-%d %H:%M:%S')
+BUILD_END_EPOCH=$(date +%s)
+ELAPSED=$((BUILD_END_EPOCH - BUILD_START_EPOCH))
+ELAPSED_FMT=$(printf '%02dh %02dm %02ds' $((ELAPSED/3600)) $(((ELAPSED%3600)/60)) $((ELAPSED%60)))
+
 echo "=============================================================================="
-echo "🎉 ¡ISO de Pulsar OS ($BOOTLOADER) generada con éxito!"
-echo "📍 Ubicación / Location: $ISO_OUTPUT"
+echo "🎉 Pulsar OS ISO ($BOOTLOADER) generated successfully!"
+echo "📍 Location: $ISO_OUTPUT"
+echo "🕐 Build started at: $BUILD_START_TS"
+echo "🕓 Build finished at: $BUILD_END_TS"
+echo "⏱️  Total build time: $ELAPSED_FMT"
 echo "=============================================================================="
