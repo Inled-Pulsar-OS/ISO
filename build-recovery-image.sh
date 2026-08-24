@@ -159,14 +159,48 @@ fi
 PROFILE"
 $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_profile"
 
-# Ensure correct file permissions
-$SUDO chroot "$ROOTFS_REC" /bin/bash -c "chown -R live:live /home/live"
-
-# Configure live-boot initramfs
+# Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    echo 'live-boot' > /etc/initramfs-tools/modules
+    passwd -d root 2>/dev/null || true
+    echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
+    echo 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0' > /etc/fstab
+    systemctl mask networking.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
+    systemctl set-default graphical.target 2>/dev/null || true
+"
+
+# Configure kernel modules for live-boot overlay in initramfs
+$SUDO bash -c "cat << 'MODS' > '$ROOTFS_REC/etc/initramfs-tools/modules'
+overlay
+squashfs
+loop
+ext4
+btrfs
+vfat
+fat
+isofs
+MODS"
+
+# Configure live-boot defaults
+$SUDO mkdir -p "$ROOTFS_REC/etc/live"
+$SUDO bash -c "cat << 'LIVECONF' > '$ROOTFS_REC/etc/live/boot.conf'
+LIVE_BOOT_COMPONENTS=\"yes\"
+LIVE_USERNAME=\"live\"
+LIVE_USER_DEFAULT_GROUPS=\"sudo audio video plugdev disk users input\"
+LIVECONF"
+
+# Mount virtual filesystems and generate robust live-boot initramfs
+$SUDO mount -t proc proc "$ROOTFS_REC/proc" 2>/dev/null || true
+$SUDO mount -t sysfs sys "$ROOTFS_REC/sys" 2>/dev/null || true
+$SUDO mount --bind /dev "$ROOTFS_REC/dev" 2>/dev/null || true
+
+$SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || true
     update-initramfs -u -k all
 "
+
+$SUDO umount -l "$ROOTFS_REC/proc" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_REC/sys" 2>/dev/null || true
+$SUDO umount -l "$ROOTFS_REC/dev" 2>/dev/null || true
 
 # 3. Extract recovery kernel and initramfs
 echo "📦 Extracting recovery kernel and initramfs..."
