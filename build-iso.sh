@@ -1756,6 +1756,31 @@ $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 
+    # Stage dedicated Debian Recovery files (build automatically if missing)
+    REC_OUT="$SCRIPT_DIR/build/recovery-out"
+    if [ ! -f "$REC_OUT/filesystem.squashfs" ] && [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
+        echo "📦 Dedicated Debian Recovery environment not found. Building it automatically..."
+        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
+    fi
+
+    if [ -f "$REC_OUT/filesystem.squashfs" ]; then
+        echo "📦 Staging dedicated Debian Recovery environment into target rootfs and ISO..."
+        $SUDO mkdir -p "$ISO_STAGING/recovery" "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
+        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
+        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/recovery/filesystem.squashfs"
+        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/recovery-filesystem.squashfs"
+        if [ -f "$REC_OUT/vmlinuz-recovery" ]; then
+            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
+            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/recovery/vmlinuz-recovery"
+            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/vmlinuz-recovery"
+        fi
+        if [ -f "$REC_OUT/initramfs-recovery.img" ]; then
+            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img"
+            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/recovery/initramfs-recovery.img"
+            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/initramfs-recovery.img"
+        fi
+    fi
+
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
 echo "📦 Compressing rootfs into SquashFS..."
 # Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
