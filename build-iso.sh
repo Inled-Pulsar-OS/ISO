@@ -1783,7 +1783,7 @@ echo "📦 Compressing rootfs into SquashFS..."
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
     if [ ! -f "$REC_OUT/filesystem.squashfs" ] && [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
         echo "📦 Dedicated Debian Recovery environment not found. Building it automatically..."
-        bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
+        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
