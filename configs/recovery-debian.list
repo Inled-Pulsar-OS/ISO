@@ -1,0 +1,60 @@
+# Minimal Debian Base & Live Boot
+linux-image-amd64
+systemd-sysv
+udev
+apt
+iproute2
+netbase
+procps
+isc-dhcp-client
+bash-completion
+sudo
+passwd
+initramfs-tools
+live-boot
+live-boot-initramfs-tools
+libpam-modules
+libpam-systemd
+polkitd
+dbus
+dbus-user-session
+util-linux
+locales
+ca-certificates
+curl
+wget
+rsync
+
+# Recovery Filesystem Tools
+busybox
+btrfs-progs
+e2fsprogs
+dosfstools
+squashfs-tools
+parted
+efibootmgr
+
+# Networking
+network-manager
+wpasupplicant
+wireless-tools
+
+# Minimal X11 & Fluxbox
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-input-all
+xinit
+x11-xserver-utils
+fluxbox
+xterm
+feh
+
+# Graphic Libraries for Rust Recovery Assistant (GTK4 / Libadwaita)
+libgtk-4-1
+libadwaita-1-0
+gsettings-desktop-schemas
+adwaita-icon-theme
+desktop-file-utils
+
+# Auxiliary Recovery Utilities
+gparted
