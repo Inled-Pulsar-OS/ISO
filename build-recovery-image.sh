@@ -161,12 +161,29 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_pr
 
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    passwd -d root 2>/dev/null || true
+    echo 'root:root' | chpasswd 2>/dev/null || true
+    echo 'live:live' | chpasswd 2>/dev/null || true
     echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
     echo 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0' > /etc/fstab
     systemctl mask networking.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
     systemctl set-default graphical.target 2>/dev/null || true
 "
+
+# Configure emergency and rescue services to provide direct root shell without password prompt
+$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/emergency.service.d" "$ROOTFS_REC/etc/systemd/system/rescue.service.d"
+$SUDO bash -c "cat << 'EMERG' > '$ROOTFS_REC/etc/systemd/system/emergency.service.d/override.conf'
+[Service]
+Environment=SYSTEMD_SULOGIN_FORCE=1
+ExecStart=
+ExecStart=-/bin/sh -c 'exec /bin/bash < /dev/console > /dev/console 2>&1'
+EMERG"
+
+$SUDO bash -c "cat << 'RESC' > '$ROOTFS_REC/etc/systemd/system/rescue.service.d/override.conf'
+[Service]
+Environment=SYSTEMD_SULOGIN_FORCE=1
+ExecStart=
+ExecStart=-/bin/sh -c 'exec /bin/bash < /dev/console > /dev/console 2>&1'
+RESC"
 
 # Configure kernel modules for live-boot overlay in initramfs
 $SUDO bash -c "cat << 'MODS' > '$ROOTFS_REC/etc/initramfs-tools/modules'
