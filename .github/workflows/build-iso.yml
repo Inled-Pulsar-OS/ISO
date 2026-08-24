@@ -92,16 +92,18 @@ jobs:
               ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version \"${{ github.event.inputs.version }}\"
             "
 
-      # 4. Upload built ISO as run artifact
-      - name: Upload ISO Artifact
+      # 4. Upload built ISO and SquashFS as run artifact
+      - name: Upload ISO and SquashFS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: iso-${{ matrix.name }}
-          path: build/pulsaros-*.iso
+          name: artifacts-${{ matrix.name }}
+          path: |
+            build/pulsaros-*.iso
+            build/pulsaros-*.squashfs
           retention-days: 1
 
   release:
-    name: Create Release and Upload ISOs
+    name: Create Release and Upload ISOs & Recovery Images
     needs: build
     runs-on: ubuntu-latest
     env:
@@ -109,33 +111,33 @@ jobs:
       SF_USER: ${{ secrets.SF_USER }}
       SF_PROJECT: ${{ secrets.SF_PROJECT }}
     steps:
-      # 1. Download all ISO artifacts
+      # 1. Download all ISO and SquashFS artifacts
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      # 2. Gather ISOs into a single directory and rename them with the version
-      - name: Gather and Rename ISO Files
+      # 2. Gather ISOs and SquashFS files into a single directory and rename them with the version
+      - name: Gather and Rename Release Files
         run: |
           mkdir dist
-          find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
+          find artifacts/ \( -name "*.iso" -o -name "*.squashfs" \) -exec cp -v {} dist/ \;
           cd dist
-          for f in *.iso; do
+          for f in *; do
             # Replace the branch name with the user-specified version (literal, no regex)
             new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
             if [ "$f" != "$new_name" ]; then
               mv -v "$f" "$new_name"
             fi
           done
-          echo "ISOs gathered and renamed:"
+          echo "Files gathered and renamed:"
           ls -la
 
-      # 3. Generate checksums for all ISOs
+      # 3. Generate checksums for all ISOs and SquashFS files
       - name: Generate SHA256SUMS
         run: |
           cd dist
-          sha256sum *.iso > SHA256SUMS
+          sha256sum *.iso *.squashfs > SHA256SUMS
           cat SHA256SUMS
 
       # 4. Check whether the SourceForge upload is configured via secrets
@@ -155,13 +157,15 @@ jobs:
         run: |
           {
             cat <<'EOF'
-          Pulsar OS Live ISO release.
+          Pulsar OS Live ISO & Recovery Images release.
 
           This release publishes the following editions:
           - **Debian (GRUB)**: Debian-based edition with GRUB bootloader.
           - **Debian (rEFInd)**: Debian-based edition with the modern rEFInd bootloader.
           - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
           - **Arch Linux (rEFInd)**: Arch-based edition with the modern rEFInd bootloader.
+
+          Recovery SquashFS images are attached directly to this release for the **Pulsar OS Internet Recovery** feature.
 
           ---
           EOF
@@ -183,16 +187,16 @@ jobs:
           } >> body.md
           cat body.md
 
-      # 6. Create the GitHub release. The release is always tagged 'latest' and
-      #    carries no ISO: the ISOs are published to SourceForge (step 7). Only
-      #    the SHA256SUMS file is attached for verification.
+      # 6. Create the GitHub release. Attaches the SquashFS recovery images and checksums.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
           name: ${{ github.event.inputs.release_title }}
           body_path: body.md
-          files: dist/SHA256SUMS
+          files: |
+            dist/SHA256SUMS
+            dist/*.squashfs
           draft: false
           prerelease: false
         env:
