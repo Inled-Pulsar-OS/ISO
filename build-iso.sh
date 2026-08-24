@@ -41,7 +41,10 @@ ORIGINAL_ARGS=("$@")
 # Parse Arguments / Parámetros
 # ==============================================================================
 CLEAN_BASE=false
-USE_LOCAL_DEBS=false
+USE_LOCAL_DEBS=true
+if [ ! -d "$ISO_DIR/../PKG" ]; then
+    USE_LOCAL_DEBS=false
+fi
 SKIP_PKG_BUILD=false
 INCREMENTAL_PKG_BUILD=false
 BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
@@ -54,6 +57,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean-base)
             CLEAN_BASE=true
+            shift
+            ;;
+        --production|--remote)
+            USE_LOCAL_DEBS=false
             shift
             ;;
         --local)
