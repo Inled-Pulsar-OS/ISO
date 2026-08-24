@@ -42,6 +42,8 @@ ORIGINAL_ARGS=("$@")
 # ==============================================================================
 CLEAN_BASE=false
 USE_LOCAL_DEBS=false
+SKIP_PKG_BUILD=false
+INCREMENTAL_PKG_BUILD=false
 BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
 WITH_NVIDIA=false
@@ -56,6 +58,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         --local)
             USE_LOCAL_DEBS=true
+            shift
+            ;;
+        --skip-all|--skip-pkg|--pack-only|--skip-build)
+            USE_LOCAL_DEBS=true
+            SKIP_PKG_BUILD=true
+            shift
+            ;;
+        --incremental|-i|--rebuild-modified|--smart|--smart-build)
+            USE_LOCAL_DEBS=true
+            INCREMENTAL_PKG_BUILD=true
             shift
             ;;
         --refind)
@@ -734,14 +746,22 @@ EOF
             pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG/arch"
         fi
 
-        if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
-            echo "🔨 Compilando todos los paquetes locales de forma fresca..."
+        if $SKIP_PKG_BUILD; then
+            echo "⚡ [SKIP-ALL] Reusing already compiled packages in build/packages (skipping compilation)..."
+        elif [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
             chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
+            pkg_cmd="./package-and-deploy.sh all"
+            if $INCREMENTAL_PKG_BUILD; then
+                echo "⚡ [INCREMENTAL] Checking and rebuilding only modified packages..."
+                pkg_cmd="./package-and-deploy.sh all --incremental"
+            else
+                echo "🔨 Compilando todos los paquetes locales de forma fresca..."
+            fi
             # Run as the original non-root user since makepkg cannot run as root
             if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
-                run_as_user bash -c "cd '$pkg_dir_source' && ./package-and-deploy.sh all"
+                run_as_user bash -c "cd '$pkg_dir_source' && $pkg_cmd"
             else
-                (cd "$pkg_dir_source" && ./package-and-deploy.sh all)
+                (cd "$pkg_dir_source" && eval "$pkg_cmd")
             fi
         else
             echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing packages."
@@ -888,7 +908,7 @@ $pkg_name"
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
             pacman -Syy --noconfirm
-            pacman -S --noconfirm archlinux-keyring
+            pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg
             pacman-key --populate archlinux
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
@@ -919,6 +939,9 @@ $pkg_name"
                 qt6-multimedia-gstreamer
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
+        if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
+            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Optional TrustAll\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
+        fi
         echo "✅ Successfully installed local Arch packages."
     else
         echo "---🌐 PRODUCTION MODE: Installing packages from Arch repository (Inled) ---"
@@ -1079,10 +1102,18 @@ EOF
             pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
         fi
 
-        if [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
-            echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
+        if $SKIP_PKG_BUILD; then
+            echo "⚡ [SKIP-ALL] Reutilizando paquetes .deb ya compilados en build/packages (omitiendo compilación)..."
+        elif [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
             chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
-            (cd "$pkg_dir_source" && ./package-and-deploy.sh all --branch "$BRANCH")
+            pkg_cmd="./package-and-deploy.sh all --branch $BRANCH"
+            if $INCREMENTAL_PKG_BUILD; then
+                echo "⚡ [INCREMENTAL] Comprobando y recompilando únicamente paquetes .deb modificados para $BRANCH..."
+                pkg_cmd="./package-and-deploy.sh all --incremental --branch $BRANCH"
+            else
+                echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
+            fi
+            (cd "$pkg_dir_source" && eval "$pkg_cmd")
         else
             echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing debs."
         fi
@@ -1734,6 +1765,15 @@ echo "📦 Compressing rootfs into SquashFS..."
         -e var/tmp/* \
         -e var/log/* \
         -e root/.bash_history
+
+    # Also export standalone recovery SquashFS image for local recovery partition and GitHub Releases
+    VER_SUFFIX=""
+    if [ -n "$PULSAR_VERSION" ]; then
+        VER_SUFFIX="-${PULSAR_VERSION}"
+    fi
+    RECOVERY_SQUASHFS="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-${BOOTLOADER}${VER_SUFFIX}.squashfs"
+    echo "📦 Exporting standalone recovery SquashFS to $RECOVERY_SQUASHFS..."
+    $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 if [ "$DISTRO" = "arch" ]; then
