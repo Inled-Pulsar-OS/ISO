@@ -102,8 +102,13 @@ $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant"
 # Configure user 'live' and permissions
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     if ! id live >/dev/null 2>&1; then
-        useradd -m -s /bin/bash -G sudo,audio,video,plugdev,disk,wheel,users live || true
-        echo 'live:live' | chpasswd
+        useradd -m -s /bin/bash live
+        for g in sudo audio video plugdev disk users input; do
+            groupadd -f \"\$g\" 2>/dev/null || true
+            usermod -aG \"\$g\" live 2>/dev/null || true
+        done
+        echo 'live:live' | chpasswd 2>/dev/null || true
+        passwd -d live 2>/dev/null || true
     fi
     mkdir -p /etc/sudoers.d
     echo 'live ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-live-user
