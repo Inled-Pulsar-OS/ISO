@@ -242,7 +242,7 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
         packages_to_install=()
         for item in "${MISSING_PACKAGES[@]}"; do
             case "$item" in
-                mmdebstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
+                mmdebstrap|debootstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
                     packages_to_install+=("$item")
                     ;;
                 mksquashfs)
@@ -1779,8 +1779,13 @@ echo "📦 Compressing rootfs into SquashFS..."
     echo "📦 Exporting standalone recovery SquashFS to $RECOVERY_SQUASHFS..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
-    # Stage dedicated Debian Recovery files if available
+    # Stage dedicated Debian Recovery files (build automatically if missing)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
+    if [ ! -f "$REC_OUT/filesystem.squashfs" ] && [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
+        echo "📦 Dedicated Debian Recovery environment not found. Building it automatically..."
+        bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
+    fi
+
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
         echo "📦 Staging dedicated Debian Recovery environment into ISO..."
         $SUDO mkdir -p "$ISO_STAGING/recovery"
