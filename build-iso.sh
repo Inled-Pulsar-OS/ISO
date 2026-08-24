@@ -41,9 +41,9 @@ ORIGINAL_ARGS=("$@")
 # Parse Arguments / Parámetros
 # ==============================================================================
 CLEAN_BASE=false
-USE_LOCAL_DEBS=true
+USE_LOCAL_PKGS=true
 if [ ! -d "$ISO_DIR/../PKG" ]; then
-    USE_LOCAL_DEBS=false
+    USE_LOCAL_PKGS=false
 fi
 SKIP_PKG_BUILD=false
 INCREMENTAL_PKG_BUILD=false
@@ -60,20 +60,20 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --production|--remote)
-            USE_LOCAL_DEBS=false
+            USE_LOCAL_PKGS=false
             shift
             ;;
-        --local)
-            USE_LOCAL_DEBS=true
+        --local|--local-pkgs|--local-debs)
+            USE_LOCAL_PKGS=true
             shift
             ;;
         --skip-all|--skip-pkg|--pack-only|--skip-build)
-            USE_LOCAL_DEBS=true
+            USE_LOCAL_PKGS=true
             SKIP_PKG_BUILD=true
             shift
             ;;
         --incremental|-i|--rebuild-modified|--smart|--smart-build)
-            USE_LOCAL_DEBS=true
+            USE_LOCAL_PKGS=true
             INCREMENTAL_PKG_BUILD=true
             shift
             ;;
@@ -750,7 +750,7 @@ EOF
         BOOTLOADER_PKGS="refind efibootmgr grub"
     fi
 
-    if $USE_LOCAL_DEBS; then
+    if $USE_LOCAL_PKGS; then
         echo "--- 🛠️ LOCAL DEVELOPMENT MODE: Installing local Arch packages ---"
         pkg_dir_source="$ISO_DIR/../PKG/arch"
         if [ ! -d "$pkg_dir_source" ]; then
@@ -1106,8 +1106,8 @@ exec /usr/bin/gpg.real --yes --batch "$@"
 EOF
     $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/gpg"
 
-    if $USE_LOCAL_DEBS; then
-        echo "--- 🛠️ LOCAL DEVELOPMENT MODE: Installing local .deb packages ---"
+    if $USE_LOCAL_PKGS; then
+        echo "--- 🛠️ MODO DESARROLLO LOCAL: Instalando paquetes deb locales ---"
         pkg_dir_source="$ISO_DIR/../PKG"
         if [ ! -d "$pkg_dir_source" ]; then
             pkg_dir_source="/home/jaime/Documentos/pulsarbase/PKG"
