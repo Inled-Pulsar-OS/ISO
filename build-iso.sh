@@ -1756,11 +1756,11 @@ $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 
-    # Stage dedicated Debian Recovery files (build automatically if missing)
+    # Build dedicated Debian Recovery environment (always — base is cached internally)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
-    if [ ! -f "$REC_OUT/filesystem.squashfs" ] && [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        echo "📦 Dedicated Debian Recovery environment not found. Building it automatically..."
-        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
+    if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
+        echo "📦 Building dedicated Debian Recovery environment..."
+        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
@@ -1815,11 +1815,11 @@ echo "📦 Compressing rootfs into SquashFS..."
     echo "📦 Exporting standalone recovery SquashFS to $RECOVERY_SQUASHFS..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
-    # Stage dedicated Debian Recovery files (build automatically if missing)
+    # Build dedicated Debian Recovery environment (always — base is cached internally)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
-    if [ ! -f "$REC_OUT/filesystem.squashfs" ] && [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        echo "📦 Dedicated Debian Recovery environment not found. Building it automatically..."
-        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished, continuing..."
+    if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
+        echo "📦 Building dedicated Debian Recovery environment..."
+        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
