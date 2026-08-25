@@ -1765,9 +1765,11 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
         echo "📦 Staging dedicated Debian Recovery environment into target rootfs and ISO..."
-        $SUDO mkdir -p "$ISO_STAGING/recovery" "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
+        $SUDO mkdir -p "$ISO_STAGING/recovery" "$ISO_STAGING/recovery/live" "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/live" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
+        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/live/filesystem.squashfs"
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/recovery/filesystem.squashfs"
+        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/live/filesystem.squashfs"
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/recovery-filesystem.squashfs"
         if [ -f "$REC_OUT/vmlinuz-recovery" ]; then
             $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
