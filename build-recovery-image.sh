@@ -3,6 +3,9 @@
 # Script: build-recovery-image.sh
 # Purpose: Builds a dedicated, lightweight Debian + Fluxbox Recovery Environment
 #          featuring the Rust-based Pulsar OS Recovery Assistant.
+#
+#          Uses a cached clean Debian base (base-recovery) and clones it fresh
+#          every build, so configuration changes always take effect.
 # ==============================================================================
 
 set -euo pipefail
@@ -28,6 +31,9 @@ echo "======================================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 
+# base-recovery: cached clean Debian rootfs (only rebuilt when missing or package list changes)
+# rootfs-recovery: fresh clone from base, configured every build, then discarded
+BASE_DIR="$BUILD_DIR/base-recovery"
 ROOTFS_REC="$BUILD_DIR/rootfs-recovery"
 PACKAGE_LIST_FILE="$CONFIG_DIR/recovery-debian.list"
 
@@ -45,11 +51,34 @@ echo "🦀 Compiling Pulsar OS Recovery Assistant (Rust)..."
     cp -f target/release/pulsar-recovery-assistant "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant"
 )
 
-# 1. Bootstrap Minimal Debian if not cached
-if [ ! -f "$ROOTFS_REC/etc/debian_version" ]; then
-    echo "📥 Bootstrapping minimal Debian ($DEBIAN_VERSION)..."
-    $SUDO rm -rf "$ROOTFS_REC"
-    $SUDO mkdir -p "$ROOTFS_REC"
+# ==============================================================================
+# PHASE 1: Bootstrap clean Debian base (cached, only when missing or packages changed)
+# ==============================================================================
+
+base_list_changed=false
+if [ -d "$BASE_DIR" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
+    current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | sort)
+    if [ ! -f "$BASE_DIR/etc/pulsaros-recovery-base.list" ]; then
+        echo "🔄 Base package list not found in cache. Rebuilding base..."
+        base_list_changed=true
+    else
+        cached_list=$(cat "$BASE_DIR/etc/pulsaros-recovery-base.list")
+        if [ "$current_list" != "$cached_list" ]; then
+            echo "🔄 Package list changed since last base build. Rebuilding base..."
+            base_list_changed=true
+        fi
+    fi
+fi
+
+if $base_list_changed; then
+    echo "🧹 Cleaning stale base cache..."
+    $SUDO rm -rf "$BASE_DIR"
+fi
+
+if [ ! -f "$BASE_DIR/etc/debian_version" ]; then
+    echo "📥 Bootstrapping clean minimal Debian base ($DEBIAN_VERSION)..."
+    $SUDO rm -rf "$BASE_DIR"
+    $SUDO mkdir -p "$BASE_DIR"
 
     PACKAGES=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
 
@@ -61,7 +90,7 @@ if [ ! -f "$ROOTFS_REC/etc/debian_version" ]; then
             --variant=apt \
             --include="$PACKAGES" \
             "$DEBIAN_VERSION" \
-            "$ROOTFS_REC" \
+            "$BASE_DIR" \
             "$MIRROR"
     elif command -v debootstrap >/dev/null 2>&1; then
         echo "Using debootstrap..."
@@ -71,17 +100,43 @@ if [ ! -f "$ROOTFS_REC/etc/debian_version" ]; then
             --components="main,contrib,non-free,non-free-firmware" \
             --include="$PKG_SPACE" \
             "$DEBIAN_VERSION" \
-            "$ROOTFS_REC" \
+            "$BASE_DIR" \
             "$MIRROR"
     else
         echo "❌ Neither mmdebstrap nor debootstrap is installed. Please install debootstrap."
         exit 1
     fi
+
+    # Save the package list into the base for future change detection
+    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$BASE_DIR/etc/pulsaros-recovery-base.list" > /dev/null
+
+    echo "✅ Clean Debian base bootstrapped at $BASE_DIR"
 else
-    echo "✨ Cached Debian recovery rootfs found in $ROOTFS_REC"
+    echo "✨ Cached clean Debian base found at $BASE_DIR"
 fi
 
-# 2. Configure Recovery OS inside Rootfs
+# ==============================================================================
+# PHASE 2: Clone clean base → working rootfs (always fresh)
+# ==============================================================================
+
+echo "🔄 Cloning clean base into working rootfs..."
+
+# Unmount any leftover mounts from a previous interrupted build
+for mp in "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev"; do
+    if mountpoint -q "$mp" 2>/dev/null; then
+        $SUDO umount -l "$mp" 2>/dev/null || true
+    fi
+done
+
+$SUDO rm -rf "$ROOTFS_REC"
+$SUDO rsync -aHAXx --delete "$BASE_DIR/" "$ROOTFS_REC/"
+
+echo "✅ Fresh clone ready at $ROOTFS_REC"
+
+# ==============================================================================
+# PHASE 3: Configure Recovery OS inside the fresh clone
+# ==============================================================================
+
 echo "⚙️ Configuring Recovery Environment (live user, autologin, Fluxbox, Rust assistant)..."
 
 # Set hostname and networking
@@ -161,8 +216,9 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_pr
 
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    echo 'root:root' | chpasswd 2>/dev/null || true
-    echo 'live:live' | chpasswd 2>/dev/null || true
+    echo 'root:root' | chpasswd
+    echo 'live:live' | chpasswd
+    passwd -u root 2>/dev/null || true
     echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
     echo 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0' > /etc/fstab
     systemctl mask networking.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
@@ -183,14 +239,14 @@ $SUDO bash -c "cat << 'EMERG' > '$ROOTFS_REC/etc/systemd/system/emergency.servic
 [Service]
 Environment=SYSTEMD_SULOGIN_FORCE=1
 ExecStart=
-ExecStart=-/bin/sh -c 'exec /bin/bash < /dev/console > /dev/console 2>&1'
+ExecStart=-/bin/sh -c 'exec /bin/bash'
 EMERG"
 
 $SUDO bash -c "cat << 'RESC' > '$ROOTFS_REC/etc/systemd/system/rescue.service.d/override.conf'
 [Service]
 Environment=SYSTEMD_SULOGIN_FORCE=1
 ExecStart=
-ExecStart=-/bin/sh -c 'exec /bin/bash < /dev/console > /dev/console 2>&1'
+ExecStart=-/bin/sh -c 'exec /bin/bash'
 RESC"
 
 # Configure kernel modules for live-boot overlay in initramfs
@@ -213,6 +269,40 @@ LIVE_USERNAME=\"live\"
 LIVE_USER_DEFAULT_GROUPS=\"sudo audio video plugdev disk users input\"
 LIVECONF"
 
+# Inject emergency/rescue shell override INTO the initramfs itself.
+# If live-boot fails to find the SquashFS, systemd enters emergency mode from
+# the initramfs — the override in the rootfs SquashFS is never mounted at that
+# point, so it must be baked into the initramfs via a hook.
+$SUDO mkdir -p "$ROOTFS_REC/etc/initramfs-tools/hooks"
+$SUDO bash -c "cat << 'HOOK' > '$ROOTFS_REC/etc/initramfs-tools/hooks/recovery-emergency'
+#!/bin/sh
+PREREQ=\"\"
+prereqs() { echo \"\$PREREQ\"; }
+case \"\$1\" in prereqs) prereqs; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+mkdir -p \"\${DESTDIR}/etc/systemd/system/emergency.service.d\"
+mkdir -p \"\${DESTDIR}/etc/systemd/system/rescue.service.d\"
+cat > \"\${DESTDIR}/etc/systemd/system/emergency.service.d/override.conf\" << 'OVERRIDE'
+[Service]
+Environment=SYSTEMD_SULOGIN_FORCE=1
+ExecStart=
+ExecStart=-/bin/sh
+OVERRIDE
+cat > \"\${DESTDIR}/etc/systemd/system/rescue.service.d/override.conf\" << 'OVERRIDE'
+[Service]
+Environment=SYSTEMD_SULOGIN_FORCE=1
+ExecStart=
+ExecStart=-/bin/sh
+OVERRIDE
+# Copy root password state into initramfs so sulogin can authenticate
+cp /etc/shadow \"\${DESTDIR}/etc/shadow\" 2>/dev/null || true
+HOOK"
+$SUDO chmod +x "$ROOTFS_REC/etc/initramfs-tools/hooks/recovery-emergency"
+
+# ==============================================================================
+# PHASE 4: Generate initramfs, kernel, and SquashFS
+# ==============================================================================
+
 # Mount virtual filesystems and generate robust live-boot initramfs
 $SUDO mount -t proc proc "$ROOTFS_REC/proc" 2>/dev/null || true
 $SUDO mount -t sysfs sys "$ROOTFS_REC/sys" 2>/dev/null || true
@@ -227,7 +317,7 @@ $SUDO umount -l "$ROOTFS_REC/proc" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_REC/sys" 2>/dev/null || true
 $SUDO umount -l "$ROOTFS_REC/dev" 2>/dev/null || true
 
-# 3. Extract recovery kernel and initramfs
+# Extract recovery kernel and initramfs
 echo "📦 Extracting recovery kernel and initramfs..."
 REC_VMLINUZ=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "vmlinuz*" | head -n 1)
 REC_INITRD=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "initrd.img*" | head -n 1)
@@ -242,7 +332,7 @@ $SUDO cp -f "$REC_INITRD" "$OUTPUT_DIR/initramfs-recovery.img"
 echo "✅ Recovery kernel: $OUTPUT_DIR/vmlinuz-recovery"
 echo "✅ Recovery initrd: $OUTPUT_DIR/initramfs-recovery.img"
 
-# 4. Generate Recovery SquashFS
+# Generate Recovery SquashFS
 echo "📦 Generating Debian Recovery SquashFS..."
 SQUASHFS_REC="$OUTPUT_DIR/filesystem.squashfs"
 $SUDO rm -f "$SQUASHFS_REC"
@@ -256,6 +346,13 @@ $SUDO mksquashfs "$ROOTFS_REC" "$SQUASHFS_REC" \
     -e "tmp/*" \
     -e "var/tmp/*" \
     -noappend
+
+# Clean up working rootfs (the base is kept cached)
+echo "🧹 Cleaning working rootfs..."
+for mp in "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev"; do
+    $SUDO umount -l "$mp" 2>/dev/null || true
+done
+$SUDO rm -rf "$ROOTFS_REC"
 
 echo "======================================================================="
 echo "✅ PULSAR OS RECOVERY ENVIRONMENT BUILT SUCCESSFULLY!"
