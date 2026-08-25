@@ -166,8 +166,16 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
     echo 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0' > /etc/fstab
     systemctl mask networking.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
+    systemctl mask systemd-fsck-root.service systemd-fsck@.service systemd-remount-fs.service e2scrub_reap.service 2>/dev/null || true
     systemctl set-default graphical.target 2>/dev/null || true
 "
+
+# Remove OnFailure=emergency.target from local-fs.target to prevent fallback on overlayfs
+$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/local-fs.target.d"
+$SUDO bash -c "cat << 'LOCALFS' > '$ROOTFS_REC/etc/systemd/system/local-fs.target.d/override.conf'
+[Unit]
+OnFailure=
+LOCALFS"
 
 # Configure emergency and rescue services to provide direct root shell without password prompt
 $SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/emergency.service.d" "$ROOTFS_REC/etc/systemd/system/rescue.service.d"
