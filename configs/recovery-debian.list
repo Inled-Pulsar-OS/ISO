@@ -13,6 +13,10 @@ passwd
 initramfs-tools
 live-boot
 live-boot-initramfs-tools
+live-config
+live-config-systemd
+live-tools
+user-setup
 libpam-modules
 libpam-systemd
 polkitd
