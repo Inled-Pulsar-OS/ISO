@@ -93,15 +93,40 @@ if [ ! -f "$BASE_DIR/etc/debian_version" ]; then
             "$BASE_DIR" \
             "$MIRROR"
     elif command -v debootstrap >/dev/null 2>&1; then
-        echo "Using debootstrap..."
-        PKG_SPACE=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
+        echo "Using debootstrap (minbase + apt install)..."
         $SUDO debootstrap \
             --arch="$ARCH" \
             --components="main,contrib,non-free,non-free-firmware" \
-            --include="$PKG_SPACE" \
+            --variant=minbase \
             "$DEBIAN_VERSION" \
             "$BASE_DIR" \
             "$MIRROR"
+        
+        # Configure sources.list
+        $SUDO bash -c "cat << 'SOURCES' > '$BASE_DIR/etc/apt/sources.list'
+deb $MIRROR $DEBIAN_VERSION main contrib non-free non-free-firmware
+deb $MIRROR $DEBIAN_VERSION-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security $DEBIAN_VERSION-security main contrib non-free non-free-firmware
+SOURCES"
+
+        # Mount virtual filesystems and install packages cleanly
+        $SUDO mount -t proc proc "$BASE_DIR/proc" 2>/dev/null || true
+        $SUDO mount -t sysfs sys "$BASE_DIR/sys" 2>/dev/null || true
+        $SUDO mount --bind /dev "$BASE_DIR/dev" 2>/dev/null || true
+        $SUDO mount --bind /dev/pts "$BASE_DIR/dev/pts" 2>/dev/null || true
+
+        PKG_SPACE=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
+        $SUDO chroot "$BASE_DIR" /bin/bash -c "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends $PKG_SPACE
+            apt-get clean
+        "
+
+        $SUDO umount -l "$BASE_DIR/dev/pts" 2>/dev/null || true
+        $SUDO umount -l "$BASE_DIR/dev" 2>/dev/null || true
+        $SUDO umount -l "$BASE_DIR/sys" 2>/dev/null || true
+        $SUDO umount -l "$BASE_DIR/proc" 2>/dev/null || true
     else
         echo "❌ Neither mmdebstrap nor debootstrap is installed. Please install debootstrap."
         exit 1
@@ -176,9 +201,16 @@ $SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d"
 $SUDO bash -c "cat << 'GETTY' > '$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d/override.conf'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin live --noclear %I \$TERM
+ExecStart=-/sbin/agetty --autologin live --noclear %I 38400 linux
 Type=idle
 GETTY"
+
+# Configure X11 non-root permissions
+$SUDO mkdir -p "$ROOTFS_REC/etc/X11"
+$SUDO bash -c "cat << 'XWRAP' > '$ROOTFS_REC/etc/X11/Xwrapper.config'
+allowed_users=anybody
+needs_root_rights=no
+XWRAP"
 
 # Configure auto-start of X11 and Fluxbox with Rust recovery assistant
 $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"
@@ -213,6 +245,9 @@ if [ -z \"\$DISPLAY\" ] && [ \"\$(tty)\" = \"/dev/tty1\" ]; then
 fi
 PROFILE"
 $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_profile"
+
+# Ensure proper ownership of live user home directory
+$SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
