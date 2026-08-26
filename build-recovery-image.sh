@@ -232,21 +232,24 @@ $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/home/live/.xinitrc'
 #!/bin/sh
 xsetroot -solid '#18181b'
 xset s off -dpms
+[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
+export GTK_THEME=\"MacTahoe-Dark\"
+export XCURSOR_THEME=\"MacTahoe-blue-dark\"
+export XCURSOR_SIZE=\"24\"
 /usr/bin/pulsar-recovery-assistant &
 exec /usr/bin/fluxbox
 XINIT"
 
 $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
 #!/bin/sh
-# Start background color
 xsetroot -solid '#18181b'
+[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
-
-# Launch the Rust recovery assistant in fullscreen
+export GTK_THEME=\"MacTahoe-Dark\"
+export XCURSOR_THEME=\"MacTahoe-blue-dark\"
+export XCURSOR_SIZE=\"24\"
 /usr/bin/pulsar-recovery-assistant &
-
-# Launch Fluxbox
 exec /usr/bin/fluxbox
 FLUX_STARTUP"
 
@@ -305,6 +308,87 @@ DeviceTimeout=8
 UseFirmwareBackground=false
 UseSimpledrm=false
 PLYCONF"
+
+# ----------------------------------------------------------------------
+# Install MacTahoe GTK Theme, Icons & Cursors into Recovery Rootfs
+# ----------------------------------------------------------------------
+echo "🎨 Installing MacTahoe theme, icons, and cursor theme into recovery environment..."
+$SUDO mkdir -p "$ROOTFS_REC/usr/share/themes" "$ROOTFS_REC/usr/share/icons"
+
+# 1. MacTahoe GTK Theme
+if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark" ]; then
+    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark" ]; then
+    $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+elif [ -d "/usr/share/themes/MacTahoe-Dark" ]; then
+    $SUDO cp -r "/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+else
+    TEMP_THEME="/tmp/pulsaros-recovery-mactahoe"
+    rm -rf "$TEMP_THEME"
+    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-gtk-theme" "$TEMP_THEME" 2>/dev/null || true
+    if [ -d "$TEMP_THEME" ]; then
+        $SUDO cp -r "$TEMP_THEME/src/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/" 2>/dev/null || true
+        rm -rf "$TEMP_THEME"
+    fi
+fi
+
+# 2. MacTahoe Icons and Cursors
+if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe-blue-dark" ]; then
+    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe-blue-dark" ]; then
+    $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+elif [ -d "/usr/share/icons/MacTahoe-blue-dark" ]; then
+    $SUDO cp -r "/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+else
+    TEMP_ICON="/tmp/pulsaros-recovery-mactahoe-icons"
+    rm -rf "$TEMP_ICON"
+    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-icon-theme" "$TEMP_ICON" 2>/dev/null || true
+    if [ -d "$TEMP_ICON" ]; then
+        $SUDO cp -r "$TEMP_ICON/dist/MacTahoe"* "$ROOTFS_REC/usr/share/icons/" 2>/dev/null || true
+        rm -rf "$TEMP_ICON"
+    fi
+fi
+
+# 3. Configure GTK-3.0, GTK-4.0, Xcursor and environment
+$SUDO mkdir -p "$ROOTFS_REC/etc/gtk-3.0" "$ROOTFS_REC/home/live/.config/gtk-3.0" "$ROOTFS_REC/home/live/.config/gtk-4.0" "$ROOTFS_REC/root/.config/gtk-3.0" "$ROOTFS_REC/root/.config/gtk-4.0" "$ROOTFS_REC/etc/skel/.config/gtk-3.0" "$ROOTFS_REC/etc/skel/.config/gtk-4.0"
+
+$SUDO bash -c "cat << 'GTK3CONF' > '$ROOTFS_REC/etc/gtk-3.0/settings.ini'
+[Settings]
+gtk-theme-name = MacTahoe-Dark
+gtk-icon-theme-name = MacTahoe-blue-dark
+gtk-cursor-theme-name = MacTahoe-blue-dark
+gtk-cursor-theme-size = 24
+gtk-application-prefer-dark-theme = 1
+gtk-font-name = Inter 10
+GTK3CONF"
+
+$SUDO cp -f "$ROOTFS_REC/etc/gtk-3.0/settings.ini" "$ROOTFS_REC/home/live/.config/gtk-3.0/settings.ini"
+$SUDO cp -f "$ROOTFS_REC/etc/gtk-3.0/settings.ini" "$ROOTFS_REC/root/.config/gtk-3.0/settings.ini"
+$SUDO cp -f "$ROOTFS_REC/etc/gtk-3.0/settings.ini" "$ROOTFS_REC/etc/skel/.config/gtk-3.0/settings.ini"
+
+if [ -d "$ROOTFS_REC/usr/share/themes/MacTahoe-Dark/gtk-4.0" ]; then
+    $SUDO cp -rf "$ROOTFS_REC/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$ROOTFS_REC/home/live/.config/gtk-4.0/" 2>/dev/null || true
+    $SUDO cp -rf "$ROOTFS_REC/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$ROOTFS_REC/root/.config/gtk-4.0/" 2>/dev/null || true
+    $SUDO cp -rf "$ROOTFS_REC/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$ROOTFS_REC/etc/skel/.config/gtk-4.0/" 2>/dev/null || true
+fi
+
+# Set Xresources for MacTahoe cursors
+$SUDO bash -c "cat << 'XRES' > '$ROOTFS_REC/home/live/.Xresources'
+Xcursor.theme: MacTahoe-blue-dark
+Xcursor.size: 24
+XRES"
+$SUDO cp -f "$ROOTFS_REC/home/live/.Xresources" "$ROOTFS_REC/etc/skel/.Xresources"
+$SUDO cp -f "$ROOTFS_REC/home/live/.Xresources" "$ROOTFS_REC/root/.Xresources"
+
+# Configure environment variables
+$SUDO bash -c "cat << 'ENVVARS' >> '$ROOTFS_REC/etc/environment'
+GTK_THEME=MacTahoe-Dark
+XCURSOR_THEME=MacTahoe-blue-dark
+XCURSOR_SIZE=24
+ENVVARS"
+
+# Ensure proper ownership
+$SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
