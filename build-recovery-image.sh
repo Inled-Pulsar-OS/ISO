@@ -263,6 +263,38 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_pr
 # Ensure proper ownership of live user home directory
 $SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 
+# Install Pulsar OS Plymouth theme
+echo "🎨 Installing Pulsar OS Plymouth theme into recovery environment..."
+$SUDO mkdir -p "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth"
+if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth" ]; then
+    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+elif [ -d "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo" ]; then
+    $SUDO cp -r "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+else
+    TEMP_PLY="/tmp/pulsaros-recovery-plymouth"
+    rm -rf "$TEMP_PLY"
+    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/plymouth-macoslike" "$TEMP_PLY" 2>/dev/null || true
+    if [ -d "$TEMP_PLY" ]; then
+        $SUDO cp -r "$TEMP_PLY"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+        rm -rf "$TEMP_PLY"
+    fi
+fi
+
+if [ -d "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/images" ]; then
+    $SUDO mv "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/images"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/" 2>/dev/null || true
+    $SUDO rm -rf "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/images"
+fi
+
+$SUDO mkdir -p "$ROOTFS_REC/etc/plymouth"
+$SUDO bash -c "cat << 'PLYCONF' > '$ROOTFS_REC/etc/plymouth/plymouthd.conf'
+[Daemon]
+Theme=pulsar-plymouth
+ShowDelay=0
+DeviceTimeout=8
+UseFirmwareBackground=false
+UseSimpledrm=false
+PLYCONF"
+
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     echo 'root:root' | chpasswd
@@ -337,7 +369,7 @@ $SUDO mount --bind /dev "$ROOTFS_REC/dev" 2>/dev/null || true
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || true
     if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-        plymouth-set-default-theme spinner 2>/dev/null || true
+        plymouth-set-default-theme pulsar-plymouth 2>/dev/null || plymouth-set-default-theme spinner 2>/dev/null || true
     fi
     update-initramfs -u -k all
 "
