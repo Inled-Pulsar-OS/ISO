@@ -34,6 +34,10 @@
 
 set -e
 
+ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$ISO_DIR"
+BUILD_DIR="$ISO_DIR/build"
+
 # Guardar argumentos originales para la auto-elevación antes de ser consumidos por shift
 ORIGINAL_ARGS=("$@")
 
@@ -475,11 +479,16 @@ cleanup() {
     $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
     $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
-    
     # Restore original DNS config in target if backup exists
     # Restaurar DNS original en el target si quedó copia
     if [ -f "$ROOTFS_TARGET/etc/resolv.conf.bak" ]; then
         $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
+    fi
+
+    # Restore host KVM node permissions
+    if [ -e /dev/kvm ]; then
+        $SUDO chmod 666 /dev/kvm 2>/dev/null || true
+        $SUDO chown root:kvm /dev/kvm 2>/dev/null || true
     fi
 }
 
