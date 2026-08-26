@@ -496,6 +496,7 @@ $SUDO mksquashfs "$ROOTFS_REC" "$SQUASHFS_REC" \
     -comp xz \
     -b 1048576 \
     -Xdict-size 100% \
+    -processors $(nproc) \
     -wildcards \
     -e "var/cache/apt/archives/*" \
     -e "var/lib/apt/lists/*" \
