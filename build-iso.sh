@@ -1807,6 +1807,7 @@ echo "📦 Compressing rootfs into SquashFS..."
         -noappend \
         -comp xz \
         -Xbcj x86 \
+        -processors $(nproc) \
         -e proc/* \
         -e sys/* \
         -e dev/* \
