@@ -403,6 +403,7 @@ fi
 
 # Paths in the project / Rutas del proyecto
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$ISO_DIR"
 BUILD_DIR="$ISO_DIR/build"
 
 # Get the original user who ran the script to find their home and run makepkg
@@ -1957,6 +1958,11 @@ menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class o
     initrd /live/initrd
 }
 
+menuentry "Pulsar OS Recovery (Debian)" --class pulsaros-recovery --class os-recovery --class gnu-linux {
+    linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash
+    initrd /recovery/initramfs-recovery.img
+}
+
 menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class terminal --class gnu-linux {
     linux /live/vmlinuz $DEBUG_PARAMS
     initrd /live/initrd
@@ -2007,6 +2013,11 @@ menuentry "Pulsar OS Live (RAM)" {
 menuentry "Pulsar OS Live (Normal)" {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
+}
+
+menuentry "Pulsar OS Recovery" {
+    linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash
+    initrd /recovery/initramfs-recovery.img
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
@@ -2115,6 +2126,13 @@ menuentry "Pulsar OS Live (Normal)" {
     options "$KERNEL_PARAMS"
 }
 
+menuentry "Pulsar OS Recovery" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
+    loader /recovery/vmlinuz-recovery
+    initrd /recovery/initramfs-recovery.img
+    options "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash"
+}
+
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_debug.png
     loader /EFI/BOOT/vmlinuz
@@ -2147,6 +2165,12 @@ menuentry "Pulsar OS Live (Normal)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
+}
+
+menuentry "Pulsar OS Recovery" {
+    loader /recovery/vmlinuz-recovery
+    initrd /recovery/initramfs-recovery.img
+    options "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash"
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
