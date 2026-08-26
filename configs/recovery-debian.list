@@ -62,3 +62,6 @@ desktop-file-utils
 
 # Auxiliary Recovery Utilities
 gparted
+plymouth
+plymouth-themes
+plymouth-x11
