@@ -232,6 +232,7 @@ $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/home/live/.xinitrc'
 #!/bin/sh
 xsetroot -solid '#18181b'
 xset s off -dpms
+xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 /usr/bin/pulsar-recovery-assistant &
 exec /usr/bin/fluxbox
 XINIT"
@@ -240,6 +241,7 @@ $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
 #!/bin/sh
 # Start background color
 xsetroot -solid '#18181b'
+xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 
 # Launch the Rust recovery assistant in fullscreen
 /usr/bin/pulsar-recovery-assistant &
@@ -251,6 +253,15 @@ FLUX_STARTUP"
 $SUDO chmod +x "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/home/live/.fluxbox/startup"
 $SUDO cp -f "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/etc/skel/.xinitrc"
 $SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
+
+# Configure passwordless sudo and X11 display preservation for live user
+$SUDO mkdir -p "$ROOTFS_REC/etc/sudoers.d"
+$SUDO bash -c "cat << 'SUDOERS' > '$ROOTFS_REC/etc/sudoers.d/live'
+live ALL=(ALL:ALL) NOPASSWD: ALL
+Defaults:live !requiretty
+Defaults:live env_keep += \"DISPLAY XAUTHORITY WAYLAND_DISPLAY\"
+SUDOERS"
+$SUDO chmod 0440 "$ROOTFS_REC/etc/sudoers.d/live"
 
 # Auto-start X on tty1 login
 $SUDO bash -c "cat << 'PROFILE' >> '$ROOTFS_REC/home/live/.bash_profile'
