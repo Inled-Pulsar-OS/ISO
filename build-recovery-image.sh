@@ -336,6 +336,9 @@ $SUDO mount --bind /dev "$ROOTFS_REC/dev" 2>/dev/null || true
 
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || true
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        plymouth-set-default-theme spinner 2>/dev/null || true
+    fi
     update-initramfs -u -k all
 "
 
