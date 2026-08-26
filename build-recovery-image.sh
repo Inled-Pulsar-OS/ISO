@@ -217,9 +217,10 @@ $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"
 
 $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/home/live/.xinitrc'
 #!/bin/sh
-xsetroot -solid '#1e1e24'
+xsetroot -solid '#18181b'
 xset s off -dpms
-exec fluxbox
+/usr/bin/pulsar-recovery-assistant &
+exec /usr/bin/fluxbox
 XINIT"
 
 $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
@@ -253,13 +254,17 @@ $SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     echo 'root:root' | chpasswd
     echo 'live:live' | chpasswd
-    passwd -u root 2>/dev/null || true
     echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
     echo 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0' > /etc/fstab
     systemctl mask networking.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
     systemctl mask systemd-fsck-root.service systemd-fsck@.service systemd-remount-fs.service e2scrub_reap.service 2>/dev/null || true
     systemctl set-default graphical.target 2>/dev/null || true
 "
+
+# Force-unlock root in /etc/shadow by removing lock prefix (! or !!)
+# passwd -u can fail silently; sed is deterministic and cannot fail here.
+$SUDO sed -i 's/^root:!!:/root::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
+$SUDO sed -i 's/^root:!:/root::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
 
 # Remove OnFailure=emergency.target from local-fs.target to prevent fallback on overlayfs
 $SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/local-fs.target.d"
@@ -269,20 +274,23 @@ OnFailure=
 LOCALFS"
 
 # Configure emergency and rescue services to provide direct root shell without password prompt
-$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/emergency.service.d" "$ROOTFS_REC/etc/systemd/system/rescue.service.d"
-$SUDO bash -c "cat << 'EMERG' > '$ROOTFS_REC/etc/systemd/system/emergency.service.d/override.conf'
+# Write overrides to BOTH /etc/systemd/ and /run/systemd/ so they are found regardless
+# of whether systemd in the initramfs uses the overlay or tmpfs as its config root.
+for _d in "$ROOTFS_REC/etc/systemd/system" "$ROOTFS_REC/run/systemd/system"; do
+    $SUDO mkdir -p "$_d/emergency.service.d" "$_d/rescue.service.d"
+    $SUDO bash -c "cat << 'EMERG' > '$_d/emergency.service.d/override.conf'
 [Service]
 Environment=SYSTEMD_SULOGIN_FORCE=1
 ExecStart=
 ExecStart=-/bin/sh -c 'exec /bin/bash'
 EMERG"
-
-$SUDO bash -c "cat << 'RESC' > '$ROOTFS_REC/etc/systemd/system/rescue.service.d/override.conf'
+    $SUDO bash -c "cat << 'RESC' > '$_d/rescue.service.d/override.conf'
 [Service]
 Environment=SYSTEMD_SULOGIN_FORCE=1
 ExecStart=
 ExecStart=-/bin/sh -c 'exec /bin/bash'
 RESC"
+done
 
 # Configure kernel modules for live-boot overlay in initramfs
 $SUDO bash -c "cat << 'MODS' > '$ROOTFS_REC/etc/initramfs-tools/modules'
@@ -303,36 +311,6 @@ LIVE_BOOT_COMPONENTS=\"yes\"
 LIVE_USERNAME=\"live\"
 LIVE_USER_DEFAULT_GROUPS=\"sudo audio video plugdev disk users input\"
 LIVECONF"
-
-# Inject emergency/rescue shell override INTO the initramfs itself.
-# If live-boot fails to find the SquashFS, systemd enters emergency mode from
-# the initramfs — the override in the rootfs SquashFS is never mounted at that
-# point, so it must be baked into the initramfs via a hook.
-$SUDO mkdir -p "$ROOTFS_REC/etc/initramfs-tools/hooks"
-$SUDO bash -c "cat << 'HOOK' > '$ROOTFS_REC/etc/initramfs-tools/hooks/recovery-emergency'
-#!/bin/sh
-PREREQ=\"\"
-prereqs() { echo \"\$PREREQ\"; }
-case \"\$1\" in prereqs) prereqs; exit 0;; esac
-. /usr/share/initramfs-tools/hook-functions
-mkdir -p \"\${DESTDIR}/etc/systemd/system/emergency.service.d\"
-mkdir -p \"\${DESTDIR}/etc/systemd/system/rescue.service.d\"
-cat > \"\${DESTDIR}/etc/systemd/system/emergency.service.d/override.conf\" << 'OVERRIDE'
-[Service]
-Environment=SYSTEMD_SULOGIN_FORCE=1
-ExecStart=
-ExecStart=-/bin/sh
-OVERRIDE
-cat > \"\${DESTDIR}/etc/systemd/system/rescue.service.d/override.conf\" << 'OVERRIDE'
-[Service]
-Environment=SYSTEMD_SULOGIN_FORCE=1
-ExecStart=
-ExecStart=-/bin/sh
-OVERRIDE
-# Copy root password state into initramfs so sulogin can authenticate
-cp /etc/shadow \"\${DESTDIR}/etc/shadow\" 2>/dev/null || true
-HOOK"
-$SUDO chmod +x "$ROOTFS_REC/etc/initramfs-tools/hooks/recovery-emergency"
 
 # ==============================================================================
 # PHASE 4: Generate initramfs, kernel, and SquashFS
@@ -381,6 +359,19 @@ $SUDO mksquashfs "$ROOTFS_REC" "$SQUASHFS_REC" \
     -e "tmp/*" \
     -e "var/tmp/*" \
     -noappend
+
+# Verify SquashFS was generated correctly
+if [ ! -f "$SQUASHFS_REC" ] || [ ! -s "$SQUASHFS_REC" ]; then
+    echo "❌ Error: Recovery SquashFS is missing or empty: $SQUASHFS_REC"
+    exit 1
+fi
+SQUASHFS_SIZE=$(du -h "$SQUASHFS_REC" | cut -f1)
+echo "✅ Recovery SquashFS verified: $SQUASHFS_REC ($SQUASHFS_SIZE)"
+echo ""
+echo "📋 Boot params expected by live-boot:"
+echo "   boot=live live-media=any live-media-path=live"
+echo "   → SquashFS must be at: <partition>/live/filesystem.squashfs"
+echo ""
 
 # Clean up working rootfs (the base is kept cached)
 echo "🧹 Cleaning working rootfs..."
