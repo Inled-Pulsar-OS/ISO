@@ -1816,21 +1816,6 @@ echo "📦 Compressing rootfs into SquashFS..."
     echo "📦 Exporting standalone recovery SquashFS to $RECOVERY_SQUASHFS..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
-    # Build dedicated Debian Recovery environment (always — base is cached internally)
-    REC_OUT="$SCRIPT_DIR/build/recovery-out"
-    if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        echo "📦 Building dedicated Debian Recovery environment..."
-        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
-    fi
-
-    if [ -f "$REC_OUT/filesystem.squashfs" ]; then
-        echo "📦 Staging dedicated Debian Recovery environment into ISO..."
-        $SUDO mkdir -p "$ISO_STAGING/recovery"
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
-        $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery" 2>/dev/null || true
-        $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img" 2>/dev/null || true
-    fi
-
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 if [ "$DISTRO" = "arch" ]; then
     # Already copied and configured above, just define the variables for subsequent steps
