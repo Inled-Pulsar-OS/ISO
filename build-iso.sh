@@ -1826,6 +1826,12 @@ echo "📦 Compressing rootfs into SquashFS..."
     echo "📦 Exporting standalone recovery SquashFS to $RECOVERY_SQUASHFS..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
+    # Stage base OS image into standard paths inside ISO staging for offline recovery partition deployment
+    $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64" "$ROOTFS_TARGET/recovery/images"
+    $SUDO cp -f "$SQUASHFS_OUT" "$ISO_STAGING/images/pulsaros-base.squashfs"
+    $SUDO cp -f "$SQUASHFS_OUT" "$ISO_STAGING/arch/x86_64/airootfs.sfs"
+    $SUDO cp -f "$SQUASHFS_OUT" "$ROOTFS_TARGET/recovery/images/pulsaros-base.squashfs"
+
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 if [ "$DISTRO" = "arch" ]; then
     # Already copied and configured above, just define the variables for subsequent steps
