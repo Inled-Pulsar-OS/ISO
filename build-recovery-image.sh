@@ -31,6 +31,19 @@ echo "======================================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 
+cleanup_rec() {
+    for mp in "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev" "$BASE_DIR/dev/pts" "$BASE_DIR/dev" "$BASE_DIR/sys" "$BASE_DIR/proc"; do
+        if [ -d "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
+            $SUDO umount -l "$mp" 2>/dev/null || true
+        fi
+    done
+    if [ -e /dev/kvm ]; then
+        $SUDO chmod 666 /dev/kvm 2>/dev/null || true
+        $SUDO chown root:kvm /dev/kvm 2>/dev/null || true
+    fi
+}
+trap cleanup_rec EXIT INT TERM
+
 # base-recovery: cached clean Debian rootfs (only rebuilt when missing or package list changes)
 # rootfs-recovery: fresh clone from base, configured every build, then discarded
 BASE_DIR="$BUILD_DIR/base-recovery"
