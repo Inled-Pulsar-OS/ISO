@@ -1793,6 +1793,12 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
         fi
     fi
 
+    # Remove unwanted GNOME extensions from rootfs
+    echo "🧹 Removing unwanted GNOME extensions (places-menu, window-list)..."
+    $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/search-light@icedman.github.com" 2>/dev/null || true
+
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
 echo "📦 Compressing rootfs into SquashFS..."
 # Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
