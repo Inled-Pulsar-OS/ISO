@@ -277,6 +277,17 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_pr
 # Ensure proper ownership of live user home directory
 $SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 
+# Configure live-boot shutdown to poweroff/reboot cleanly without media removal prompt
+$SUDO mkdir -p "$ROOTFS_REC/etc/live" "$ROOTFS_REC/etc/default"
+$SUDO bash -c "cat << 'LIVECONF' > '$ROOTFS_REC/etc/live/boot.conf'
+LIVE_NOPROMPT=yes
+LIVECONF"
+$SUDO bash -c "cat << 'LIVETOOLS' > '$ROOTFS_REC/etc/default/live-tools'
+OPTIONS=\"--noprompt\"
+LIVETOOLS"
+$SUDO rm -f "$ROOTFS_REC/lib/systemd/system-shutdown/live-tools.shutdown" 2>/dev/null || true
+$SUDO rm -f "$ROOTFS_REC/usr/lib/systemd/system-shutdown/live-tools.shutdown" 2>/dev/null || true
+
 # Install Pulsar OS Plymouth theme
 echo "🎨 Installing Pulsar OS Plymouth theme into recovery environment..."
 $SUDO mkdir -p "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth"
