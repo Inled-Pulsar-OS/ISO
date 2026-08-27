@@ -589,8 +589,11 @@ if [ ! -d "$ROOTFS_BASE/etc" ]; then
         # Bootstrap Arch Linux using pacstrap
         # Create clean pacman.conf with only official Arch repos to avoid
         # conflicts from third-party repos
+        # NOTE: the mirror is pinned to $MIRROR (Arch official by default) so the
+        # build does NOT depend on the host OS's repositories -> reproducible
+        # builds regardless of the machine that runs build-iso.sh
         CLEAN_PACMAN_CONF="/tmp/pulsaros-pacman-$$.conf"
-        cat > "$CLEAN_PACMAN_CONF" <<'CLEANEof'
+        cat > "$CLEAN_PACMAN_CONF" <<CLEANEof
 [options]
 HoldPkg = pacman glibc
 Architecture = auto
@@ -600,19 +603,37 @@ NoProgressBar
 ParallelDownloads = 5
 
 [core]
-Include = /etc/pacman.d/mirrorlist
+Server = $MIRROR
 
 [extra]
-Include = /etc/pacman.d/mirrorlist
+Server = $MIRROR
 
 [multilib]
-Include = /etc/pacman.d/mirrorlist
+Server = $MIRROR
 CLEANEof
 
         mkdir -p "$ROOTFS_BASE"
-        $SUDO pacstrap -c -C "$CLEAN_PACMAN_CONF" -K "$ROOTFS_BASE" $PACKAGE_LIST
+
+        # Seed an Arch-pinned pacman keyring BEFORE pacstrap so package signatures
+        # validate during the bootstrap (pacstrap -K would start with an empty
+        # keyring and every signature check would fail). Copying the Arch keyring
+        # from the host makes the build reproducible and host-agnostic.
+        $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
+        if [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
+            $SUDO cp /usr/share/pacman/keyrings/archlinux.gpg /usr/share/pacman/keyrings/archlinux-trusted \
+                /usr/share/pacman/keyrings/archlinux-revoked "$ROOTFS_BASE/usr/share/pacman/keyrings/"
+        else
+            echo "⚠️  archlinux-keyring not found on host - signatures may fail during bootstrap"
+        fi
+
+        # -M: do not copy the host's mirrorlist into the target (reproducibility)
+        # (no -K: keyring already populated above so signature checks pass)
+        $SUDO pacstrap -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
         rm -f "$CLEAN_PACMAN_CONF"
-        
+
+        # Write the pinned mirrorlist inside the base rootfs as well
+        echo "Server = $MIRROR" | $SUDO tee "$ROOTFS_BASE/etc/pacman.d/mirrorlist" > /dev/null
+
         # Save the actually used package list in the base cache for future diffs
         grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
         
