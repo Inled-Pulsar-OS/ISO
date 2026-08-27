@@ -56,8 +56,10 @@ feh
 # Graphic Libraries for Rust Recovery Assistant (GTK4 / Libadwaita)
 libgtk-4-1
 libadwaita-1-0
+librsvg2-common
 gsettings-desktop-schemas
 adwaita-icon-theme
+hicolor-icon-theme
 desktop-file-utils
 
 # Auxiliary Recovery Utilities
