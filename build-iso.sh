@@ -2127,13 +2127,6 @@ menuentry "Pulsar OS Live (Normal)" {
     options "$KERNEL_PARAMS"
 }
 
-menuentry "Pulsar OS Recovery" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
-    loader /recovery/vmlinuz-recovery
-    initrd /recovery/initramfs-recovery.img
-    options "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash"
-}
-
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_debug.png
     loader /EFI/BOOT/vmlinuz
@@ -2166,12 +2159,6 @@ menuentry "Pulsar OS Live (Normal)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$KERNEL_PARAMS"
-}
-
-menuentry "Pulsar OS Recovery" {
-    loader /recovery/vmlinuz-recovery
-    initrd /recovery/initramfs-recovery.img
-    options "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash"
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
