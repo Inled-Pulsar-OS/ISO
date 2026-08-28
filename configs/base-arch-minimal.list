@@ -46,6 +46,7 @@ breeze
 # ── Networking ───────────────────────────────────────────────────────────────
 networkmanager
 network-manager-applet
+iputils
 wpa_supplicant
 bluez
 bluez-utils
