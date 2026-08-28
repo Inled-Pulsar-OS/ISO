@@ -1006,7 +1006,7 @@ $pkg_name"
 
             # Pin our custom nautilus so the following -Syu doesn't replace it with upstream
             if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
-                echo 'IgnorePkg = nautilus' >> /etc/pacman.conf
+                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus' /etc/pacman.conf
             fi
 
             # Install remaining dependencies and packages.
