@@ -37,9 +37,11 @@ dosfstools
 squashfs-tools
 parted
 efibootmgr
+zstd
 
 # Networking
 network-manager
+network-manager-gnome
 wpasupplicant
 wireless-tools
 
