@@ -1,0 +1,165 @@
+# =============================================================================
+# Pulsar OS - Minimal Arch Package List
+# =============================================================================
+# Stripped-down list for lightweight ISO (~2-3GB compressed target).
+# Heavy packages (Docker, VM tools, multimedia, full firmware) are installed
+# post-install by recovery.py when the system is deployed to disk.
+# =============================================================================
+
+# ── System Base ──────────────────────────────────────────────────────────────
+linux
+pacman
+# linux-headers: solo para DKMS post-install (broadcom, nvidia)
+systemd
+systemd-sysvcompat
+udev
+iproute2
+procps-ng
+dhcpcd
+bash-completion
+sudo
+shadow
+mkinitcpio
+pam
+util-linux
+dbus
+
+# ── GNOME Desktop (core only) ────────────────────────────────────────────────
+gnome-shell
+gnome-session
+gnome-control-center
+gnome-terminal
+gnome-tweaks
+dconf
+
+# ── Display Manager ──────────────────────────────────────────────────────────
+sddm
+qt6-imageformats
+qt6-declarative
+qt6-5compat
+qt6-svg
+qt6-wayland
+kirigami
+kdeclarative
+breeze
+
+# ── Networking ───────────────────────────────────────────────────────────────
+networkmanager
+network-manager-applet
+wpa_supplicant
+bluez
+bluez-utils
+rfkill
+ca-certificates
+
+# ── X11 / Wayland ───────────────────────────────────────────────────────────
+xorg-xwayland
+xorg-server
+polkit
+accountsservice
+at-spi2-core
+
+# ── MacTahoe Theme Dependencies ──────────────────────────────────────────────
+sassc
+glib2
+libxml2
+
+# ── Bootloader ───────────────────────────────────────────────────────────────
+grub
+efibootmgr
+
+# ── File Manager & Portals ───────────────────────────────────────────────────
+nautilus
+file-roller
+gnome-keyring
+xdg-desktop-portal-gnome
+xdg-desktop-portal
+xdg-user-dirs
+xdg-utils
+gvfs
+gvfs-mtp
+
+# ── Audio (PipeWire) ────────────────────────────────────────────────────────
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pavucontrol
+alsa-utils
+
+# ── Text Editors ─────────────────────────────────────────────────────────────
+nano
+# vim: solo instalado post-install si se necesita
+gnome-text-editor
+
+# ── System Utilities (lightweight) ───────────────────────────────────────────
+e2fsprogs
+dosfstools
+ntfs-3g
+gparted
+gnome-system-monitor
+htop
+zstd
+# p7zip: redundante con zip/unzip
+zip
+pv
+wget
+curl
+unzip
+git
+
+# ── Graphics / GPU (essential only) ──────────────────────────────────────────
+mesa
+virglrenderer
+mesa-utils
+xf86-video-amdgpu
+xf86-video-intel
+xf86-video-nouveau
+vulkan-intel
+vulkan-radeon
+libva-mesa-driver
+intel-media-driver
+
+# ── CPU Microcode ────────────────────────────────────────────────────────────
+intel-ucode
+amd-ucode
+
+# ── Firmware (essential only) ───────────────────────────────────────────────
+# NOTE: linux-firmware meta-package is ~1GB. Use targeted sub-packages.
+# GPU firmware is loaded from initramfs via the kms hook.
+linux-firmware-amdgpu
+linux-firmware-intel
+linux-firmware-nvidia
+
+# ── Flatpak (for post-install apps) ──────────────────────────────────────────
+flatpak
+
+# ── GNOME Extensions (official repos only) ───────────────────────────────────
+gnome-shell-extensions
+gnome-shell-extension-appindicator
+
+# ── Fildem HUD / Global Menu Dependencies ────────────────────────────────────
+# Estos se pueden instalar post-install si se necesita el global menu
+python-gobject
+# python-cairo es requerido por welcome.py (import cairo) y el OOTB — sin él el
+# welcome/OOTB crashea con 'No module named cairo'.
+python-cairo
+python-dbus
+bamf
+libkeybinder3
+gtk3
+
+# ── Development / Build Tools (minimal) ──────────────────────────────────────
+# git is listed above; no docker, no full dev stack
+
+# ── GNOME Apps (essential only) ──────────────────────────────────────────────
+gnome-calculator
+gnome-calendar
+
+# ── Arch ISO live support ────────────────────────────────────────────────────
+# CRÍTICO: archiso + mkinitcpio-archiso proveen los hooks de arranque live
+# 'archiso' y 'archiso_loop_mnt' sin los cuales mkinitcpio falla y el ISO no bootea.
+# NO eliminar estos paquetes de la lista.
+archiso
+mkinitcpio-archiso
+squashfs-tools

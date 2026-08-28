@@ -55,6 +55,7 @@ BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
 WITH_NVIDIA=false
 DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
+MINIMAL=false       # Minimal ISO: trimmed package list for ~2-3GB target
 PULSAR_VERSION=""
 
 while [[ $# -gt 0 ]]; do
@@ -91,6 +92,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --nvidia)
             WITH_NVIDIA=true
+            shift
+            ;;
+        --minimal)
+            MINIMAL=true
+            shift
+            ;;
+        --full)
+            MINIMAL=false
             shift
             ;;
         --arch)
@@ -442,9 +451,14 @@ else
     ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO"
 fi
 
-# Select package list based on distro
+# Select package list based on distro and minimal flag
 if [ "$DISTRO" = "arch" ]; then
-    PACKAGE_LIST_FILE="$ISO_DIR/configs/base-arch.list"
+    if $MINIMAL; then
+        echo "🪶 Minimal mode: using trimmed package list (~2-3GB target)"
+        PACKAGE_LIST_FILE="$ISO_DIR/configs/base-arch-minimal.list"
+    else
+        PACKAGE_LIST_FILE="$ISO_DIR/configs/base-arch.list"
+    fi
 else
     PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
 fi
@@ -615,13 +629,25 @@ CLEANEof
         mkdir -p "$ROOTFS_BASE"
 
         # Seed an Arch-pinned pacman keyring BEFORE pacstrap so package signatures
-        # validate during the bootstrap (pacstrap -K would start with an empty
-        # keyring and every signature check would fail). Copying the Arch keyring
-        # from the host makes the build reproducible and host-agnostic.
-        $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
+        # validate during the bootstrap. We populate /etc/pacman.d/gnupg (where pacman
+        # validates signatures) using the host's archlinux-keyring; the archlinux-keyring
+        # package is still installed by pacstrap and owns /usr/share/pacman/keyrings/*
+        # (so we must NOT leave files there or the package install would conflict).
+        #
+        # pacstrap -K starts with an EMPTY keyring, which makes every signature check
+        # fail, so we seed a populated gnupg dir instead.
         if [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
+            $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
             $SUDO cp /usr/share/pacman/keyrings/archlinux.gpg /usr/share/pacman/keyrings/archlinux-trusted \
                 /usr/share/pacman/keyrings/archlinux-revoked "$ROOTFS_BASE/usr/share/pacman/keyrings/"
+            $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --init
+            $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --populate archlinux
+            # Remove our temporary keyring files so the archlinux-keyring package
+            # can install cleanly; the already-populated gnupg dir remains for
+            # signature verification during pacstrap.
+            $SUDO rm -f "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux.gpg \
+                "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-trusted \
+                "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-revoked
         else
             echo "⚠️  archlinux-keyring not found on host - signatures may fail during bootstrap"
         fi
@@ -728,7 +754,7 @@ fi
 if [ -f "$ROOTFS_TARGET/etc/resolv.conf" ]; then
     $SUDO cp "$ROOTFS_TARGET/etc/resolv.conf" "$ROOTFS_TARGET/etc/resolv.conf.bak"
 fi
-echo "nameserver 8.8.8.8" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
 
 # English: Create Plymouth theme directory and symlink in advance to satisfy initramfs hooks
 # Español: Crear el directorio y el enlace simbólico del tema Plymouth con antelación para satisfacer los hooks de initramfs
@@ -759,7 +785,9 @@ SigLevel = Optional TrustAll
 LocalFileSigLevel = Optional
 #CheckSpace
 NoProgressBar
-ParallelDownloads = 5
+# Downloads are serial (one at a time) to avoid GitHub release rate-limiting that
+# causes intermittent 404s when pacman fetches the [inled] repo (redirects to GitHub).
+ParallelDownloads = 1
 
 [inled]
 SigLevel = Optional TrustAll
@@ -913,6 +941,7 @@ $pkg_name"
         fi
 
         echo "📂 Using local packages from: $LOCAL_PKGS_DIR"
+
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
         
@@ -932,6 +961,14 @@ $pkg_name"
 
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+            # Verify pacman is available in chroot
+            if ! command -v pacman >/dev/null 2>&1; then
+                echo '❌ ERROR: pacman not found in chroot. ROOTFS may be incomplete.'
+                echo '   Delete build/rootfs-base-* and rebuild.'
+                exit 1
+            fi
 
             # Init pacman keyring
             mkdir -p /etc/pacman.d/gnupg
@@ -941,19 +978,19 @@ $pkg_name"
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
             # Init keyring, import Inled repo key first, then sync and populate
-            pacman-key --init
+            /usr/bin/pacman-key --init
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
-                pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-                pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+                /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
             fi
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
-            pacman -Syy --noconfirm
-            pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg
-            pacman-key --populate archlinux
+            /usr/bin/pacman -Syy --noconfirm
+            /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg
+            /usr/bin/pacman-key --populate archlinux
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
@@ -972,7 +1009,8 @@ $pkg_name"
                 echo 'IgnorePkg = nautilus' >> /etc/pacman.conf
             fi
 
-            # Install remaining dependencies and packages
+            # Install remaining dependencies and packages.
+            # droidtux/macboat/appinstall/seafari come from the [inled] repo via pacman.
             pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 droidtux \
@@ -989,8 +1027,17 @@ $pkg_name"
         echo "✅ Successfully installed local Arch packages."
     else
         echo "---🌐 PRODUCTION MODE: Installing packages from Arch repository (Inled) ---"
+
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+            # Verify pacman is available in chroot
+            if ! command -v pacman >/dev/null 2>&1; then
+                echo '❌ ERROR: pacman not found in chroot. ROOTFS may be incomplete.'
+                echo '   Delete build/rootfs-base-* and rebuild.'
+                exit 1
+            fi
 
             # Init pacman keyring
             mkdir -p /etc/pacman.d/gnupg
@@ -1000,28 +1047,29 @@ $pkg_name"
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
             # Init keyring, import Inled key, then sync and populate
-            pacman-key --init
+            /usr/bin/pacman-key --init
 
             # Import and sign Inled repo key from bundled file (before syncing Inled repo)
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
-                pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-                pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+                /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
             fi
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
-            pacman -Syy --noconfirm
-            pacman -S --noconfirm archlinux-keyring
-            pacman-key --populate archlinux
+            /usr/bin/pacman -Syy --noconfirm
+            /usr/bin/pacman -S --noconfirm archlinux-keyring
+            /usr/bin/pacman-key --populate archlinux
 
             # Arch now ships libnautilus-extension as a separate package, but our
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
-            if pacman -Q libnautilus-extension >/dev/null 2>&1; then
-                pacman -Rdd --noconfirm libnautilus-extension || true
+            if /usr/bin/pacman -Q libnautilus-extension >/dev/null 2>&1; then
+                /usr/bin/pacman -Rdd --noconfirm libnautilus-extension || true
             fi
 
             # Install Pulsar OS packages and bootloader
-            pacman -Syu --noconfirm --overwrite '*' \
+            # droidtux/macboat/appinstall/seafari come from the [inled] repo via pacman.
+            /usr/bin/pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 gnome-control-center \
                 nautilus \
@@ -1065,7 +1113,8 @@ $pkg_name"
     echo "🔤 Restoring full glibc local sources..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
-        pacman -Sw --noconfirm glibc >/dev/null 2>&1
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        /usr/bin/pacman -Sw --noconfirm glibc >/dev/null 2>&1
         glibc_pkg=\$(ls -1 /var/cache/pacman/pkg/glibc-*.pkg.tar.zst 2>/dev/null | tail -n 1)
         if [ -z \"\$glibc_pkg\" ]; then
             echo '❌ No se pudo descargar glibc para restaurar i18n' >&2
@@ -1429,6 +1478,7 @@ fi
 echo "⚙️ Customizing Spotlight launcher..."
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     set -e
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     if [ -f /usr/share/applications/pulsaros-spotlight.desktop ]; then
         sed -i 's/^Icon=.*/Icon=view-app-grid/' /usr/share/applications/pulsaros-spotlight.desktop
     elif [ -f /usr/share/applications/spotlight-python.desktop ]; then
@@ -1453,9 +1503,10 @@ if [ "$DISTRO" = "debian" ]; then
     "
 elif [ "$DISTRO" = "arch" ]; then
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         if ! command -v winboat >/dev/null 2>&1 && [ ! -f /opt/winboat/winboat ]; then
             echo '📥 Installing Winboat on Arch (fallback)...'
-            pacman -S --noconfirm winboat-bin 2>/dev/null || {
+            /usr/bin/pacman -S --noconfirm winboat-bin 2>/dev/null || {
                 mkdir -p /tmp/winboat-install
                 cd /tmp/winboat-install
                 curl -sL -o winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
@@ -1720,8 +1771,9 @@ install nvidia_uvm /bin/false
 install nvidia_drm /bin/false
 EOF
 
+    # Show the actual error (not swallowed) so a failure aborts visibly.
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        mkinitcpio -P 2>/dev/null
+        mkinitcpio -P
     "
 
     # Remove the temporary modprobe config so that the Nvidia drivers can still load
@@ -1743,6 +1795,12 @@ else
 fi
 
 echo "✨ Chroot rootfs listo y estructurado correctamente en: $ROOTFS_TARGET"
+
+# Mark minimal build for post-install package installation by recovery.py
+if $MINIMAL; then
+    $SUDO touch "$ROOTFS_TARGET/etc/pulsaros-minimal-build"
+    echo "🪶 Minimal build marker placed in rootfs."
+fi
 
 # ==============================================================================
 # PHASE 7: Packaging and Live ISO Generation
@@ -1770,7 +1828,8 @@ if [ "$DISTRO" = "arch" ]; then
 
     echo "🧹 Removing file hooks and regenerating initramfs for the installed system..."
     $SUDO rm -f "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf"
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P 2>/dev/null"
+    # Show the actual error (not swallowed).
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "mkinitcpio -P"
 fi
 
 # 0. Clean temporary logs, test accounts, and unmount virtual filesystems prior to packaging
@@ -1797,18 +1856,20 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
         echo "📦 Staging dedicated Debian Recovery environment into target rootfs and ISO..."
         $SUDO mkdir -p "$ISO_STAGING/recovery" "$ISO_STAGING/recovery/live" "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/live" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/live/filesystem.squashfs"
+        # Hardlinks for ISO_STAGING (won't be rsync'd, saves disk during build)
+        $SUDO ln -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
+        $SUDO ln -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/live/filesystem.squashfs"
+        # Copies for ROOTFS_TARGET (rsync'd to disk — hardlinks cause cross-device link errors)
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/recovery/filesystem.squashfs"
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/live/filesystem.squashfs"
         $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/recovery-filesystem.squashfs"
         if [ -f "$REC_OUT/vmlinuz-recovery" ]; then
-            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
+            $SUDO ln -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
             $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/recovery/vmlinuz-recovery"
             $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/vmlinuz-recovery"
         fi
         if [ -f "$REC_OUT/initramfs-recovery.img" ]; then
-            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img"
+            $SUDO ln -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img"
             $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/recovery/initramfs-recovery.img"
             $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/initramfs-recovery.img"
         fi
@@ -1820,8 +1881,39 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/search-light@icedman.github.com" 2>/dev/null || true
 
+# ── Deep clean rootfs before compression ──────────────────────────────────
+echo "🧹 Deep-cleaning rootfs before SquashFS compression..."
+# Remove documentation and locale data to save space
+$SUDO find "$ROOTFS_TARGET/usr/share/doc" -type f -delete 2>/dev/null || true
+$SUDO find "$ROOTFS_TARGET/usr/share/man" -type f -delete 2>/dev/null || true
+$SUDO find "$ROOTFS_TARGET/usr/share/gtk-doc" -type d -exec rm -rf {} + 2>/dev/null || true
+$SUDO find "$ROOTFS_TARGET/usr/share/info" -type f -delete 2>/dev/null || true
+# Keep only essential locales (es, en, C)
+$SUDO find "$ROOTFS_TARGET/usr/share/locale" -mindepth 1 -maxdepth 1 \
+    ! -name 'es' ! -name 'es_*' ! -name 'en' ! -name 'en_*' ! -name 'C' \
+    -exec rm -rf {} + 2>/dev/null || true
+# Remove Python cache files
+$SUDO find "$ROOTFS_TARGET" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+$SUDO find "$ROOTFS_TARGET" -name "*.pyc" -delete 2>/dev/null || true
+# Remove debug symbols
+$SUDO find "$ROOTFS_TARGET" -name "*.debug" -delete 2>/dev/null || true
+# Kickstart icon cache rebuild (do NOT delete icon themes — it breaks cursors
+# and app icons, e.g. breeze for SDDM).
+# Actualiza la caché de iconos (NO borrar temas — rompe cursores e iconos).
+$SUDO find "$ROOTFS_TARGET/usr/share/icons" -type f -name 'icon-theme.cache' -delete 2>/dev/null || true
+# Remove pacman package cache inside rootfs
+$SUDO rm -rf "$ROOTFS_TARGET/var/cache/pacman/pkg"/* 2>/dev/null || true
+# Remove any remaining build artifacts
+$SUDO rm -rf "$ROOTFS_TARGET/var/cache/pacman/sync"/* 2>/dev/null || true
+# Remove unused systemd generators and tmpfiles
+$SUDO rm -rf "$ROOTFS_TARGET/usr/lib/systemd/system-generators"/*.py 2>/dev/null || true
+# Remove more redundant files
+$SUDO find "$ROOTFS_TARGET/usr/share/X11/locale" -mindepth 1 -maxdepth 1 \
+    ! -name 'en_US.UTF-8' ! -name 'es_ES.UTF-8' -exec rm -rf {} + 2>/dev/null || true
+echo "✅ Rootfs cleaned."
+
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
-echo "📦 Compressing rootfs into SquashFS..."
+echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
 # Exclude dynamic/temp directories and virtual filesystems to save space and prevent errors
 # Excluimos directorios dinámicos, temporales y sistemas de archivos virtuales para ahorrar espacio y evitar errores
     if [ "$DISTRO" = "arch" ]; then
@@ -1832,8 +1924,7 @@ echo "📦 Compressing rootfs into SquashFS..."
     fi
     $SUDO mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
-        -comp xz \
-        -Xbcj x86 \
+        -comp zstd -Xcompression-level 19 \
         -processors $(nproc) \
         -e proc/* \
         -e sys/* \
@@ -1855,8 +1946,10 @@ echo "📦 Compressing rootfs into SquashFS..."
 
     # Stage base OS image into standard paths inside ISO staging for offline recovery partition deployment
     $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64" "$ROOTFS_TARGET/recovery/images"
-    $SUDO cp -f "$SQUASHFS_OUT" "$ISO_STAGING/images/pulsaros-base.squashfs"
-    $SUDO cp -f "$SQUASHFS_OUT" "$ISO_STAGING/arch/x86_64/airootfs.sfs"
+    # Hardlinks for ISO_STAGING (won't be rsync'd)
+    $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/images/pulsaros-base.squashfs"
+    $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/arch/x86_64/airootfs.sfs"
+    # Copy for ROOTFS_TARGET (rsync'd to disk — hardlinks cause cross-device link errors)
     $SUDO cp -f "$SQUASHFS_OUT" "$ROOTFS_TARGET/recovery/images/pulsaros-base.squashfs"
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
