@@ -37,6 +37,7 @@ dosfstools
 squashfs-tools
 parted
 efibootmgr
+zstd
 
 # Networking
 network-manager
