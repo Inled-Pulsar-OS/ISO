@@ -1922,7 +1922,7 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     else
         SQUASHFS_OUT="$ISO_STAGING/live/filesystem.squashfs"
     fi
-    $SUDO mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
+    $SUDO env "PATH=/usr/bin:/usr/sbin:/sbin:/bin:$PATH" mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
         -comp zstd -Xcompression-level 19 \
         -processors $(nproc) \
@@ -1945,12 +1945,15 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
     # Stage base OS image into standard paths inside ISO staging for offline recovery partition deployment
-    $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64" "$ROOTFS_TARGET/recovery/images"
+    $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64"
     # Hardlinks for ISO_STAGING (won't be rsync'd)
     $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/images/pulsaros-base.squashfs"
     $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/arch/x86_64/airootfs.sfs"
-    # Copy for ROOTFS_TARGET (rsync'd to disk — hardlinks cause cross-device link errors)
-    $SUDO cp -f "$SQUASHFS_OUT" "$ROOTFS_TARGET/recovery/images/pulsaros-base.squashfs"
+    # NOTE: We intentionally do NOT copy the squashfs into ROOTFS_TARGET.
+    # The installer will generate a fresh recovery base image from the
+    # installed system at install time (_regenerate_base_squashfs). This
+    # avoids embedding a ~3 GB compressed image inside the live rootfs,
+    # which would bloat the ISO.
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 if [ "$DISTRO" = "arch" ]; then
