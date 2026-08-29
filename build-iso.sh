@@ -1560,9 +1560,10 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
     _iso_ver="${PULSAR_VERSION:-rolling}"
-    _iso_pretty="Pulsar OS Pear Edition"
+    _iso_base="Pulsar OS Bitten Fruit ${DISTRO^} Based"
+    _iso_pretty="$_iso_base"
     if [ -n "$PULSAR_VERSION" ] && [ "$PULSAR_VERSION" != "rolling" ]; then
-        _iso_pretty="Pulsar OS Pear Edition ($PULSAR_VERSION)"
+        _iso_pretty="$_iso_base ($PULSAR_VERSION)"
     fi
     _build_id="$(date +%Y%m%d%H%M)"
 
