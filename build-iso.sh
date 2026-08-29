@@ -1742,6 +1742,14 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
         cp -- "${img}" "${img_dest}" &
         cp_pid=$!
 
+        # The debug boot runs the initramfs hooks with `set -x`, which dumps a
+        # trace line for every command in the copy loop and floods the console.
+        # Remember the shell option state and silence the trace just for the copy
+        # loop, so on a console boot all the user sees is a single percentage.
+        _xtrace=0
+        case $- in *x*) _xtrace=1 ;; esac
+        set +x
+
         # Monitor progress in the foreground (avoids background subshell TTY/race issues)
         while kill -0 $cp_pid 2>/dev/null; do
             curr_size=$(stat -c %s "${img_dest}" 2>/dev/null || echo 0)
@@ -1750,18 +1758,16 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
             else
                 pct=0
             fi
-            curr_mb=$((curr_size / 1048576))
-            total_mb=$((total_size / 1048576))
 
             if [ "$have_plymouth" = "1" ]; then
                 (
-                    timeout 2 plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" >/dev/null 2>&1
+                    timeout 2 plymouth message --text="Copiando sistema a memoria RAM: ${pct}%" >/dev/null 2>&1
                     timeout 2 plymouth --progress="$pct" >/dev/null 2>&1
                 ) &
             else
-                # No plymouth (debug/console): overwrite a single line with the
-                # percentage instead of spamming logs. \r moves to line start.
-                printf "\r[%3d%%] Copying OS to RAM: %d / %d MB   " "$pct" "$curr_mb" "$total_mb" >/dev/console 2>/dev/null
+                # No plymouth (debug/console): overwrite a single line. Just a
+                # number + % so it does not matter how fast it scrolls.
+                printf "\r%3d%%  " "$pct" >/dev/console 2>/dev/null
             fi
             sleep 0.2
         done
@@ -1770,16 +1776,17 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
         wait $cp_pid
         rc=$?
 
-        # Print final status
-        total_mb=$((total_size / 1048576))
         if [ "$have_plymouth" = "1" ]; then
             (
-                timeout 2 plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" >/dev/null 2>&1
+                timeout 2 plymouth message --text="Copiando sistema a memoria RAM: 100%" >/dev/null 2>&1
                 timeout 2 plymouth --progress=100 >/dev/null 2>&1
             ) &
         else
-            printf "\r[100%%] Copying OS to RAM: done.                                    \n" >/dev/console 2>/dev/null
+            printf "\r100%%  \n" >/dev/console 2>/dev/null
         fi
+
+        # Restore the previous trace state for the remaining boot
+        [ "$_xtrace" = "1" ] && set -x
 
         if [ "$rc" != 0 ]; then
             echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
