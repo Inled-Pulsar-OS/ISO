@@ -145,10 +145,13 @@ python-gobject
 # python-cairo es requerido por welcome.py (import cairo) y el OOTB — sin él el
 # welcome/OOTB crashea con 'No module named cairo'.
 python-cairo
+python-numpy
 python-dbus
 bamf
 libkeybinder3
 gtk3
+gtk4
+gtk4-layer-shell
 
 # ── Development / Build Tools (minimal) ──────────────────────────────────────
 # git is listed above; no docker, no full dev stack
