@@ -878,7 +878,11 @@ $pkg_name"
         done
         unset seen_pkg_names
 
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin")
+        # cloudflare-warp-bin is bundled in the (minimal) ISO so the recovery/installer can
+        # offer the user a VPN to reach the Inled repo in regions where Cloudflare is censored.
+        # localsend-bin is an extra package offered post-install. Both must be compiled from AUR
+        # since they are not present in the official repos or the Inled repo.
+        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -1340,6 +1344,31 @@ EOF
     "
 fi
 
+# ==============================================================================
+# Cloudflare WARP for the Debian edition (installed the official way)
+#
+# The official Debian instructions add Cloudflare's own APT repo and install the
+# cloudflare-warp package from it. It is bundled in the ISO so the recovery and
+# installer can offer the user a VPN to reach the Inled repo in regions where
+# Cloudflare is censored. (On Arch we bundle cloudflare-warp-bin from the AUR.)
+# ==============================================================================
+if [ "$DISTRO" = "debian" ]; then
+    echo "🌐 Installing Cloudflare WARP (official Debian repo) in the target..."
+    # Add Cloudflare's signed-by APT source from the host to avoid nested quoting.
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
+    $SUDO bash -c 'curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output "$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg"' 2>/dev/null || true
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/apt/sources.list.d"
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/cloudflare-warp.list" > /dev/null
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends cloudflare-warp
+        systemctl enable warp-svc 2>/dev/null || true
+        apt-get clean
+    "
+fi
+
 # Dynamically adjust Calamares configuration inside chroot based on distribution and selected bootloader
 echo "⚙️ Configuring Calamares in the chroot target..."
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/calamares/modules"
@@ -1781,6 +1810,17 @@ EOF
     # Remove the temporary modprobe config so that the Nvidia drivers can still load
     # normally in the final booted system.
     $SUDO rm -f "$ROOTFS_TARGET/etc/modprobe.d/nvidia-initramfs-blacklist.conf"
+
+    # Enable the Cloudflare WARP daemon (bundled via cloudflare-warp-bin) so the
+    # recovery/installer can offer the VPN with a single "warp-cli connect" when
+    # the user has network but the Inled repo (apt.inled.es) is censored/blocked.
+    if [ -f "$ROOTFS_TARGET/usr/lib/systemd/system/warp-svc.service" ]; then
+        echo "🌐 Enabling Cloudflare WARP daemon (warp-svc)..."
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl enable warp-svc 2>/dev/null || true"
+    else
+        echo "⚠️ warp-svc.service not present in target — skipping WARP daemon enable (cloudflare-warp-bin may have failed to build)."
+    fi
+
     # Copy skeleton files to live user home directory to ensure all dconf settings and GTK4 themes are applied
     echo "⚙️ Configurando el directorio home del usuario live..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
