@@ -740,7 +740,7 @@ if [ "$DISTRO" = "arch" ]; then
     # truncated .pkg.tar.zst in the bind-mounted cache that fails its PGP
     # signature check and aborts the build with
     # "paquete no válido o dañado (firma PGP)".
-    for p in pulsaros-branding pulsaros-theme pulsaros-gnome pulsaros-global-menu \
+    for p in pulsaros-branding pulsaros-theme pulsaros-gnome sayri pulsaros-global-menu \
              pulsaros-spotlight-launcher pulsaros-sddm pulsaros-plymouth \
              pulsaros-refind pulsaros-grub pulsaros-calamares pulsaros-essential pulsaros-hibernate \
              pulsaros-welcome pulsaros-recovery pulsaros-bootsound pulsar-pear-sound-theme \
@@ -1077,6 +1077,7 @@ $pkg_name"
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
+                sayri \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1300,6 +1301,7 @@ EOF
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
+                sayri \
                 nautilus \
                 pulsaros-control-center \
                 pulsaros-global-menu \
