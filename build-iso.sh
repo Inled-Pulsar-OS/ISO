@@ -1726,9 +1726,17 @@ old_block = """    if [ "${copytoram}" = "y" ]; then
     fi"""
 
 new_block = """    if [ "${copytoram}" = "y" ]; then
-        msg ":: Copying rootfs image to RAM with progress..."
+        msg -n ":: Copying rootfs image to RAM..."
         total_size=$(stat -c %s "${img}")
         img_dest="/run/archiso/copytoram/${img_fullname}"
+
+        # Detect once whether a splash/plymouth is available. Normal boots use it
+        # (or the debug/console boot falls back to a single clean progress line on
+        # the console, so the user does not get a flood of logs from the copy).
+        have_plymouth=0
+        if command -v plymouth >/dev/null 2>&1; then
+            timeout 2 plymouth --ping >/dev/null 2>&1 && have_plymouth=1
+        fi
 
         # Start copy in the background
         cp -- "${img}" "${img_dest}" &
@@ -1745,14 +1753,17 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
             curr_mb=$((curr_size / 1048576))
             total_mb=$((total_size / 1048576))
 
-            # Send status update to Plymouth in a non-blocking background job with a timeout
-            (
-                if command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth --ping >/dev/null 2>&1; then
-                    timeout 2 plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" 2>/dev/null
-                    timeout 2 plymouth --progress="$pct" 2>/dev/null
-                fi
-            ) &
-            sleep 0.5
+            if [ "$have_plymouth" = "1" ]; then
+                (
+                    timeout 2 plymouth message --text="Copiando sistema a memoria RAM: ${pct}% (${curr_mb}MB / ${total_mb}MB)" >/dev/null 2>&1
+                    timeout 2 plymouth --progress="$pct" >/dev/null 2>&1
+                ) &
+            else
+                # No plymouth (debug/console): overwrite a single line with the
+                # percentage instead of spamming logs. \r moves to line start.
+                printf "\r[%3d%%] Copying OS to RAM: %d / %d MB   " "$pct" "$curr_mb" "$total_mb" >/dev/console 2>/dev/null
+            fi
+            sleep 0.2
         done
 
         # Re-attach and get exit status of cp
@@ -1761,12 +1772,14 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
 
         # Print final status
         total_mb=$((total_size / 1048576))
-        (
-            if command -v plymouth >/dev/null 2>&1 && timeout 2 plymouth --ping >/dev/null 2>&1; then
-                timeout 2 plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" 2>/dev/null
-                timeout 2 plymouth --progress=100 2>/dev/null
-            fi
-        ) &
+        if [ "$have_plymouth" = "1" ]; then
+            (
+                timeout 2 plymouth message --text="Copiando sistema a memoria RAM: 100% (${total_mb}MB / ${total_mb}MB)" >/dev/null 2>&1
+                timeout 2 plymouth --progress=100 >/dev/null 2>&1
+            ) &
+        else
+            printf "\r[100%%] Copying OS to RAM: done.                                    \n" >/dev/console 2>/dev/null
+        fi
 
         if [ "$rc" != 0 ]; then
             echo "ERROR: while copy \x27${img}\x27 to \x27/run/archiso/copytoram/${img_fullname}\x27"
@@ -1774,6 +1787,7 @@ new_block = """    if [ "${copytoram}" = "y" ]; then
         fi
 
         img="/run/archiso/copytoram/${img_fullname}"
+        msg "done."
     fi"""
 
 if old_block in content:
@@ -2016,12 +2030,12 @@ fi
 if [ "$DISTRO" = "arch" ]; then
     KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
     RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
-    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --"
+    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --"
     LEGACY_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --"
 else
     KERNEL_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
     RAM_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    DEBUG_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
+    DEBUG_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
     LEGACY_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
@@ -2184,7 +2198,7 @@ menuentry "Pulsar OS Recovery" {
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
     initrd /live/initrd
 }
 
@@ -2469,7 +2483,7 @@ menuentry "Pulsar OS Live (Normal)" {
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes plymouth.ignore-serial-consoles loglevel=7 rd.debug --
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
     initrd /live/initrd
 }
 
