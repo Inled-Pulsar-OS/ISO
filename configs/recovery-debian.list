@@ -13,10 +13,7 @@ passwd
 initramfs-tools
 live-boot
 live-boot-initramfs-tools
-live-config
-live-config-systemd
 live-tools
-user-setup
 libpam-modules
 libpam-systemd
 polkitd
@@ -47,7 +44,10 @@ wireless-tools
 
 # Minimal X11 & Fluxbox
 xserver-xorg-core
+xserver-xorg-legacy
 xserver-xorg-video-all
+xserver-xorg-video-fbdev
+xserver-xorg-video-vesa
 xserver-xorg-input-all
 xinit
 x11-xserver-utils

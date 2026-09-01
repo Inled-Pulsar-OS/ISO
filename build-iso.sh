@@ -368,10 +368,11 @@ fi
 if [ "$EUID" -ne 0 ]; then
     echo "🔐 This script requires superuser privileges to run."
     echo "Re-ejecutando con pkexec..."
+    SCRIPT_PATH="$ISO_DIR/$(basename "${BASH_SOURCE[0]}")"
     if command -v pkexec >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-        exec pkexec "$0" "${ORIGINAL_ARGS[@]}"
+        exec pkexec "$SCRIPT_PATH" "${ORIGINAL_ARGS[@]}"
     else
-        exec sudo "$0" "${ORIGINAL_ARGS[@]}"
+        exec sudo "$SCRIPT_PATH" "${ORIGINAL_ARGS[@]}"
     fi
 fi
 
@@ -440,13 +441,6 @@ if [ -z "$ORIGINAL_HOME" ]; then
     ORIGINAL_HOME="$HOME"
 fi
 
-# Pacman cache dir in home (not in /var/cache/pacman on root partition)
-PACMAN_CACHE_DIR="$ORIGINAL_HOME/.cache/pacman"
-mkdir -p "$PACMAN_CACHE_DIR"
-if [ "$EUID" -eq 0 ] && [ -n "$ORIGINAL_USER" ]; then
-    chown -R "$ORIGINAL_USER":"$ORIGINAL_USER" "$ORIGINAL_HOME/.cache" 2>/dev/null || true
-fi
-
 VARIANT_NAME="$BRANCH-$DISTRO"
 if $WITH_NVIDIA; then
     VARIANT_NAME="${VARIANT_NAME}-nvidia"
@@ -456,8 +450,15 @@ if $MINIMAL; then
 fi
 
 ROOTFS_BASE="$BUILD_DIR/rootfs-base-${VARIANT_NAME}"
-ROOTFS_TARGET="$BUILD_DIR/rootfs-target-${VARIANT_NAME}"
+ROOTFS_TARGET="$BUILD_DIR/rootfs-target-${VARIANT_NAME}-${BOOTLOADER}"
 ISO_STAGING="$BUILD_DIR/iso-staging-${VARIANT_NAME}-${BOOTLOADER}"
+
+# Pacman cache dir per build variant & bootloader to avoid parallel download/lock collisions
+PACMAN_CACHE_DIR="$ORIGINAL_HOME/.cache/pulsaros-pacman-${VARIANT_NAME}-${BOOTLOADER}"
+mkdir -p "$PACMAN_CACHE_DIR"
+if [ "$EUID" -eq 0 ] && [ -n "$ORIGINAL_USER" ]; then
+    chown -R "$ORIGINAL_USER":"$ORIGINAL_USER" "$ORIGINAL_HOME/.cache" 2>/dev/null || true
+fi
 
 # CPU & Resource Optimization for Parallel and Safe Builds
 TOTAL_CORES=$(nproc 2>/dev/null || echo 4)
@@ -503,6 +504,25 @@ fi
 # Detección dinámica de la ruta de chroot en el host
 CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
 
+## Helper: Unmount directory tree safely
+unmount_tree() {
+    local target_dir="$1"
+    [ -z "$target_dir" ] && return 0
+    [ ! -d "$target_dir" ] && return 0
+    awk '$2 ~ "^'"$target_dir"'/" || $2 == "'"$target_dir"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
+        $SUDO umount -l "$mp" 2>/dev/null || true
+    done
+}
+
+# Helper: Safely unmount and remove a directory without touching bind mounts
+safe_remove_dir() {
+    local target_dir="$1"
+    [ -z "$target_dir" ] && return 0
+    [ ! -d "$target_dir" ] && return 0
+    unmount_tree "$target_dir"
+    $SUDO rm -rf "$target_dir" 2>/dev/null || true
+}
+
 # Preventative cleanup function to ensure filesystems are unmounted on interruption
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
@@ -514,37 +534,39 @@ cleanup() {
         $SUDO swapoff "$ROOTFS_TARGET/swapfile" 2>/dev/null || true
     fi
 
-    $SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
-    $SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
-    $SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
-    $SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
-    $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
     # Restore original DNS config in target if backup exists
     # Restaurar DNS original en el target si quedó copia
     if [ -f "$ROOTFS_TARGET/etc/resolv.conf.bak" ]; then
         $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
     fi
 
-    # Unmount anything under this specific ROOTFS_TARGET or ISO_STAGING without touching sibling builds
-    awk '$2 ~ "^'"$ROOTFS_TARGET"'/" || $2 == "'"$ROOTFS_TARGET"'" || $2 ~ "^'"$ISO_STAGING"'/" || $2 == "'"$ISO_STAGING"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
-        $SUDO umount -l "$mp" 2>/dev/null || true
-    done
+    unmount_tree "$ROOTFS_TARGET"
+    unmount_tree "$ISO_STAGING"
 
-    # Restore host KVM node permissions
+    # Restore host KVM and PTMX node permissions
     if [ -e /dev/kvm ]; then
         $SUDO chmod 666 /dev/kvm 2>/dev/null || true
         $SUDO chown root:kvm /dev/kvm 2>/dev/null || true
     fi
+    $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
+    if [ ! -c /dev/ptmx ]; then
+        $SUDO rm -f /dev/ptmx 2>/dev/null || true
+        $SUDO mknod -m 666 /dev/ptmx c 5 2 2>/dev/null || true
+    fi
+    $SUDO chmod 666 /dev/ptmx 2>/dev/null || true
 }
 
 # Preflight: release any leftover mounts from previous interrupted builds for this specific target variant.
 preflight_cleanup() {
     echo "🔍 Checking residual mounts for ${VARIANT_NAME}..."
-    # Only unmount mounts belonging to this target variant, never touching sibling builds!
-    awk '$2 ~ "^'"$ROOTFS_TARGET"'/" || $2 == "'"$ROOTFS_TARGET"'" || $2 ~ "^'"$ISO_STAGING"'/" || $2 == "'"$ISO_STAGING"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
-        echo "   Unmounting $mp"
-        $SUDO umount -l "$mp" 2>/dev/null || true
-    done
+    unmount_tree "$ROOTFS_TARGET"
+    unmount_tree "$ISO_STAGING"
+    $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
+    if [ ! -c /dev/ptmx ]; then
+        $SUDO rm -f /dev/ptmx 2>/dev/null || true
+        $SUDO mknod -m 666 /dev/ptmx c 5 2 2>/dev/null || true
+    fi
+    $SUDO chmod 666 /dev/ptmx 2>/dev/null || true
     echo "✅ Residual mnt check completed."
 }
 
@@ -572,8 +594,7 @@ preflight_cleanup
 # Auto-limpieza en caso de bootstrap anterior incompleto o corrupto
 if [ -d "$ROOTFS_BASE" ] && { [ ! -d "$ROOTFS_BASE/etc" ] || [ ! -d "$ROOTFS_BASE/proc" ] || [ ! -d "$ROOTFS_BASE/boot" ]; }; then
     echo "⚠️ Incomplete or corrupt base cache detected. Cleaning to regenerate..."
-    cleanup
-    $SUDO rm -rf "$ROOTFS_BASE"
+    safe_remove_dir "$ROOTFS_BASE"
 fi
 
 # Detect if the package list has changed since the cache was created
@@ -603,30 +624,29 @@ fi
 
 if $CLEAN_BASE || [ "$base_list_changed" = true ]; then
     echo "🚨 Base cache cleanup requested or package list change detected..."
-    cleanup
-    $SUDO rm -rf "$ROOTFS_BASE"
+    safe_remove_dir "$ROOTFS_BASE"
 fi
 
 if [ ! -d "$ROOTFS_BASE/etc" ]; then
     mkdir -p "$BUILD_DIR"
-    
-    if [ ! -f "$PACKAGE_LIST_FILE" ]; then
-        echo "❌ Error: Base packages file not found in: $PACKAGE_LIST_FILE"
-        exit 1
-    fi
-    
-    if [ "$DISTRO" = "arch" ]; then
-        echo "--- 📥 Creating Arch Linux base ---"
-        PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
-        
-        # Bootstrap Arch Linux using pacstrap
-        # Create clean pacman.conf with only official Arch repos to avoid
-        # conflicts from third-party repos
-        # NOTE: the mirror is pinned to $MIRROR (Arch official by default) so the
-        # build does NOT depend on the host OS's repositories -> reproducible
-        # builds regardless of the machine that runs build-iso.sh
-        CLEAN_PACMAN_CONF="/tmp/pulsaros-pacman-$$.conf"
-        cat > "$CLEAN_PACMAN_CONF" <<CLEANEof
+    (
+        flock -x 200
+        if [ ! -d "$ROOTFS_BASE/etc" ]; then
+            safe_remove_dir "$ROOTFS_BASE"
+            mkdir -p "$ROOTFS_BASE"
+            
+            if [ "$DISTRO" = "arch" ]; then
+                echo "--- 📥 Creating Arch Linux base ---"
+                PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
+                
+                # Bootstrap Arch Linux using pacstrap
+                # Create clean pacman.conf with only official Arch repos to avoid
+                # conflicts from third-party repos
+                # NOTE: the mirror is pinned to $MIRROR (Arch official by default) so the
+                # build does NOT depend on the host OS's repositories -> reproducible
+                # builds regardless of the machine that runs build-iso.sh
+                CLEAN_PACMAN_CONF="/tmp/pulsaros-pacman-$$.conf"
+                cat > "$CLEAN_PACMAN_CONF" <<CLEANEof
 [options]
 HoldPkg = pacman glibc
 Architecture = auto
@@ -645,77 +665,79 @@ Server = $MIRROR
 Server = $MIRROR
 CLEANEof
 
-        mkdir -p "$ROOTFS_BASE"
+                mkdir -p "$ROOTFS_BASE"
 
-        # Seed an Arch-pinned pacman keyring BEFORE pacstrap so package signatures
-        # validate during the bootstrap.
-        mkdir -p "$ROOTFS_BASE/etc/pacman.d"
-        if [ -d /etc/pacman.d/gnupg ]; then
-            echo "🔑 Copiando keyring pacman del host al rootfs base..."
-            $SUDO cp -a /etc/pacman.d/gnupg "$ROOTFS_BASE/etc/pacman.d/"
-        elif [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
-            $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
-            $SUDO cp /usr/share/pacman/keyrings/archlinux.gpg /usr/share/pacman/keyrings/archlinux-trusted \
-                /usr/share/pacman/keyrings/archlinux-revoked "$ROOTFS_BASE/usr/share/pacman/keyrings/"
-            env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --init
-            env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --populate archlinux
-            $SUDO rm -f "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux.gpg \
-                "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-trusted \
-                "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-revoked
-        else
-            echo "⚠️  archlinux-keyring not found on host - signatures may fail during bootstrap"
-        fi
+                # Seed an Arch-pinned pacman keyring BEFORE pacstrap so package signatures
+                # validate during the bootstrap.
+                mkdir -p "$ROOTFS_BASE/etc/pacman.d"
+                if [ -d /etc/pacman.d/gnupg ]; then
+                    echo "🔑 Copiando keyring pacman del host al rootfs base..."
+                    $SUDO cp -a /etc/pacman.d/gnupg "$ROOTFS_BASE/etc/pacman.d/"
+                elif [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
+                    $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
+                    $SUDO cp /usr/share/pacman/keyrings/archlinux.gpg /usr/share/pacman/keyrings/archlinux-trusted \
+                        /usr/share/pacman/keyrings/archlinux-revoked "$ROOTFS_BASE/usr/share/pacman/keyrings/"
+                    env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --init
+                    env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --populate archlinux
+                    $SUDO rm -f "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux.gpg \
+                        "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-trusted \
+                        "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-revoked
+                else
+                    echo "⚠️  archlinux-keyring not found on host - signatures may fail during bootstrap"
+                fi
 
-        # -M: do not copy the host's mirrorlist into the target (reproducibility)
-        # -K: initialize and copy keyring from host
-        $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
-        rm -f "$CLEAN_PACMAN_CONF"
+                # -M: do not copy the host's mirrorlist into the target (reproducibility)
+                # -K: initialize and copy keyring from host
+                $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
+                rm -f "$CLEAN_PACMAN_CONF"
 
-        # Write the pinned mirrorlist inside the base rootfs as well
-        echo "Server = $MIRROR" | $SUDO tee "$ROOTFS_BASE/etc/pacman.d/mirrorlist" > /dev/null
+                # Write the pinned mirrorlist inside the base rootfs as well
+                echo "Server = $MIRROR" | $SUDO tee "$ROOTFS_BASE/etc/pacman.d/mirrorlist" > /dev/null
 
-        # Save the actually used package list in the base cache for future diffs
-        grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
-        
-        echo "✅ Arch base bootstraping completed on $ROOTFS_BASE"
-    else
-        echo "--- 📥 Creating Clean Debian Base (mmdebstrap) ---"
-        
-        if $WITH_NVIDIA; then
-            echo "💚 Including proprietary hardware drivers (NVIDIA, Broadcom STA, DKMS, Headers) in the installation..."
-            PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
-        else
-            echo "💙 Excluding proprietary drivers (NVIDIA, Broadcom STA, DKMS, Headers) from installation..."
-            PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
+                # Save the actually used package list in the base cache for future diffs
+                grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+                
+                echo "✅ Arch base bootstraping completed on $ROOTFS_BASE"
+            else
+                echo "--- 📥 Creating Clean Debian Base (mmdebstrap) ---"
+                
+                if $WITH_NVIDIA; then
+                    echo "💚 Including proprietary hardware drivers (NVIDIA, Broadcom STA, DKMS, Headers) in the installation..."
+                    PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+                else
+                    echo "💙 Excluding proprietary drivers (NVIDIA, Broadcom STA, DKMS, Headers) from installation..."
+                    PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
+                fi
+                
+                # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
+                KEYRING_PARAM=""
+                if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+                    KEYRING_PARAM="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+                    echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
+                fi
+                
+                # Execute Debian Bootstrap
+                $SUDO /usr/bin/mmdebstrap \
+                    --architecture="$ARCH" \
+                    --components="main,contrib,non-free,non-free-firmware" \
+                    --variant=apt \
+                    $KEYRING_PARAM \
+                    --include="$PACKAGE_LIST" \
+                    "$DEBIAN_VERSION" \
+                    "$ROOTFS_BASE" \
+                    "$MIRROR"
+                    
+                # Save the actually used package list in the base cache for future diffs
+                if $WITH_NVIDIA; then
+                    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+                else
+                    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+                fi
+                
+                echo "✅ Base Debian Bootstrap completed in: $ROOTFS_BASE"
+            fi
         fi
-        
-        # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
-        KEYRING_PARAM=""
-        if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
-            KEYRING_PARAM="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
-            echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
-        fi
-        
-        # Execute Debian Bootstrap
-        $SUDO /usr/bin/mmdebstrap \
-            --architecture="$ARCH" \
-            --components="main,contrib,non-free,non-free-firmware" \
-            --variant=apt \
-            $KEYRING_PARAM \
-            --include="$PACKAGE_LIST" \
-            "$DEBIAN_VERSION" \
-            "$ROOTFS_BASE" \
-            "$MIRROR"
-            
-        # Save the actually used package list in the base cache for future diffs
-        if $WITH_NVIDIA; then
-            grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
-        else
-            grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
-        fi
-        
-        echo "✅ Base Debian Bootstrap completed in: $ROOTFS_BASE"
-    fi
+    ) 200>"$BUILD_DIR/.base-${VARIANT_NAME}.lock"
 else
     echo "✨ Virgin base detected in cache. Jumping bootstrap."
 fi
@@ -735,6 +757,7 @@ mkdir -p "$ROOTFS_TARGET"
 
 # Sync keeping special attributes / Sincronización manteniendo atributos especiales
 $SUDO rsync -aHAXx --delete "$ROOTFS_BASE/" "$ROOTFS_TARGET/"
+ln -sfn "$ROOTFS_TARGET" "$BUILD_DIR/rootfs-target-${VARIANT_NAME}" 2>/dev/null || true
 
 # ==============================================================================
 # PHASE 4: Mount virtual filesystems and network / FASE 4: Montar directorios y red
@@ -744,7 +767,11 @@ echo "⚙️ Configuring virtual mounts and DNS..."
 $SUDO mount -t proc proc "$ROOTFS_TARGET/proc"
 $SUDO mount -t sysfs sys "$ROOTFS_TARGET/sys"
 $SUDO mount --bind /dev "$ROOTFS_TARGET/dev"
-$SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts"
+$SUDO mount --make-rprivate "$ROOTFS_TARGET/dev" 2>/dev/null || true
+$SUDO mount --bind /dev/pts "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
+$SUDO mount -t tmpfs tmpfs "$ROOTFS_TARGET/dev/shm" -o mode=1777 2>/dev/null || true
+$SUDO chmod 666 /dev/ptmx 2>/dev/null || true
+$SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
 
 # Bind mount pacman cache dir in home (not root partition) if on Arch
 if [ "$DISTRO" = "arch" ]; then
@@ -913,7 +940,7 @@ $pkg_name"
                 fi
                 
                 echo "🔨 Compiling AUR dependency: $dep..."
-                BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep"
+                BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep-$$"
                 $SUDO rm -rf "$BUILD_TEMP_DIR"
                 mkdir -p "$BUILD_TEMP_DIR"
                 $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$BUILD_TEMP_DIR"
@@ -1409,7 +1436,7 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 if [ "$DISTRO" = "debian" ]; then
     # Download external winboat dependencies on host and copy to chroot
     echo "📥 Downloading external dependencies (Winboat) on the host..."
-    WINBOAT_TMP="$BUILD_DIR/winboat-${VARIANT_NAME}.deb"
+    WINBOAT_TMP="$BUILD_DIR/winboat-${VARIANT_NAME}-${BOOTLOADER}-$$.deb"
     wget -q --timeout=15 --tries=3 -O "$WINBOAT_TMP" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
     $SUDO cp "$WINBOAT_TMP" "$ROOTFS_TARGET/tmp/winboat.deb"
     rm -f "$WINBOAT_TMP"
@@ -1438,12 +1465,32 @@ elif [ "$DISTRO" = "arch" ]; then
     "
 fi
 
-# Configurar Flathub en el sistema e instalar Flatpaks esenciales
-echo "📦 Configurando repositorio Flathub e instalando Hidamari..."
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-    flatpak install --system -y --noninteractive flathub io.github.jeffshee.Hidamari || true
-"
+# Configurar Flathub en el sistema e instalar Flatpaks esenciales (con caché persistente local)
+FLATPAK_CACHE_DIR="$BUILD_DIR/flatpak-cache"
+if [ -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
+    echo "✨ Hidamari (Flatpak) ya está presente en el rootfs. Omitiendo descarga."
+else
+    echo "📦 Configurando repositorio Flathub e instalando Flatpaks..."
+    if [ -d "$FLATPAK_CACHE_DIR" ] && [ -d "$FLATPAK_CACHE_DIR/app/io.github.jeffshee.Hidamari" ]; then
+        echo "⚡ Restaurando Flatpaks (Hidamari y runtimes) desde la caché local ($FLATPAK_CACHE_DIR)..."
+        $SUDO mkdir -p "$ROOTFS_TARGET/var/lib/flatpak"
+        $SUDO cp -a "$FLATPAK_CACHE_DIR"/* "$ROOTFS_TARGET/var/lib/flatpak/" 2>/dev/null || true
+    fi
+
+    if [ ! -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+            flatpak install --system -y --noninteractive flathub io.github.jeffshee.Hidamari || true
+        "
+        if [ -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
+            echo "💾 Guardando Flatpaks en la caché local persistente ($FLATPAK_CACHE_DIR)..."
+            $SUDO mkdir -p "$FLATPAK_CACHE_DIR"
+            $SUDO cp -a "$ROOTFS_TARGET/var/lib/flatpak"/* "$FLATPAK_CACHE_DIR/" 2>/dev/null || true
+        fi
+    else
+        echo "✅ Hidamari y runtimes restaurados instantáneamente desde la caché local (0s de descarga)."
+    fi
+fi
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
@@ -1792,17 +1839,20 @@ $SUDO rm -f "$ROOTFS_TARGET"/var/lib/AccountsService/users/* 2>/dev/null || true
 $SUDO find "$ROOTFS_TARGET/home" -mindepth 1 -maxdepth 1 ! -name 'live' -exec rm -rf {} + 2>/dev/null || true
 
 echo "Unmounting virtual filesystems in target..."
-$SUDO umount -l "$ROOTFS_TARGET/proc" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_TARGET/sys" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_TARGET/dev/pts" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_TARGET/dev" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
+unmount_tree "$ROOTFS_TARGET"
 
     # Build dedicated Debian Recovery environment (always — base is cached internally)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
     if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        echo "📦 Building dedicated Debian Recovery environment..."
-        $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+        if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
+            (
+                flock -x 200
+                if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
+                    echo "📦 Building dedicated Debian Recovery environment..."
+                    $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+                fi
+            ) 200>"$BUILD_DIR/.recovery.lock"
+        fi
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
@@ -1819,11 +1869,17 @@ $SUDO umount -l "$ROOTFS_TARGET/var/cache/pacman/pkg" 2>/dev/null || true
             $SUDO ln -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
             $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/recovery/vmlinuz-recovery"
             $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/vmlinuz-recovery"
+        else
+            echo "❌ Error: Recovery kernel missing at $REC_OUT/vmlinuz-recovery"
+            exit 1
         fi
         if [ -f "$REC_OUT/initramfs-recovery.img" ]; then
             $SUDO ln -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img"
             $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/recovery/initramfs-recovery.img"
             $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/initramfs-recovery.img"
+        else
+            echo "❌ Error: Recovery initramfs missing at $REC_OUT/initramfs-recovery.img"
+            exit 1
         fi
     fi
 
@@ -1949,14 +2005,16 @@ resolve_boot_icons() {
         return
     fi
     echo "🌐 Descargando pulsar-boot-icons desde Inled-Pulsar-OS/PKG..." >&2
-    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}" "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
-    $SUDO git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Inled-Pulsar-OS/PKG.git" "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}" 2>/dev/null || true
-    if [ -d "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}/pulsar-boot-icons" ]; then
-        $SUDO mkdir -p "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
-        $SUDO cp -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}/pulsar-boot-icons"/* "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}/"
+    local icons_tmp_repo="$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}-${BOOTLOADER}-$$"
+    local icons_tmp_dest="$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}-${BOOTLOADER}-$$"
+    $SUDO rm -rf "$icons_tmp_repo" "$icons_tmp_dest"
+    $SUDO git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Inled-Pulsar-OS/PKG.git" "$icons_tmp_repo" 2>/dev/null || true
+    if [ -d "$icons_tmp_repo/pulsar-boot-icons" ]; then
+        $SUDO mkdir -p "$icons_tmp_dest"
+        $SUDO cp -rf "$icons_tmp_repo/pulsar-boot-icons"/* "$icons_tmp_dest/"
     fi
-    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}"
-    echo "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
+    $SUDO rm -rf "$icons_tmp_repo"
+    echo "$icons_tmp_dest"
 }
 
 if [ "$BOOTLOADER" = "grub" ]; then
@@ -1972,11 +2030,28 @@ if [ "$BOOTLOADER" = "grub" ]; then
         GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
     elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
         GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
+    elif [ -d "$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme"
+    elif [ -d "$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme"
     fi
-    if [ -n "$GRUB_THEME_SRC" ]; then
+    if [ -z "$GRUB_THEME_SRC" ] && [ -f "$SCRIPT_DIR/../PKG/pulsaros-grub/prepare-assets.sh" ]; then
+        echo "🎨 Preparando tema de GRUB para la ISO..."
+        TMP_GRUB_STAGE="/tmp/iso-grub-theme-stage-${VARIANT_NAME}-${BOOTLOADER}-$$"
+        $SUDO rm -rf "$TMP_GRUB_STAGE"
+        mkdir -p "$TMP_GRUB_STAGE"
+        bash "$SCRIPT_DIR/../PKG/pulsaros-grub/prepare-assets.sh" "$TMP_GRUB_STAGE" >/dev/null 2>&1 || true
+        if [ -d "$TMP_GRUB_STAGE/boot/grub/themes/grub-theme" ]; then
+            GRUB_THEME_SRC="$TMP_GRUB_STAGE/boot/grub/themes/grub-theme"
+        fi
+    fi
+    if [ -n "$GRUB_THEME_SRC" ] && [ -d "$GRUB_THEME_SRC" ]; then
         echo "🎨 Copying Pulsar OS GRUB theme ($GRUB_THEME_SRC) to the ISO staging..."
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
         $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
+        if [ -d "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common" ]; then
+            $SUDO cp -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
+        fi
     fi
     BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR/grub" ]; then
@@ -1994,8 +2069,6 @@ if [ "$BOOTLOADER" = "grub" ]; then
     
     # Create GRUB bootloader configuration / Crear menú de arranque de GRUB
     echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
-    
-
 
     cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
 set default="0"
@@ -2014,12 +2087,14 @@ if loadfont /boot/grub/fonts/unicode.pf2; then
     terminal_output gfxterm
 fi
 
-loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
-loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
-set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
 
 menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class gnu-linux --class os {
     linux /live/vmlinuz $RAM_PARAMS
@@ -2029,11 +2104,6 @@ menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class gnu-linux --class 
 menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd
-}
-
-menuentry "Pulsar OS Recovery (Debian)" --class pulsaros-recovery --class os-recovery --class gnu-linux {
-    linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash
-    initrd /recovery/initramfs-recovery.img
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class terminal --class gnu-linux {
@@ -2071,12 +2141,14 @@ if loadfont /boot/grub/fonts/unicode.pf2; then
     terminal_output gfxterm
 fi
 
-loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
-loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
-set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
 
 menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
@@ -2086,11 +2158,6 @@ menuentry "Pulsar OS Live (RAM)" {
 menuentry "Pulsar OS Live (Normal)" {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
-}
-
-menuentry "Pulsar OS Recovery" {
-    linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=recovery quiet splash
-    initrd /recovery/initramfs-recovery.img
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
@@ -2118,7 +2185,7 @@ EOF
     # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
     # We also set the volume label to PULSAR_ISO so the archiso hook can locate it,
     # and strip out Apple/HFS+/APM arguments to prevent label collision on physical USB drives.
-    WRAPPER_PATH="/tmp/xorriso-wrapper"
+    WRAPPER_PATH="/tmp/xorriso-wrapper-${VARIANT_NAME}-${BOOTLOADER}-$$"
     cat <<'EOF' > "$WRAPPER_PATH"
 #!/bin/bash
 args=()
@@ -2159,6 +2226,7 @@ EOF
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
     rm -f "$WRAPPER_PATH"
+    $SUDO ln -sfn "$(basename "$ISO_OUTPUT")" "$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}.iso" 2>/dev/null || true
 
 else
     # --------------------------------------------------------------------------
@@ -2169,14 +2237,14 @@ else
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
     EFI_IMG="$ISO_STAGING/boot/efi.img"
 
-    # Create a 350MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for kernel/initrd)
-    # Crear un archivo vacío de 350MB y formatearlo en FAT16 (elimina avisos de clúster de FAT32 y tiene espacio para kernel/initrd)
-    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=350 2>/dev/null
+    # Create a 450MB empty file and format it as FAT16 (eliminates FAT32 cluster warnings and has space for both regular and recovery kernels/initrds)
+    # Crear un archivo vacío de 450MB y formatearlo en FAT16
+    $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=450 2>/dev/null
     $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
 
-    REFIND_CONF_TMP="$BUILD_DIR/refind-${VARIANT_NAME}-${BOOTLOADER}.conf"
-    REFIND_MINIMAL_CONF_TMP="$BUILD_DIR/refind-minimal-${VARIANT_NAME}-${BOOTLOADER}.conf"
-    REFIND_THEME_DIR_TMP="$BUILD_DIR/refind-mac-theme-${VARIANT_NAME}-${BOOTLOADER}"
+    REFIND_CONF_TMP="$BUILD_DIR/refind-${VARIANT_NAME}-${BOOTLOADER}-$$.conf"
+    REFIND_MINIMAL_CONF_TMP="$BUILD_DIR/refind-minimal-${VARIANT_NAME}-${BOOTLOADER}-$$.conf"
+    REFIND_THEME_DIR_TMP="$BUILD_DIR/refind-mac-theme-${VARIANT_NAME}-${BOOTLOADER}-$$"
 
     # Create temporary refind.conf for the ISO boot (full config with theme — goes inside efi.img)
     cat <<EOF > "$REFIND_CONF_TMP"
@@ -2185,8 +2253,10 @@ enable_mouse
 mouse_speed 4
 mouse_size 16
 resolution max
+scanfor manual
+dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
+dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
-#showtools about,reboot,shutdown,firmware,hidden_tags
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live (RAM)" {
@@ -2223,6 +2293,9 @@ EOF
     cat <<EOF > "$REFIND_MINIMAL_CONF_TMP"
 timeout 10
 resolution max
+scanfor manual
+dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
+dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
 
 menuentry "Pulsar OS Live (RAM)" {
@@ -2270,8 +2343,14 @@ EOF
         echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
         $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_toram.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_normal.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/os_pulsaros_normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_normal.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_debug.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/old.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_old.png" 2>/dev/null || true
+        if [ -f "$BOOT_ICONS_DIR/os_recovery.png" ]; then
+            $SUDO cp -f "$BOOT_ICONS_DIR/os_recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_recovery.png" 2>/dev/null || true
+        elif [ -f "$BOOT_ICONS_DIR/recovery.png" ]; then
+            $SUDO cp -f "$BOOT_ICONS_DIR/recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_recovery.png" 2>/dev/null || true
+        fi
     fi
 
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
@@ -2281,18 +2360,21 @@ EOF
     fi
 
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
-    # NOTE: refind.conf, icons and theme go ONLY inside efi.img to avoid rEFInd
-    # processing showtools from two filesystems and duplicating tool buttons.
-    # Solo el bootloader, driver, kernel e initrd van en la raíz ISO.
     echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
     $SUDO cp "$REFIND_SHARE_DIR/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
     $SUDO cp "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
     $SUDO cp "$REFIND_MINIMAL_CONF_TMP" "$ISO_STAGING/EFI/BOOT/refind.conf"
-    # Copy kernel and initrd directly to the UEFI boot folder on the ISO
-    # Copiar kernel e initrd directamente al directorio de arranque UEFI en la ISO
+    
+    # Copy kernels and initrds directly to the UEFI boot folder on the ISO
     $SUDO cp "$ISO_STAGING/live/vmlinuz" "$ISO_STAGING/EFI/BOOT/vmlinuz"
     $SUDO cp "$ISO_STAGING/live/initrd" "$ISO_STAGING/EFI/BOOT/initrd"
+    if [ -f "$ISO_STAGING/recovery/vmlinuz-recovery" ]; then
+        $SUDO cp "$ISO_STAGING/recovery/vmlinuz-recovery" "$ISO_STAGING/EFI/BOOT/vmlinuz-recovery"
+    fi
+    if [ -f "$ISO_STAGING/recovery/initramfs-recovery.img" ]; then
+        $SUDO cp "$ISO_STAGING/recovery/initramfs-recovery.img" "$ISO_STAGING/EFI/BOOT/initramfs-recovery.img"
+    fi
 
     # 2. Populate the efi.img for El Torito boot using mtools (resolves cluster size warnings)
     echo "📥 Copiando archivos a efi.img usando mtools..."
@@ -2308,10 +2390,16 @@ EOF
     $SUDO mcopy -s -i "$EFI_IMG" "$REFIND_SHARE_DIR/icons"/* ::/EFI/BOOT/icons/
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes/rEFInd-Regular-Dark
     $SUDO mcopy -s -i "$EFI_IMG" "$REFIND_THEME_DIR_TMP"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
-    # Copy kernel and initrd directly to the efi.img FAT volume using mtools
-    # Copiar kernel e initrd directamente al volumen FAT de efi.img usando mtools
+    
+    # Copy kernels and initrds directly to the efi.img FAT volume using mtools
     $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/vmlinuz" ::/EFI/BOOT/vmlinuz
     $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/initrd" ::/EFI/BOOT/initrd
+    if [ -f "$ISO_STAGING/recovery/vmlinuz-recovery" ]; then
+        $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/recovery/vmlinuz-recovery" ::/EFI/BOOT/vmlinuz-recovery
+    fi
+    if [ -f "$ISO_STAGING/recovery/initramfs-recovery.img" ]; then
+        $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/recovery/initramfs-recovery.img" ::/EFI/BOOT/initramfs-recovery.img
+    fi
 
     # Cleanup temp build files
     $SUDO rm -f "$REFIND_CONF_TMP"
@@ -2324,10 +2412,17 @@ EOF
         GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
     elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
         GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
+    elif [ -d "$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme"
+    elif [ -d "$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme" ]; then
+        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme"
     fi
-    if [ -n "$GRUB_THEME_SRC" ]; then
+    if [ -n "$GRUB_THEME_SRC" ] && [ -d "$GRUB_THEME_SRC" ]; then
         $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
         $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
+        if [ -d "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common" ]; then
+            $SUDO cp -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
+        fi
         if [ -d "$BOOT_ICONS_DIR/grub" ]; then
             $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
             $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
@@ -2365,12 +2460,14 @@ if loadfont /boot/grub/fonts/unicode.pf2; then
     terminal_output gfxterm
 fi
 
-loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
-loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
-loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
-set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
 
 menuentry "Pulsar OS Live (RAM)" {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --

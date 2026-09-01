@@ -151,6 +151,24 @@ SOURCES"
     echo "✅ Clean Debian base bootstrapped at $BASE_DIR"
 else
     echo "✨ Cached clean Debian base found at $BASE_DIR"
+    # Ensure any newly added packages in recovery-debian.list are installed in the cached base
+    PKG_SPACE=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ' ')
+    $SUDO mount -t proc proc "$BASE_DIR/proc" 2>/dev/null || true
+    $SUDO mount -t sysfs sys "$BASE_DIR/sys" 2>/dev/null || true
+    $SUDO mount --bind /dev "$BASE_DIR/dev" 2>/dev/null || true
+    $SUDO mount --bind /dev/pts "$BASE_DIR/dev/pts" 2>/dev/null || true
+
+    $SUDO chroot "$BASE_DIR" /bin/bash -c "
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends $PKG_SPACE
+        apt-get clean
+    " 2>/dev/null || true
+
+    $SUDO umount -l "$BASE_DIR/dev/pts" 2>/dev/null || true
+    $SUDO umount -l "$BASE_DIR/dev" 2>/dev/null || true
+    $SUDO umount -l "$BASE_DIR/sys" 2>/dev/null || true
+    $SUDO umount -l "$BASE_DIR/proc" 2>/dev/null || true
 fi
 
 # ==============================================================================
@@ -196,34 +214,65 @@ $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant"
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     if ! id live >/dev/null 2>&1; then
         useradd -m -s /bin/bash live
-        for g in sudo audio video plugdev disk users input; do
+        for g in sudo audio video render tty plugdev disk users input; do
             groupadd -f \"\$g\" 2>/dev/null || true
             usermod -aG \"\$g\" live 2>/dev/null || true
         done
         echo 'live:live' | chpasswd 2>/dev/null || true
-        passwd -d live 2>/dev/null || true
+        passwd -u live 2>/dev/null || true
     fi
+    for g in sudo audio video render tty plugdev disk users input; do
+        groupadd -f \"\$g\" 2>/dev/null || true
+        usermod -aG \"\$g\" live 2>/dev/null || true
+    done
     mkdir -p /etc/sudoers.d
     echo 'live ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-live-user
     echo 'ALL ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers.d/99-live-user
     chmod 0440 /etc/sudoers.d/99-live-user
 "
 
-# Configure systemd autologin on tty1
-$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d"
-$SUDO bash -c "cat << 'GETTY' > '$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d/override.conf'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin live --noclear %I 38400 linux
-Type=idle
-GETTY"
+# Configure dedicated systemd graphical service for recovery (bypasses agetty/PAM login loop completely)
+$SUDO bash -c "cat << 'GUISVC' > '$ROOTFS_REC/etc/systemd/system/pulsar-recovery-gui.service'
+[Unit]
+Description=Pulsar OS Recovery GUI Assistant
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Conflicts=getty@tty1.service
 
-# Configure X11 non-root permissions
+[Service]
+Type=simple
+User=live
+PAMName=login
+Environment=HOME=/home/live
+Environment=USER=live
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=GTK_THEME=MacTahoe-Dark
+Environment=XCURSOR_THEME=MacTahoe-blue-dark
+Environment=XCURSOR_SIZE=24
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+ExecStart=/usr/bin/xinit /home/live/.xinitrc -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=graphical.target
+GUISVC"
+
+$SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    systemctl enable pulsar-recovery-gui.service 2>/dev/null || true
+    systemctl mask getty@tty1.service 2>/dev/null || true
+"
+
+# Configure X11 permissions for non-root / tty startup
 $SUDO mkdir -p "$ROOTFS_REC/etc/X11"
 $SUDO bash -c "cat << 'XWRAP' > '$ROOTFS_REC/etc/X11/Xwrapper.config'
 allowed_users=anybody
-needs_root_rights=no
+needs_root_rights=yes
 XWRAP"
+$SUDO chmod 4755 "$ROOTFS_REC/usr/lib/xorg/Xorg.wrap" 2>/dev/null || true
 
 # Configure auto-start of X11 and Fluxbox with Rust recovery assistant
 $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"
@@ -266,10 +315,13 @@ Defaults:live env_keep += \"DISPLAY XAUTHORITY WAYLAND_DISPLAY\"
 SUDOERS"
 $SUDO chmod 0440 "$ROOTFS_REC/etc/sudoers.d/live"
 
-# Auto-start X on tty1 login
+# Auto-start X on tty1 login without looping on failure
 $SUDO bash -c "cat << 'PROFILE' >> '$ROOTFS_REC/home/live/.bash_profile'
 if [ -z \"\$DISPLAY\" ] && [ \"\$(tty)\" = \"/dev/tty1\" ]; then
-    exec startx -- -nocursor 2>/dev/null || exec startx
+    startx -- -nocursor 2>/tmp/xorg.log || startx >>/tmp/xorg.log 2>&1 || {
+        echo \"⚠️ Error al iniciar servidor gráfico X11. Registro en /tmp/xorg.log\"
+        echo \"💡 Puedes intentar ejecutar manualmente: sudo /usr/bin/pulsar-recovery-assistant\"
+    }
 fi
 PROFILE"
 $SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_profile"
@@ -412,10 +464,12 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     systemctl set-default graphical.target 2>/dev/null || true
 "
 
-# Force-unlock root in /etc/shadow by removing lock prefix (! or !!)
+# Force-unlock root and live in /etc/shadow by removing lock prefix (! or !!)
 # passwd -u can fail silently; sed is deterministic and cannot fail here.
 $SUDO sed -i 's/^root:!!:/root::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
 $SUDO sed -i 's/^root:!:/root::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
+$SUDO sed -i 's/^live:!!:/live::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
+$SUDO sed -i 's/^live:!:/live::/' "$ROOTFS_REC/etc/shadow" 2>/dev/null || true
 
 # Remove OnFailure=emergency.target from local-fs.target to prevent fallback on overlayfs
 $SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/local-fs.target.d"
@@ -496,8 +550,9 @@ fi
 
 $SUDO cp -f "$REC_VMLINUZ" "$OUTPUT_DIR/vmlinuz-recovery"
 $SUDO cp -f "$REC_INITRD" "$OUTPUT_DIR/initramfs-recovery.img"
-echo "✅ Recovery kernel: $OUTPUT_DIR/vmlinuz-recovery"
-echo "✅ Recovery initrd: $OUTPUT_DIR/initramfs-recovery.img"
+# Clean temporary files, logs, and potential nologin locks
+$SUDO rm -f "$ROOTFS_REC/etc/nologin" "$ROOTFS_REC/run/nologin" "$ROOTFS_REC/var/run/nologin" 2>/dev/null || true
+$SUDO rm -rf "$ROOTFS_REC"/tmp/* "$ROOTFS_REC"/var/tmp/* 2>/dev/null || true
 
 # Generate Recovery SquashFS
 echo "📦 Generating Debian Recovery SquashFS..."
