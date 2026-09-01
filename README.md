@@ -64,13 +64,62 @@ sudo apt-get install -y qemu-system-x86 ovmf
 ```
 
 ## Building the ISO  
-The main file for the build is `build-iso.sh`, which accepts the following flags:
+The main file for building single ISOs is `build-iso.sh`, which accepts the following flags:
 - `--branch stable`, replacing stable with any other Debian branch; currently only stable can be used.
 - `--local` to package from the packages in the `/PKG` folder, which must be in the same folder that contains the `/ISO` folder
 - `--refind` Indicates that the rEFInd version should be built
 - `--grub` Builds the GRUB version
 - `--arch` Builds the ARCH version (if this flag is absent, the Debian version is built)  
 - `--nvidia` Build ISO image with privative drivers (BROADCOM, NVIDIA, etc...)
+- `--minimal` Minimal lightweight build (~2-3GB target)
+
+## Building Multiple ISOs in Parallel
+
+To build multiple ISO editions concurrently with full isolation, thermal balancing, and zero race conditions, use `build-parallel.sh`. It automatically synchronizes concurrent tasks using `flock` and creates isolated rootfs targets to prevent directory collisions.
+
+### Flags and Usage
+
+| Target Flags | Description |
+| --- | --- |
+| `--all` | Builds all variants (Arch GRUB, Arch rEFInd, Debian GRUB, Debian rEFInd). Default if none specified. |
+| `--arch-grub` | Builds the Arch Linux edition with GRUB. |
+| `--arch-refind` | Builds the Arch Linux edition with rEFInd. |
+| `--debian-grub` | Builds the Debian edition with GRUB. |
+| `--debian-refind` | Builds the Debian edition with rEFInd. |
+
+| Filter Flags | Description |
+| --- | --- |
+| `--arch` / `--arch-only` | Compiles only Arch Linux editions. |
+| `--debian` / `--debian-only`| Compiles only Debian editions. |
+| `--grub` / `--grub-only` | Compiles only GRUB editions. |
+| `--refind` / `--refind-only` | Compiles only rEFInd editions. |
+
+| Additional Options | Description |
+| --- | --- |
+| `--minimal` | Minimal lightweight build (~2-3GB target). |
+| `--full` | Standard full build. |
+| `--clean-base` | Deletes and rebuilds the base cache from scratch. |
+| `--nvidia` | Includes proprietary NVIDIA and Broadcom drivers. |
+| `--branch, -b <branch>` | Build branch (stable, forky, rolling). Default is stable. |
+| `--version, -v <ver>` | Version tag for the ISOs. |
+| `--skip-pkg` | Skips the local package build phase in `/PKG`. |
+| `--production` | Uses remote repositories instead of local packages. |
+
+### Examples
+
+```bash
+# Build Arch GRUB, Arch rEFInd, Debian GRUB, and Debian rEFInd simultaneously:
+sudo ./build-parallel.sh --all
+
+# Build specific combinations:
+sudo ./build-parallel.sh --arch-grub --arch-refind --debian-grub
+
+# Build all Arch versions, minimally:
+sudo ./build-parallel.sh --arch --minimal
+
+# Build all Debian versions with rEFInd:
+sudo ./build-parallel.sh --debian --refind
+```
 
 ## Testing in Chroot or the ISO quickly   
 The file for quickly testing the ISOs is `run-qemu.sh`, which accepts the following arguments:
