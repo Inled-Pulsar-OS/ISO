@@ -246,6 +246,7 @@ Environment=HOME=/home/live
 Environment=USER=live
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=GTK_THEME=MacTahoe-Dark
 Environment=XCURSOR_THEME=MacTahoe-blue-dark
 Environment=XCURSOR_SIZE=24
@@ -279,6 +280,7 @@ $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"
 
 $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/home/live/.xinitrc'
 #!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 xsetroot -solid '#18181b'
 xset s off -dpms
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
@@ -292,13 +294,13 @@ XINIT"
 
 $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
 #!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 xsetroot -solid '#18181b'
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 export GTK_THEME=\"MacTahoe-Dark\"
 export XCURSOR_THEME=\"MacTahoe-blue-dark\"
 export XCURSOR_SIZE=\"24\"
-/usr/bin/pulsar-recovery-assistant &
 exec /usr/bin/fluxbox
 FLUX_STARTUP"
 
