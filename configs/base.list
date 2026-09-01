@@ -91,8 +91,7 @@ python3-cairo
 grub-pc
 grub-efi-amd64-bin
 efibootmgr
-calamares
-calamares-settings-debian
+os-prober
 # Aplicaciones Estándar
 gnome-calculator
 gnome-calendar

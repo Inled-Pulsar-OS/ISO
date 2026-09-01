@@ -74,6 +74,7 @@ python-cairo
 # Bootloader y Disco
 grub
 efibootmgr
+os-prober
 # Aplicaciones Estándar
 gnome-calculator
 gnome-calendar

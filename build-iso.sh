@@ -375,6 +375,10 @@ if [ "$EUID" -ne 0 ]; then
     fi
 fi
 
+# Sanitize root environment (pkexec leaves user's XDG_RUNTIME_DIR which breaks gpg-agent / root sockets)
+unset XDG_RUNTIME_DIR
+export HOME="/root"
+
 # Build timing: captured after auto-elevation so they survive the re-exec
 BUILD_START_TS=$(date '+%Y-%m-%d %H:%M:%S')
 BUILD_START_EPOCH=$(date +%s)
@@ -443,12 +447,34 @@ if [ "$EUID" -eq 0 ] && [ -n "$ORIGINAL_USER" ]; then
     chown -R "$ORIGINAL_USER":"$ORIGINAL_USER" "$ORIGINAL_HOME/.cache" 2>/dev/null || true
 fi
 
+VARIANT_NAME="$BRANCH-$DISTRO"
 if $WITH_NVIDIA; then
-    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO-nvidia"
-    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO-nvidia"
-else
-    ROOTFS_BASE="$BUILD_DIR/rootfs-base-$BRANCH-$DISTRO"
-    ROOTFS_TARGET="$BUILD_DIR/rootfs-target-$BRANCH-$DISTRO"
+    VARIANT_NAME="${VARIANT_NAME}-nvidia"
+fi
+if $MINIMAL; then
+    VARIANT_NAME="${VARIANT_NAME}-minimal"
+fi
+
+ROOTFS_BASE="$BUILD_DIR/rootfs-base-${VARIANT_NAME}"
+ROOTFS_TARGET="$BUILD_DIR/rootfs-target-${VARIANT_NAME}"
+ISO_STAGING="$BUILD_DIR/iso-staging-${VARIANT_NAME}-${BOOTLOADER}"
+
+# CPU & Resource Optimization for Parallel and Safe Builds
+TOTAL_CORES=$(nproc 2>/dev/null || echo 4)
+if [ -z "$BUILD_PROCESSORS" ]; then
+    if [ "$TOTAL_CORES" -ge 8 ]; then
+        BUILD_PROCESSORS=$(( TOTAL_CORES / 2 ))
+    elif [ "$TOTAL_CORES" -ge 4 ]; then
+        BUILD_PROCESSORS=$(( TOTAL_CORES - 1 ))
+    else
+        BUILD_PROCESSORS=$TOTAL_CORES
+    fi
+fi
+
+# Run with lower CPU scheduling priority to keep desktop responsive and prevent thermal spikes
+renice -n 10 $$ >/dev/null 2>&1 || true
+if command -v ionice >/dev/null 2>&1; then
+    ionice -c 2 -n 4 -p $$ >/dev/null 2>&1 || true
 fi
 
 # Select package list based on distro and minimal flag
@@ -480,7 +506,7 @@ CHROOT_BIN=$(command -v chroot || echo "/usr/sbin/chroot")
 # Preventative cleanup function to ensure filesystems are unmounted on interruption
 # Función de limpieza preventiva para asegurar desmontajes en caso de interrupción
 cleanup() {
-    echo "🧹 Terminating and freeing chroot-mounted resources..."
+    echo "🧹 Terminating and freeing chroot-mounted resources for ${VARIANT_NAME}..."
 
     # Desactivar swap del rootfs target si quedó activo (p.ej. creado por pulsaros-setup-hibernation)
     # Deactivate any swap inside the rootfs target (e.g. created by pulsaros-setup-hibernation)
@@ -499,6 +525,11 @@ cleanup() {
         $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
     fi
 
+    # Unmount anything under this specific ROOTFS_TARGET or ISO_STAGING without touching sibling builds
+    awk '$2 ~ "^'"$ROOTFS_TARGET"'/" || $2 == "'"$ROOTFS_TARGET"'" || $2 ~ "^'"$ISO_STAGING"'/" || $2 == "'"$ISO_STAGING"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
+        $SUDO umount -l "$mp" 2>/dev/null || true
+    done
+
     # Restore host KVM node permissions
     if [ -e /dev/kvm ]; then
         $SUDO chmod 666 /dev/kvm 2>/dev/null || true
@@ -506,25 +537,13 @@ cleanup() {
     fi
 }
 
-# Preflight: release any leftover mounts from previous interrupted builds.
-# This runs once at startup so a fresh build never fails on stale mounts.
-# Prelanzamiento: libera montajes residuales de builds interrumpidos.
-# Se ejecuta una vez al inicio para que un build nuevo nunca falle por montajes viejos.
+# Preflight: release any leftover mounts from previous interrupted builds for this specific target variant.
 preflight_cleanup() {
-    echo "🔍 Checking residual mounts from previous builds..."
-    # Unmount anything mounted under the build directory (leftover chroot mounts)
-    # Desmontar todo lo montado bajo el directorio de build (montajes chroot residuales)
-    awk '$2 ~ "^'"$BUILD_DIR"'/" || $2 == "'"$BUILD_DIR"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
+    echo "🔍 Checking residual mounts for ${VARIANT_NAME}..."
+    # Only unmount mounts belonging to this target variant, never touching sibling builds!
+    awk '$2 ~ "^'"$ROOTFS_TARGET"'/" || $2 == "'"$ROOTFS_TARGET"'" || $2 ~ "^'"$ISO_STAGING"'/" || $2 == "'"$ISO_STAGING"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
         echo "   Unmounting $mp"
         $SUDO umount -l "$mp" 2>/dev/null || true
-    done
-    # Free known helper mount points (e.g. ISO verification leftovers)
-    # Liberar puntos de montaje auxiliares conocidos (p.ej. sobras de verificación ISO)
-    for mp in /tmp/iso-mnt /tmp/pulsar-verify /tmp/pulsar-iso; do
-        if mountpoint -q "$mp" 2>/dev/null; then
-            echo "   Desmontando residual: $mp"
-            $SUDO umount -l "$mp" 2>/dev/null || true
-        fi
     done
     echo "✅ Residual mnt check completed."
 }
@@ -629,22 +648,17 @@ CLEANEof
         mkdir -p "$ROOTFS_BASE"
 
         # Seed an Arch-pinned pacman keyring BEFORE pacstrap so package signatures
-        # validate during the bootstrap. We populate /etc/pacman.d/gnupg (where pacman
-        # validates signatures) using the host's archlinux-keyring; the archlinux-keyring
-        # package is still installed by pacstrap and owns /usr/share/pacman/keyrings/*
-        # (so we must NOT leave files there or the package install would conflict).
-        #
-        # pacstrap -K starts with an EMPTY keyring, which makes every signature check
-        # fail, so we seed a populated gnupg dir instead.
-        if [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
+        # validate during the bootstrap.
+        mkdir -p "$ROOTFS_BASE/etc/pacman.d"
+        if [ -d /etc/pacman.d/gnupg ]; then
+            echo "🔑 Copiando keyring pacman del host al rootfs base..."
+            $SUDO cp -a /etc/pacman.d/gnupg "$ROOTFS_BASE/etc/pacman.d/"
+        elif [ -f /usr/share/pacman/keyrings/archlinux.gpg ]; then
             $SUDO install -d "$ROOTFS_BASE/usr/share/pacman/keyrings"
             $SUDO cp /usr/share/pacman/keyrings/archlinux.gpg /usr/share/pacman/keyrings/archlinux-trusted \
                 /usr/share/pacman/keyrings/archlinux-revoked "$ROOTFS_BASE/usr/share/pacman/keyrings/"
-            $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --init
-            $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --populate archlinux
-            # Remove our temporary keyring files so the archlinux-keyring package
-            # can install cleanly; the already-populated gnupg dir remains for
-            # signature verification during pacstrap.
+            env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --init
+            env -u XDG_RUNTIME_DIR HOME="/root" $SUDO pacman-key --gpgdir "$ROOTFS_BASE/etc/pacman.d/gnupg" --populate archlinux
             $SUDO rm -f "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux.gpg \
                 "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-trusted \
                 "$ROOTFS_BASE"/usr/share/pacman/keyrings/archlinux-revoked
@@ -653,8 +667,8 @@ CLEANEof
         fi
 
         # -M: do not copy the host's mirrorlist into the target (reproducibility)
-        # (no -K: keyring already populated above so signature checks pass)
-        $SUDO pacstrap -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
+        # -K: initialize and copy keyring from host
+        $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
         rm -f "$CLEAN_PACMAN_CONF"
 
         # Write the pinned mirrorlist inside the base rootfs as well
@@ -742,7 +756,7 @@ if [ "$DISTRO" = "arch" ]; then
     # "paquete no válido o dañado (firma PGP)".
     for p in pulsaros-branding pulsaros-theme pulsaros-gnome sayri pulsaros-global-menu \
              pulsaros-spotlight-launcher pulsaros-sddm pulsaros-plymouth \
-             pulsaros-refind pulsaros-grub pulsaros-calamares pulsaros-essential pulsaros-hibernate \
+             pulsaros-refind pulsaros-grub pulsaros-essential pulsaros-hibernate \
              pulsaros-welcome pulsaros-recovery pulsaros-bootsound pulsar-pear-sound-theme \
              gnome-macos-remap-wayland droidtux macboat appinstall seafari \
              spotlight-gtk; do
@@ -806,9 +820,9 @@ EOF
 
     # Bootstrap packages into target
     if [ "$BOOTLOADER" = "grub" ]; then
-        BOOTLOADER_PKGS="grub efibootmgr"
+        BOOTLOADER_PKGS="grub efibootmgr os-prober"
     else
-        BOOTLOADER_PKGS="refind efibootmgr grub"
+        BOOTLOADER_PKGS="refind efibootmgr grub os-prober"
     fi
 
     if $USE_LOCAL_PKGS; then
@@ -882,7 +896,7 @@ $pkg_name"
         # offer the user a VPN to reach the Inled repo in regions where Cloudflare is censored.
         # localsend-bin is an extra package offered post-install. Both must be compiled from AUR
         # since they are not present in the official repos or the Inled repo.
-        AUR_DEPS=("calamares" "pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
+        AUR_DEPS=("pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -1087,7 +1101,6 @@ $pkg_name"
                 pulsaros-sddm \
                 pulsaros-plymouth \
                 pulsaros-$BOOTLOADER \
-                pulsaros-calamares \
                 pulsaros-essential \
                 pulsaros-welcome \
                 pulsaros-recovery \
@@ -1248,9 +1261,9 @@ EOF
         fi
 
         if [ "$BOOTLOADER" = "grub" ]; then
-            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr"
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin"
+            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin os-prober"
         fi
 
         $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
@@ -1287,9 +1300,9 @@ EOF
     else
         echo "---🌐 PRODUCTION MODE: Installing packages from APT repository ---"
         if [ "$BOOTLOADER" = "grub" ]; then
-            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr"
+            BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin"
+            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin os-prober"
         fi
 
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -1313,7 +1326,6 @@ EOF
                 pulsaros-sddm \
                 pulsaros-plymouth \
                 pulsaros-$BOOTLOADER \
-                pulsaros-calamares \
                 pulsaros-essential \
                 pulsaros-welcome \
                 pulsaros-recovery \
@@ -1356,149 +1368,24 @@ if [ "$DISTRO" = "debian" ]; then
     echo "🌐 Installing Cloudflare WARP (official Debian repo) in the target..."
     # Add Cloudflare's signed-by APT source from the host to avoid nested quoting.
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
-    $SUDO bash -c 'curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output "$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg"' 2>/dev/null || true
+    $SUDO bash -c "curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output '$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'" 2>/dev/null || true
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/apt/sources.list.d"
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/cloudflare-warp.list" > /dev/null
+    if [ -f "$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg" ]; then
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/cloudflare-warp.list" > /dev/null
+    else
+        echo "⚠️  Cloudflare WARP keyring not downloaded, skipping repo setup."
+    fi
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        set -e
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y --no-install-recommends cloudflare-warp
-        systemctl enable warp-svc 2>/dev/null || true
-        apt-get clean
+        apt-get update 2>/dev/null && \
+        apt-get install -y --no-install-recommends cloudflare-warp 2>/dev/null && \
+        systemctl enable warp-svc 2>/dev/null || \
+        echo '⚠️  Cloudflare WARP not available, skipping (ISO will still work without VPN)'
+        apt-get clean 2>/dev/null || true
     "
 fi
 
-# Dynamically adjust Calamares configuration inside chroot based on distribution and selected bootloader
-echo "⚙️ Configuring Calamares in the chroot target..."
-$SUDO mkdir -p "$ROOTFS_TARGET/etc/calamares/modules"
-
-# 1. Adjust modules search path in settings.conf to support both Arch and Debian module paths
-if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
-    $SUDO sed -i 's|modules-search: \[ local, /usr/lib/x86_64-linux-gnu/calamares/modules, /usr/share/calamares/modules \]|modules-search: [ local, /usr/lib/x86_64-linux-gnu/calamares/modules, /usr/lib/calamares/modules, /usr/share/calamares/modules ]|' "$ROOTFS_TARGET/etc/calamares/settings.conf"
-fi
-
-# 2. Configure bootloader sequence in settings.conf
-if [ "$BOOTLOADER" = "refind" ]; then
-    echo "⚙️ Configuring Calamares boot sequence for rEFInd..."
-    if [ -f "$ROOTFS_TARGET/etc/calamares/settings.conf" ]; then
-        # Check if shellprocess@refind is already in settings.conf, if not add it right after bootloader
-        if ! grep -q "shellprocess@refind" "$ROOTFS_TARGET/etc/calamares/settings.conf"; then
-            $SUDO sed -i 's/- bootloader/- bootloader\n  - shellprocess@refind/' "$ROOTFS_TARGET/etc/calamares/settings.conf"
-        fi
-    fi
-else
-    echo "⚙️ Squid sequence configured for GRUB."
-fi
-
-# 3. Create distro-specific unpackfs.conf, packages.conf, and users.conf
-if [ "$DISTRO" = "arch" ]; then
-    echo "⚙️ Generating Calamares configurations for Arch Linux..."
-    
-    # unpackfs.conf for Arch
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
----
-unpack:
-    - source: "/run/archiso/copytoram/airootfs.sfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-    - source: "/run/archiso/bootmnt/live/x86_64/airootfs.sfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-    - source: "/run/archiso/bootmnt/live/airootfs.sfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-    - source: "/run/archiso/bootmnt/airootfs.sfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-    - source: "/run/archiso/airootfs.sfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-EOF
-
-    # packages.conf for Arch
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/packages.conf" > /dev/null
----
-backend: pacman
-
-operations:
-  - try_remove:
-      - calamares
-      - pulsaros-calamares
-EOF
-
-    # users.conf for Arch
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/users.conf" > /dev/null
----
-makeuproot: true
-defaultGroups:
-    - wheel
-    - docker
-    - users
-autologinUserWithWelcome: true
-writeUsersPageToDummy: false
-userShell: /bin/bash
-EOF
-
-else
-    echo "⚙️ Generating Calamares configurations for Debian..."
-    
-    # unpackfs.conf for Debian
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/unpackfs.conf" > /dev/null
----
-unpack:
-    - source: "/lib/live/mount/medium/live/filesystem.squashfs"
-      sourcefs: "squashfs"
-      destination: ""
-    - source: "/run/live/medium/live/filesystem.squashfs"
-      sourcefs: "squashfs"
-      destination: ""
-      optional: true
-EOF
-
-    # packages.conf for Debian
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/packages.conf" > /dev/null
----
-backend: apt
-
-operations:
-  - install:
-      - firmware-linux
-      - firmware-linux-nonfree
-      - firmware-misc-nonfree
-      - firmware-iwlwifi
-      - firmware-realtek
-      - firmware-atheros
-      - firmware-brcm80211
-      - intel-microcode
-      - amd64-microcode
-      - firmware-amd-graphics
-  - try_remove:
-      - calamares
-      - calamares-settings-debian
-      - pulsaros-calamares
-EOF
-
-    # users.conf for Debian
-    cat <<EOF | $SUDO tee "$ROOTFS_TARGET/etc/calamares/modules/users.conf" > /dev/null
----
-makeuproot: true
-defaultGroups:
-    - docker
-    - sudo
-    - users
-    - lpadmin
-    - sambashare
-autologinUserWithWelcome: true
-writeUsersPageToDummy: false
-userShell: /bin/bash
-EOF
-fi
+#
 
 # ==============================================================================
 # PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
@@ -1522,9 +1409,10 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 if [ "$DISTRO" = "debian" ]; then
     # Download external winboat dependencies on host and copy to chroot
     echo "📥 Downloading external dependencies (Winboat) on the host..."
-    wget -q --timeout=15 --tries=3 -O "$BUILD_DIR/winboat.deb" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-    $SUDO cp "$BUILD_DIR/winboat.deb" "$ROOTFS_TARGET/tmp/winboat.deb"
-    rm -f "$BUILD_DIR/winboat.deb"
+    WINBOAT_TMP="$BUILD_DIR/winboat-${VARIANT_NAME}.deb"
+    wget -q --timeout=15 --tries=3 -O "$WINBOAT_TMP" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
+    $SUDO cp "$WINBOAT_TMP" "$ROOTFS_TARGET/tmp/winboat.deb"
+    rm -f "$WINBOAT_TMP"
 
     echo "📥 Installing Winboat..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -1872,10 +1760,10 @@ fi
 # ==============================================================================
 echo "---💿 Creating Pulsar OS Live ISO Image /Creating Pulsar OS Live ISO ---"
 
-ISO_STAGING="$BUILD_DIR/iso-staging"
 $SUDO rm -rf "$ISO_STAGING"
 mkdir -p "$ISO_STAGING/live"
 mkdir -p "$ISO_STAGING/boot/grub"
+
 
 if [ "$DISTRO" = "arch" ]; then
     echo "🐧 Copying Kernel and Initrd to the Live ISO (with archiso hooks)..."
@@ -1899,7 +1787,7 @@ fi
 # 0. Clean temporary logs, test accounts, and unmount virtual filesystems prior to packaging
 echo "🧹 Sanitizing rootfs target (cleaning test logs, temporary accounts, and cache)..."
 $SUDO rm -rf "$ROOTFS_TARGET"/tmp/* "$ROOTFS_TARGET"/var/tmp/* "$ROOTFS_TARGET"/var/log/* 2>/dev/null || true
-$SUDO rm -f "$ROOTFS_TARGET"/etc/sudoers.d/pulsaros-user-* 2>/dev/null || true
+$SUDO rm -f "$ROOTFS_TARGET"/etc/sudoers.d/pulsaros-user-* "$ROOTFS_TARGET"/etc/sudoers.d/jaime 2>/dev/null || true
 $SUDO rm -f "$ROOTFS_TARGET"/var/lib/AccountsService/users/* 2>/dev/null || true
 $SUDO find "$ROOTFS_TARGET/home" -mindepth 1 -maxdepth 1 ! -name 'live' -exec rm -rf {} + 2>/dev/null || true
 
@@ -1989,7 +1877,7 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     $SUDO env "PATH=/usr/bin:/usr/sbin:/sbin:/bin:$PATH" mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
         -comp zstd -Xcompression-level 19 \
-        -processors $(nproc) \
+        -processors "$BUILD_PROCESSORS" \
         -e proc/* \
         -e sys/* \
         -e dev/* \
@@ -2061,14 +1949,14 @@ resolve_boot_icons() {
         return
     fi
     echo "🌐 Descargando pulsar-boot-icons desde Inled-Pulsar-OS/PKG..." >&2
-    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp" "$BUILD_DIR/pulsar-boot-icons"
-    $SUDO git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Inled-Pulsar-OS/PKG.git" "$BUILD_DIR/pkg-repo-temp" 2>/dev/null || true
-    if [ -d "$BUILD_DIR/pkg-repo-temp/pulsar-boot-icons" ]; then
-        $SUDO mkdir -p "$BUILD_DIR/pulsar-boot-icons"
-        $SUDO cp -rf "$BUILD_DIR/pkg-repo-temp/pulsar-boot-icons"/* "$BUILD_DIR/pulsar-boot-icons/"
+    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}" "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
+    $SUDO git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Inled-Pulsar-OS/PKG.git" "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}" 2>/dev/null || true
+    if [ -d "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}/pulsar-boot-icons" ]; then
+        $SUDO mkdir -p "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
+        $SUDO cp -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}/pulsar-boot-icons"/* "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}/"
     fi
-    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp"
-    echo "$BUILD_DIR/pulsar-boot-icons"
+    $SUDO rm -rf "$BUILD_DIR/pkg-repo-temp-${VARIANT_NAME}"
+    echo "$BUILD_DIR/pulsar-boot-icons-${VARIANT_NAME}"
 }
 
 if [ "$BOOTLOADER" = "grub" ]; then
@@ -2286,8 +2174,12 @@ else
     $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=350 2>/dev/null
     $SUDO mkfs.vfat -F 16 "$EFI_IMG" >/dev/null
 
+    REFIND_CONF_TMP="$BUILD_DIR/refind-${VARIANT_NAME}-${BOOTLOADER}.conf"
+    REFIND_MINIMAL_CONF_TMP="$BUILD_DIR/refind-minimal-${VARIANT_NAME}-${BOOTLOADER}.conf"
+    REFIND_THEME_DIR_TMP="$BUILD_DIR/refind-mac-theme-${VARIANT_NAME}-${BOOTLOADER}"
+
     # Create temporary refind.conf for the ISO boot (full config with theme — goes inside efi.img)
-    cat <<EOF > "$BUILD_DIR/refind.conf"
+    cat <<EOF > "$REFIND_CONF_TMP"
 timeout 10
 enable_mouse
 mouse_speed 4
@@ -2328,7 +2220,7 @@ EOF
 
     # Minimal refind.conf for the ISO root (no showtools, no theme — avoids duplicate tool buttons
     # when rEFInd scans both ISO9660 and FAT efi.img filesystems)
-    cat <<EOF > "$BUILD_DIR/refind-minimal.conf"
+    cat <<EOF > "$REFIND_MINIMAL_CONF_TMP"
 timeout 10
 resolution max
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
@@ -2360,26 +2252,26 @@ EOF
 
     # Get the theme (copy from installed rootfs package, local source, or GitHub fallback)
     echo "🎨 Obteniendo tema macOS de rEFInd..."
-    $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
+    $SUDO rm -rf "$REFIND_THEME_DIR_TMP"
     if [ -d "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" ]; then
         echo "📂 Copiando tema rEFInd desde el paquete pulsaros-refind instalado en rootfs..."
-        $SUDO cp -r "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" "$BUILD_DIR/refind-mac-theme"
+        $SUDO cp -r "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" "$REFIND_THEME_DIR_TMP"
     elif [ -d "$ISO_DIR/../refind" ]; then
         echo "📂 Copiando tema local desde: $ISO_DIR/../refind"
-        $SUDO cp -r "$ISO_DIR/../refind" "$BUILD_DIR/refind-mac-theme"
-        $SUDO rm -rf "$BUILD_DIR/refind-mac-theme/.git"
+        $SUDO cp -r "$ISO_DIR/../refind" "$REFIND_THEME_DIR_TMP"
+        $SUDO rm -rf "$REFIND_THEME_DIR_TMP/.git"
     else
         echo "🌐 Descargando tema desde GitHub..."
-        $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$BUILD_DIR/refind-mac-theme"
+        $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$REFIND_THEME_DIR_TMP"
     fi
-    $SUDO sed -i '/#MENUENTRIES/q' "$BUILD_DIR/refind-mac-theme/theme.conf"
+    $SUDO sed -i '/#MENUENTRIES/q' "$REFIND_THEME_DIR_TMP/theme.conf"
     BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR" ]; then
         echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
-        $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_toram.png" 2>/dev/null || true
-        $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_normal.png" 2>/dev/null || true
-        $SUDO cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_debug.png" 2>/dev/null || true
-        $SUDO cp -f "$BOOT_ICONS_DIR/old.png" "$BUILD_DIR/refind-mac-theme/icons/os_pulsaros_old.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_toram.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_normal.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_debug.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/old.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_old.png" 2>/dev/null || true
     fi
 
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
@@ -2396,7 +2288,7 @@ EOF
     $SUDO cp "$REFIND_SHARE_DIR/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
     $SUDO cp "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
-    $SUDO cp "$BUILD_DIR/refind-minimal.conf" "$ISO_STAGING/EFI/BOOT/refind.conf"
+    $SUDO cp "$REFIND_MINIMAL_CONF_TMP" "$ISO_STAGING/EFI/BOOT/refind.conf"
     # Copy kernel and initrd directly to the UEFI boot folder on the ISO
     # Copiar kernel e initrd directamente al directorio de arranque UEFI en la ISO
     $SUDO cp "$ISO_STAGING/live/vmlinuz" "$ISO_STAGING/EFI/BOOT/vmlinuz"
@@ -2412,19 +2304,19 @@ EOF
 
     $SUDO mcopy -i "$EFI_IMG" "$REFIND_SHARE_DIR/refind_x64.efi" ::/EFI/BOOT/bootx64.efi
     $SUDO mcopy -i "$EFI_IMG" "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi ::/EFI/BOOT/drivers_x64/ 2>/dev/null || true
-    $SUDO mcopy -i "$EFI_IMG" "$BUILD_DIR/refind.conf" ::/EFI/BOOT/refind.conf
+    $SUDO mcopy -i "$EFI_IMG" "$REFIND_CONF_TMP" ::/EFI/BOOT/refind.conf
     $SUDO mcopy -s -i "$EFI_IMG" "$REFIND_SHARE_DIR/icons"/* ::/EFI/BOOT/icons/
     $SUDO mmd -i "$EFI_IMG" ::/EFI/BOOT/themes/rEFInd-Regular-Dark
-    $SUDO mcopy -s -i "$EFI_IMG" "$BUILD_DIR/refind-mac-theme"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
+    $SUDO mcopy -s -i "$EFI_IMG" "$REFIND_THEME_DIR_TMP"/* ::/EFI/BOOT/themes/rEFInd-Regular-Dark/
     # Copy kernel and initrd directly to the efi.img FAT volume using mtools
     # Copiar kernel e initrd directamente al volumen FAT de efi.img usando mtools
     $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/vmlinuz" ::/EFI/BOOT/vmlinuz
     $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/live/initrd" ::/EFI/BOOT/initrd
 
     # Cleanup temp build files
-    $SUDO rm -f "$BUILD_DIR/refind.conf"
-    $SUDO rm -f "$BUILD_DIR/refind-minimal.conf"
-    $SUDO rm -rf "$BUILD_DIR/refind-mac-theme"
+    $SUDO rm -f "$REFIND_CONF_TMP"
+    $SUDO rm -f "$REFIND_MINIMAL_CONF_TMP"
+    $SUDO rm -rf "$REFIND_THEME_DIR_TMP"
 
     # Copy the custom GRUB theme to the ISO staging directory for Ventoy compatibility
     GRUB_THEME_SRC=""
