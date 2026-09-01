@@ -19,7 +19,7 @@ Clona la base limpia al rootfs para empezar a personalizar a partir de la base l
 Monta los sistemas de archivos necesarios y configura el acceso a internet,para poder bajar archivos de internet (repo Inled o paquetes de terceros) 
 
 ## Fase 5  
-Configura los repositorios de Inled, instala los paquetes necesarios de la distribución (calamares, etc...) hace una chapuza para que funcione autokey (necesario para el remap) y procede a crear los ajustes de Calamares. Aquí se instalan tanto los paquetes de /PKG subidos al repo de Inled como otros paquetes de Inled
+Configura los repositorios de Inled, instala los paquetes necesarios de la distribución (pulsaros-recovery, etc...), hace la configuración para autokey y procede a preparar el instalador nativo Pulsar OS Recovery. Aquí se instalan tanto los paquetes de /PKG subidos al repo de Inled como otros paquetes de Inled.
 
 ## Fase 5.5  
 Instala las aplicaciones externas, configura flatpak e instala hidamari por Flatpak.  
