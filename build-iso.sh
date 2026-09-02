@@ -1576,12 +1576,17 @@ if [ "$DISTRO" = "arch" ]; then
         fi
     fi
     
-    # Ensure kms hook is in the main /etc/mkinitcpio.conf HOOKS array (for the installed system)
+    # Set canonical HOOKS for the installed system.
+    # CRITICAL: With the systemd hook, systemd-hibernate-resume handles resume natively.
+    # The legacy busybox 'resume' hook MUST NOT coexist with 'systemd' — it causes the
+    # kernel to hang after Plymouth splash on resume (waiting for /sys/power/resume that
+    # systemd already consumed). Hard-write the canonical line to avoid any stale state
+    # from the host's mkinitcpio.conf being inherited by the rootfs.
     if [ -f "$ROOTFS_TARGET/etc/mkinitcpio.conf" ]; then
-        if ! grep -q "kms" "$ROOTFS_TARGET/etc/mkinitcpio.conf" 2>/dev/null; then
-            echo "⚙️ Añadiendo el hook 'kms' a /etc/mkinitcpio.conf..."
-            $SUDO sed -i 's/\(^HOOKS=([^)]*\)\(block\)/\1kms \2/' "$ROOTFS_TARGET/etc/mkinitcpio.conf"
-        fi
+        echo "⚙️ Estableciendo HOOKS canónicos en /etc/mkinitcpio.conf del sistema instalado..."
+        $SUDO sed -i 's/^HOOKS=.*/HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole plymouth block filesystems fsck btrfs)/' \
+            "$ROOTFS_TARGET/etc/mkinitcpio.conf"
+        echo "   HOOKS → $(grep '^HOOKS=' "$ROOTFS_TARGET/etc/mkinitcpio.conf")"
     fi
     # Set the GRUB menu entry label to Pulsar OS instead of the archiso default "Arch"
     if [ -f "$ROOTFS_TARGET/etc/default/grub" ]; then
