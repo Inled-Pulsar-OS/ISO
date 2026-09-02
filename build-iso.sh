@@ -776,18 +776,14 @@ $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
 # Bind mount pacman cache dir in home (not root partition) if on Arch
 if [ "$DISTRO" = "arch" ]; then
     $SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
-    # Purge previously cached Inled-repo packages: an interrupted download
-    # (e.g. while a release asset is being re-uploaded to GitHub) leaves a
-    # truncated .pkg.tar.zst in the bind-mounted cache that fails its PGP
-    # signature check and aborts the build with
-    # "paquete no válido o dañado (firma PGP)".
-    for p in pulsaros-branding pulsaros-theme pulsaros-gnome sayri pulsaros-global-menu \
-             pulsaros-spotlight-launcher pulsaros-sddm pulsaros-plymouth \
-             pulsaros-refind pulsaros-grub pulsaros-essential pulsaros-hibernate \
-             pulsaros-welcome pulsaros-recovery pulsaros-bootsound pulsar-pear-sound-theme \
-             gnome-macos-remap-wayland droidtux macboat appinstall seafari \
-             spotlight-gtk; do
-        $SUDO rm -f "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst "$PACMAN_CACHE_DIR"/$p-*.pkg.tar.zst.sig 2>/dev/null || true
+    # Purge previously cached Inled-repo packages and obsolete packages (like calamares):
+    # an interrupted download or obsolete package leaves stale/broken .pkg.tar.zst in the
+    # bind-mounted cache that fails signature checks or reintroduces removed packages.
+    for pattern in "pulsaros-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
+                   "droidtux-*" "macboat-*" "appinstall-*" "seafari-*" \
+                   "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
+                   "pulsar-pear-sound-theme-*" "*-debug-*"; do
+        $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst.sig 2>/dev/null || true
     done
 fi
 
@@ -905,10 +901,15 @@ EOF
         # package. pacman -U rejects two versions of the same package with
         # "duplicate target", and the package build directory accumulates old
         # builds over time.
-        echo "🧹 Removing old versions of local packages..."
+        echo "🧹 Removing old versions and orphan packages from local packages..."
         for pkg_file in $(ls -rv "$LOCAL_PKGS_DIR"/*.pkg.tar.zst 2>/dev/null); do
             pkg_name=$(LC_ALL=C pacman -Qip "$pkg_file" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
             [ -z "$pkg_name" ] && continue
+            if [[ "$pkg_name" == *calamares* ]] || [[ "$pkg_name" == *-debug* ]]; then
+                echo "   Eliminando paquete no deseado: $(basename "$pkg_file")"
+                rm -f "$pkg_file"
+                continue
+            fi
             if echo "$seen_pkg_names" | grep -qx "$pkg_name"; then
                 echo "   Eliminando versión anterior de $pkg_name: $(basename "$pkg_file")"
                 rm -f "$pkg_file"
@@ -993,6 +994,8 @@ $pkg_name"
         # Clean up packages that are not needed or cause dependency issues inside the chroot
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/autokey-qt-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-keybindings-*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
@@ -1049,14 +1052,14 @@ $pkg_name"
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
-            # Pin our custom nautilus so the following -Syu doesn't replace it with upstream
+            # Pin our custom nautilus so subsequent pacman runs don't replace it with upstream
             if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
                 sed -i '/^Architecture = auto$/a IgnorePkg = nautilus' /etc/pacman.conf
             fi
 
             # Install remaining dependencies and packages.
             # droidtux/macboat/appinstall/seafari come from the [inled] repo via pacman.
-            pacman -Syu --noconfirm --overwrite '*' \
+            pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 droidtux \
                 macboat \
@@ -1281,6 +1284,8 @@ EOF
         echo "📂 Using local packages from: $LOCAL_DEBS_DIR"
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug*
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
         else
