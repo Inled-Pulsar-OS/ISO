@@ -1905,9 +1905,8 @@ unmount_tree "$ROOTFS_TARGET"
                    "$ROOTFS_TARGET/usr/lib/pulsaros/resume-session" \
                    "$ROOTFS_TARGET/usr/lib/pulsaros/verify-resume-offset" \
                    "$ROOTFS_TARGET/usr/lib/systemd/system-sleep/pulsaros-hibernate.sh" 2>/dev/null || true
-    # Enable the post-resume session restoration service
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c \
-        "systemctl enable pulsaros-resume-session.service 2>/dev/null || true" 2>/dev/null || true
+    # pulsaros-resume-session.service is activated by the drop-in of
+    # systemd-hibernate-clear.service — no explicit enable needed.
     # 3. pulsaros-global-menu
     $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-power-action" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
     $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-setup-hibernation" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
