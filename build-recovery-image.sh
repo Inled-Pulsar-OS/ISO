@@ -212,6 +212,7 @@ $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant"
 
 # Configure user 'live' and permissions
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     if ! id live >/dev/null 2>&1; then
         useradd -m -s /bin/bash live
         for g in sudo audio video render tty plugdev disk users input; do
@@ -457,6 +458,7 @@ $SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true
 
 # Unlock root and configure systemd environment
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     echo 'root:root' | chpasswd
     echo 'live:live' | chpasswd
     echo 'SYSTEMD_SULOGIN_FORCE=1' >> /etc/environment
@@ -529,6 +531,7 @@ $SUDO mount -t sysfs sys "$ROOTFS_REC/sys" 2>/dev/null || true
 $SUDO mount --bind /dev "$ROOTFS_REC/dev" 2>/dev/null || true
 
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || true
     if command -v plymouth-set-default-theme >/dev/null 2>&1; then
         plymouth-set-default-theme pulsar-plymouth 2>/dev/null || plymouth-set-default-theme spinner 2>/dev/null || true
