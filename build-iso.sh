@@ -1883,6 +1883,24 @@ unmount_tree "$ROOTFS_TARGET"
         fi
     fi
 
+    # Sync latest local development packages directly into target rootfs
+    echo "📦 Syncing latest local workspace components into target rootfs..."
+    # 1. pulsaros-recovery (recovery.py, rust assistant)
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/bin" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+    $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery/." "$ROOTFS_TARGET/usr/share/pulsaros-recovery/" 2>/dev/null || true
+    # 2. pulsaros-hibernate
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/lib/pulsaros" "$ROOTFS_TARGET/usr/lib/systemd/system-sleep" "$ROOTFS_TARGET/etc/systemd/system"
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-hibernate/usr/lib/pulsaros/sleep-progress" "$ROOTFS_TARGET/usr/lib/pulsaros/" 2>/dev/null || true
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-hibernate/usr/lib/pulsaros/verify-resume-offset" "$ROOTFS_TARGET/usr/lib/pulsaros/" 2>/dev/null || true
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-hibernate/usr/lib/systemd/system-sleep/pulsaros-hibernate.sh" "$ROOTFS_TARGET/usr/lib/systemd/system-sleep/" 2>/dev/null || true
+    $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-hibernate/etc/systemd/system/." "$ROOTFS_TARGET/etc/systemd/system/" 2>/dev/null || true
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/lib/pulsaros/sleep-progress" "$ROOTFS_TARGET/usr/lib/pulsaros/verify-resume-offset" "$ROOTFS_TARGET/usr/lib/systemd/system-sleep/pulsaros-hibernate.sh" 2>/dev/null || true
+    # 3. pulsaros-global-menu
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-power-action" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-setup-hibernation" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/pulsaros-power-action" "$ROOTFS_TARGET/usr/bin/pulsaros-setup-hibernation" 2>/dev/null || true
+
     # Remove unwanted GNOME extensions from rootfs
     echo "🧹 Removing unwanted GNOME extensions (places-menu, window-list)..."
     $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
