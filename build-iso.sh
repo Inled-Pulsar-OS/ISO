@@ -170,7 +170,7 @@ MISSING_PACKAGES=()
 
 # Check standard commands / Comprobar comandos estándar
 if [ "$DISTRO" = "arch" ]; then
-    CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+    CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc" "patchelf")
 else
     CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 fi
