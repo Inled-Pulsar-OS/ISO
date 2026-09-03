@@ -198,23 +198,25 @@ if ! check_host_package_installed "mtools"; then
     MISSING_PACKAGES+=("mtools")
 fi
 
-if [ "$BOOTLOADER" = "grub" ]; then
-    # We also need the BIOS and UEFI build files for grub-mkrescue
-    # También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
-    if ! check_host_package_installed "grub-pc-bin"; then
-        MISSING_PACKAGES+=("grub-pc-bin")
+if [ "$DISTRO" = "debian" ]; then
+    if [ "$BOOTLOADER" = "grub" ]; then
+        # We also need the BIOS and UEFI build files for grub-mkrescue
+        # También necesitamos los archivos de construcción BIOS y UEFI para grub-mkrescue
+        if ! check_host_package_installed "grub-pc-bin"; then
+            MISSING_PACKAGES+=("grub-pc-bin")
+        fi
+        if ! check_host_package_installed "grub-efi-amd64-bin"; then
+            MISSING_PACKAGES+=("grub-efi-amd64-bin")
+        fi
     fi
-    if ! check_host_package_installed "grub-efi-amd64-bin"; then
-        MISSING_PACKAGES+=("grub-efi-amd64-bin")
+
+    if ! command -v debootstrap >/dev/null 2>&1 && ! command -v mmdebstrap >/dev/null 2>&1; then
+        MISSING_PACKAGES+=("debootstrap")
     fi
-fi
 
-if ! command -v debootstrap >/dev/null 2>&1 && ! command -v mmdebstrap >/dev/null 2>&1; then
-    MISSING_PACKAGES+=("debootstrap")
-fi
-
-if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
-    MISSING_PACKAGES+=("debian-archive-keyring")
+    if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+        MISSING_PACKAGES+=("debian-archive-keyring")
+    fi
 fi
 
 # Install dependencies if they are missing / Instalar dependencias si faltan
@@ -222,12 +224,8 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo "⚠️ Essential dependencies detected to be missing from the host: ${MISSING_PACKAGES[*]}"
     echo "These tools are required for Pulsar OS build ($BOOTLOADER)."
     
-    # SAFETY GUARD: never touch the host package manager by default.
-    # The ISO build runs on the user's own machine (often Arch), and host-level
-    # pacman/apt operations (especially 'pacman -Sy' partial upgrades) can break it.
-    # Only auto-install when explicitly requested with --install-host-deps.
-    # GUARDIA DE SEGURIDAD: por defecto nunca se toca el gestor de paquetes del host.
-    if [ "$ALLOW_HOST_INSTALL" != "true" ]; then
+    # SAFETY GUARD: never touch the host package manager by default on developer machines.
+    if [ "$ALLOW_HOST_INSTALL" != "true" ] && [ "$GITHUB_ACTIONS" != "true" ] && [ "$CI" != "true" ]; then
         echo "❌ Missing host dependencies. They will NOT auto-install to protect your system."
         echo "   Manually install missing packages (e.g. sudo pacman -S ${MISSING_PACKAGES[*]})"
         echo "   or repeat the command with the variable ALLOW_HOST_INSTALL=true to authorize the installation. To install pacstrap use arch-install-scripts"
