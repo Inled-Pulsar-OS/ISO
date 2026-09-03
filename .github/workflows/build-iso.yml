@@ -73,8 +73,7 @@ jobs:
             imagemagick \
             psmisc \
             debian-archive-keyring
-          chmod +x build-iso.sh
-          sudo ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version "${{ github.event.inputs.version }}"
+          sudo ALLOW_HOST_INSTALL=true ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version "${{ github.event.inputs.version }}"
 
       # 3. Build inside privileged Docker container (for Arch)
       - name: Build Arch ISO inside Docker
@@ -83,6 +82,9 @@ jobs:
           sudo docker run --privileged --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
+            -e GITHUB_ACTIONS="true" \
+            -e CI="true" \
+            -e ALLOW_HOST_INSTALL="true" \
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
