@@ -1342,7 +1342,7 @@ EOF
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
-            yes | apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy
+            apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
             yes | apt-get install -y --no-install-recommends \
                 $BOOTLOADER_PKGS \
                 pulsaros-branding \
