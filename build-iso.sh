@@ -1389,6 +1389,41 @@ EOF
 fi
 
 # ==============================================================================
+# Install pre-compiled Tauri binary for pulsaros-welcome
+# Instalar el binario Tauri pre-compilado de pulsaros-welcome
+#
+# The pulsaros-welcome package installed from the repo may only contain the
+# Python+WebKitGTK fallback. The Tauri binary (compiled on the build host with
+# `npx tauri build`) must be installed separately at /usr/lib/pulsaros-welcome/
+# so the wrapper at /usr/bin/pulsaros-welcome picks it up. The binary is
+# architecture-specific: it must be compiled on the same distro as the target
+# rootfs (Arch binary for Arch ISOs, Debian binary for Debian ISOs).
+# ==============================================================================
+echo "🦀 Installing pre-compiled pulsaros-welcome Tauri binary..."
+WELCOME_PKG_SRC="$ISO_DIR/../PKG/pulsaros-welcome"
+WELCOME_TAURI_BIN="$WELCOME_PKG_SRC/usr/share/pulsaros-welcome/src-tauri/target/release/pulsaros-welcome"
+
+if [ -f "$WELCOME_TAURI_BIN" ] && [ -x "$WELCOME_TAURI_BIN" ]; then
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/lib/pulsaros-welcome"
+    $SUDO cp -f "$WELCOME_TAURI_BIN" "$ROOTFS_TARGET/usr/lib/pulsaros-welcome/pulsaros-welcome"
+    $SUDO chmod 755 "$ROOTFS_TARGET/usr/lib/pulsaros-welcome/pulsaros-welcome"
+    # Also update the wrapper script to the new version that checks /usr/lib first
+    $SUDO cp -f "$WELCOME_PKG_SRC/usr/bin/pulsaros-welcome" "$ROOTFS_TARGET/usr/bin/pulsaros-welcome"
+    $SUDO chmod 755 "$ROOTFS_TARGET/usr/bin/pulsaros-welcome"
+    # Also update dist/ with the freshly built frontend assets
+    if [ -d "$WELCOME_PKG_SRC/usr/share/pulsaros-welcome/dist" ]; then
+        $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/pulsaros-welcome"
+        $SUDO cp -rf "$WELCOME_PKG_SRC/usr/share/pulsaros-welcome/dist" \
+                     "$ROOTFS_TARGET/usr/share/pulsaros-welcome/"
+    fi
+    echo "✅ pulsaros-welcome Tauri binary installed at /usr/lib/pulsaros-welcome/pulsaros-welcome"
+else
+    echo "⚠️  pulsaros-welcome Tauri binary not found at $WELCOME_TAURI_BIN"
+    echo "   Run 'npx tauri build' inside PKG/pulsaros-welcome/usr/share/pulsaros-welcome"
+    echo "   to compile it before building the ISO. Python fallback will be used."
+fi
+
+# ==============================================================================
 # Cloudflare WARP for the Debian edition (installed the official way)
 #
 # The official Debian instructions add Cloudflare's own APT repo and install the
