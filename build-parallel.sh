@@ -322,7 +322,7 @@ fi
 REC_OUT="$SCRIPT_DIR/build/recovery-out"
 if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ] && [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
     echo "🛠️  Pre-generando imagen de recuperación compartida (Debian Recovery)..."
-    bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+    bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "${BRANCH:-stable}" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
 fi
 
 # ==============================================================================
