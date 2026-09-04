@@ -1124,6 +1124,7 @@ $pkg_name"
                 pulsaros-theme \
                 pulsaros-gnome \
                 sayri \
+                pulsaros-circle-to-search \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1892,7 +1893,7 @@ unmount_tree "$ROOTFS_TARGET"
                 flock -x 200
                 if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
                     echo "📦 Building dedicated Debian Recovery environment..."
-                    $SUDO bash "$SCRIPT_DIR/build-recovery-image.sh" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+                    $SUDO BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
                 fi
             ) 200>"$BUILD_DIR/.recovery.lock"
         fi
@@ -1950,6 +1951,10 @@ unmount_tree "$ROOTFS_TARGET"
     $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-power-action" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
     $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-global-menu/usr/bin/pulsaros-setup-hibernation" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
     $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/pulsaros-power-action" "$ROOTFS_TARGET/usr/bin/pulsaros-setup-hibernation" 2>/dev/null || true
+    # 4. pulsaros-circle-to-search
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/bin/pulsar-circle-to-search" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+    $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es" "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/" 2>/dev/null || true
+    $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/pulsar-circle-to-search" 2>/dev/null || true
 
     # Remove unwanted GNOME extensions from rootfs
     echo "🧹 Removing unwanted GNOME extensions (places-menu, window-list)..."
