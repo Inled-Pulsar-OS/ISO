@@ -634,9 +634,22 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     update-initramfs -u -k all
 "
 
-$SUDO umount -l "$ROOTFS_REC/proc" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_REC/sys" 2>/dev/null || true
-$SUDO umount -l "$ROOTFS_REC/dev" 2>/dev/null || true
+# Thoroughly unmount all virtual filesystems in $ROOTFS_REC
+echo "🧹 Unmounting all virtual filesystems in recovery rootfs..."
+for mp in "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev/shm" "$ROOTFS_REC/dev" "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/run"; do
+    if [ -d "$mp" ]; then
+        while mountpoint -q "$mp" 2>/dev/null; do
+            $SUDO umount -l "$mp" 2>/dev/null || true
+            sleep 0.1
+        done
+    fi
+done
+
+if [ -f /proc/mounts ]; then
+    grep "$ROOTFS_REC" /proc/mounts | cut -d' ' -f2 | sort -r | while read -r mnt; do
+        [ -n "$mnt" ] && $SUDO umount -l "$mnt" 2>/dev/null || true
+    done
+fi
 
 # Extract recovery kernel and initramfs
 echo "📦 Extracting recovery kernel and initramfs..."
@@ -663,12 +676,16 @@ $SUDO mksquashfs "$ROOTFS_REC" "$SQUASHFS_REC" \
     -b 1048576 \
     -Xdict-size 100% \
     -processors $(nproc) \
-    -wildcards \
-    -e "var/cache/apt/archives/*" \
-    -e "var/lib/apt/lists/*" \
-    -e "tmp/*" \
-    -e "var/tmp/*" \
-    -noappend
+    -noappend \
+    -e proc/* \
+    -e sys/* \
+    -e dev/* \
+    -e run/* \
+    -e tmp/* \
+    -e var/tmp/* \
+    -e var/log/* \
+    -e var/cache/apt/archives/* \
+    -e var/lib/apt/lists/*
 
 # Verify SquashFS was generated correctly
 if [ ! -f "$SQUASHFS_REC" ] || [ ! -s "$SQUASHFS_REC" ]; then
