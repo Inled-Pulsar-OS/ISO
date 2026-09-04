@@ -19,6 +19,28 @@ OUTPUT_DIR="${SCRIPT_DIR}/build/recovery-out"
 DEBIAN_VERSION="trixie"
 ARCH="amd64"
 MIRROR="http://deb.debian.org/debian"
+BRANCH="${BRANCH:-stable}"
+USE_LOCAL_PKGS="${USE_LOCAL_PKGS:-false}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --branch)
+            BRANCH="$2"
+            shift 2
+            ;;
+        --local-pkgs)
+            USE_LOCAL_PKGS=true
+            shift
+            ;;
+        --prod)
+            USE_LOCAL_PKGS=false
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -55,14 +77,16 @@ if [ ! -f "$PACKAGE_LIST_FILE" ]; then
     exit 1
 fi
 
-# Build / update the Rust recovery assistant binary first
-echo "🦀 Compiling Pulsar OS Recovery Assistant (Rust)..."
-(
-    cd "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery"
-    cargo build --release
-    mkdir -p "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin"
-    cp -f target/release/pulsar-recovery-assistant "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant"
-)
+# Optional: compile local Rust recovery assistant binary if in local development mode
+if [ "$USE_LOCAL_PKGS" = "true" ] && [ -d "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery" ] && command -v cargo >/dev/null 2>&1; then
+    echo "🦀 Compiling Pulsar OS Recovery Assistant (Rust) from local source..."
+    (
+        cd "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery"
+        cargo build --release
+        mkdir -p "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin"
+        cp -f target/release/pulsar-recovery-assistant "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant"
+    ) || echo "⚠️ Local Rust recovery compilation failed, using package from repository."
+fi
 
 # ==============================================================================
 # PHASE 1: Bootstrap clean Debian base (cached, only when missing or packages changed)
@@ -195,6 +219,15 @@ echo "✅ Fresh clone ready at $ROOTFS_REC"
 
 echo "⚙️ Configuring Recovery Environment (live user, autologin, Fluxbox, Rust assistant)..."
 
+# Mount virtual filesystems and configure DNS for package installation
+$SUDO mount -t proc proc "$ROOTFS_REC/proc" 2>/dev/null || true
+$SUDO mount -t sysfs sys "$ROOTFS_REC/sys" 2>/dev/null || true
+$SUDO mount --bind /dev "$ROOTFS_REC/dev" 2>/dev/null || true
+$SUDO mount --bind /dev/pts "$ROOTFS_REC/dev/pts" 2>/dev/null || true
+
+$SUDO rm -f "$ROOTFS_REC/etc/resolv.conf"
+printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 8.8.4.4\n" | $SUDO tee "$ROOTFS_REC/etc/resolv.conf" > /dev/null
+
 # Set hostname and networking
 $SUDO bash -c "echo 'pulsaros-recovery' > '$ROOTFS_REC/etc/hostname'"
 $SUDO bash -c "cat << 'HOSTS' > '$ROOTFS_REC/etc/hosts'
@@ -203,12 +236,57 @@ $SUDO bash -c "cat << 'HOSTS' > '$ROOTFS_REC/etc/hosts'
 ::1         localhost ip6-localhost ip6-loopback
 HOSTS"
 
-# Install Rust recovery assistant binary & assets into recovery rootfs
-$SUDO mkdir -p "$ROOTFS_REC/usr/bin" "$ROOTFS_REC/usr/share/pulsaros-recovery" "$ROOTFS_REC/usr/share/pulsar-boot-icons"
-$SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" "$ROOTFS_REC/usr/bin/"
-$SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery/." "$ROOTFS_REC/usr/share/pulsaros-recovery/" 2>/dev/null || true
-$SUDO cp -rf "$PULSAR_ROOT/PKG/pulsar-boot-icons/." "$ROOTFS_REC/usr/share/pulsar-boot-icons/" 2>/dev/null || true
-$SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant"
+# Set up Inled APT repository
+echo "🔑 Configuring Inled repository (apt.inled.es)..."
+$SUDO mkdir -p "$ROOTFS_REC/usr/share/keyrings" "$ROOTFS_REC/etc/apt/sources.list.d" "$ROOTFS_REC/etc/apt/preferences.d"
+if [ -f "$CONFIG_DIR/inled-archive-keyring.gpg" ]; then
+    $SUDO cp "$CONFIG_DIR/inled-archive-keyring.gpg" "$ROOTFS_REC/usr/share/keyrings/inled-archive-keyring.gpg"
+elif [ -f "/usr/share/keyrings/inled-archive-keyring.gpg" ]; then
+    $SUDO cp "/usr/share/keyrings/inled-archive-keyring.gpg" "$ROOTFS_REC/usr/share/keyrings/inled-archive-keyring.gpg"
+fi
+
+$SUDO bash -c "cat << 'INLEDLIST' > '$ROOTFS_REC/etc/apt/sources.list.d/inled.list'
+deb [signed-by=/usr/share/keyrings/inled-archive-keyring.gpg] https://apt.inled.es ${BRANCH:-stable} main
+INLEDLIST"
+
+$SUDO bash -c "cat << 'INLEDPIN' > '$ROOTFS_REC/etc/apt/preferences.d/99inled'
+Package: *
+Pin: origin \"apt.inled.es\"
+Pin-Priority: 1001
+INLEDPIN"
+
+# Install Pulsar OS packages from apt.inled.es
+echo "📦 Installing Pulsar OS packages (pulsaros-recovery, pulsaros-boot-icons, pulsaros-plymouth, pulsaros-theme)..."
+$SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    export DEBIAN_FRONTEND=noninteractive
+    echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        pulsaros-recovery \
+        pulsaros-boot-icons \
+        pulsaros-plymouth \
+        pulsaros-theme || true
+    rm -f /etc/apt/apt.conf.d/99force-overwrite
+    apt-get clean
+"
+
+# Optional local overrides for development mode
+if [ "$USE_LOCAL_PKGS" = "true" ]; then
+    if [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ]; then
+        echo "📂 Overriding with local Rust recovery assistant binary..."
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" "$ROOTFS_REC/usr/bin/"
+    fi
+    if [ -d "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery" ]; then
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery/." "$ROOTFS_REC/usr/share/pulsaros-recovery/" 2>/dev/null || true
+    fi
+    if [ -d "$PULSAR_ROOT/PKG/pulsar-boot-icons" ]; then
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsar-boot-icons/." "$ROOTFS_REC/usr/share/pulsar-boot-icons/" 2>/dev/null || true
+    fi
+fi
+
+if [ -f "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant" ]; then
+    $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant"
+fi
 
 # Configure user 'live' and permissions
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
@@ -344,19 +422,21 @@ $SUDO rm -f "$ROOTFS_REC/lib/systemd/system-shutdown/live-tools.shutdown" 2>/dev
 $SUDO rm -f "$ROOTFS_REC/usr/lib/systemd/system-shutdown/live-tools.shutdown" 2>/dev/null || true
 
 # Install Pulsar OS Plymouth theme
-echo "🎨 Installing Pulsar OS Plymouth theme into recovery environment..."
+echo "🎨 Configuring Pulsar OS Plymouth theme into recovery environment..."
 $SUDO mkdir -p "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth"
-if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth" ]; then
-    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
-elif [ -d "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo" ]; then
-    $SUDO cp -r "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
-else
-    TEMP_PLY="/tmp/pulsaros-recovery-plymouth"
-    rm -rf "$TEMP_PLY"
-    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/plymouth-macoslike" "$TEMP_PLY" 2>/dev/null || true
-    if [ -d "$TEMP_PLY" ]; then
-        $SUDO cp -r "$TEMP_PLY"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+if [ ! -f "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/pulsar-plymouth.plymouth" ]; then
+    if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth" ]; then
+        $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/plymouth/themes/pulsar-plymouth"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+    elif [ -d "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo" ]; then
+        $SUDO cp -r "$PULSAR_ROOT/PKG/pulsaros-plymouth/repo"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+    else
+        TEMP_PLY="/tmp/pulsaros-recovery-plymouth"
         rm -rf "$TEMP_PLY"
+        git clone --depth=1 "https://github.com/Inled-Pulsar-OS/plymouth-macoslike" "$TEMP_PLY" 2>/dev/null || true
+        if [ -d "$TEMP_PLY" ]; then
+            $SUDO cp -r "$TEMP_PLY"/* "$ROOTFS_REC/usr/share/plymouth/themes/pulsar-plymouth/"
+            rm -rf "$TEMP_PLY"
+        fi
     fi
 fi
 
@@ -378,40 +458,44 @@ PLYCONF"
 # ----------------------------------------------------------------------
 # Install MacTahoe GTK Theme, Icons & Cursors into Recovery Rootfs
 # ----------------------------------------------------------------------
-echo "🎨 Installing MacTahoe theme, icons, and cursor theme into recovery environment..."
+echo "🎨 Configuring MacTahoe theme, icons, and cursor theme into recovery environment..."
 $SUDO mkdir -p "$ROOTFS_REC/usr/share/themes" "$ROOTFS_REC/usr/share/icons"
 
 # 1. MacTahoe GTK Theme
-if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark" ]; then
-    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
-elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark" ]; then
-    $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
-elif [ -d "/usr/share/themes/MacTahoe-Dark" ]; then
-    $SUDO cp -r "/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
-else
-    TEMP_THEME="/tmp/pulsaros-recovery-mactahoe"
-    rm -rf "$TEMP_THEME"
-    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-gtk-theme" "$TEMP_THEME" 2>/dev/null || true
-    if [ -d "$TEMP_THEME" ]; then
-        $SUDO cp -r "$TEMP_THEME/src/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/" 2>/dev/null || true
+if [ ! -d "$ROOTFS_REC/usr/share/themes/MacTahoe-Dark" ]; then
+    if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark" ]; then
+        $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+    elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark" ]; then
+        $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+    elif [ -d "/usr/share/themes/MacTahoe-Dark" ]; then
+        $SUDO cp -r "/usr/share/themes/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/"
+    else
+        TEMP_THEME="/tmp/pulsaros-recovery-mactahoe"
         rm -rf "$TEMP_THEME"
+        git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-gtk-theme" "$TEMP_THEME" 2>/dev/null || true
+        if [ -d "$TEMP_THEME" ]; then
+            $SUDO cp -r "$TEMP_THEME/src/MacTahoe-Dark"* "$ROOTFS_REC/usr/share/themes/" 2>/dev/null || true
+            rm -rf "$TEMP_THEME"
+        fi
     fi
 fi
 
 # 2. MacTahoe Icons and Cursors
-if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe-blue-dark" ]; then
-    $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
-elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe-blue-dark" ]; then
-    $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
-elif [ -d "/usr/share/icons/MacTahoe-blue-dark" ]; then
-    $SUDO cp -r "/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
-else
-    TEMP_ICON="/tmp/pulsaros-recovery-mactahoe-icons"
-    rm -rf "$TEMP_ICON"
-    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-icon-theme" "$TEMP_ICON" 2>/dev/null || true
-    if [ -d "$TEMP_ICON" ]; then
-        $SUDO cp -r "$TEMP_ICON/dist/MacTahoe"* "$ROOTFS_REC/usr/share/icons/" 2>/dev/null || true
+if [ ! -d "$ROOTFS_REC/usr/share/icons/MacTahoe-blue-dark" ]; then
+    if [ -d "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe-blue-dark" ]; then
+        $SUDO cp -r "$BUILD_DIR/rootfs-target-stable-arch/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+    elif [ -d "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe-blue-dark" ]; then
+        $SUDO cp -r "$PULSAR_ROOT/PKG/build/pkg-staging/pulsaros-theme/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+    elif [ -d "/usr/share/icons/MacTahoe-blue-dark" ]; then
+        $SUDO cp -r "/usr/share/icons/MacTahoe"* "$ROOTFS_REC/usr/share/icons/"
+    else
+        TEMP_ICON="/tmp/pulsaros-recovery-mactahoe-icons"
         rm -rf "$TEMP_ICON"
+        git clone --depth=1 "https://github.com/Inled-Pulsar-OS/MacTahoe-icon-theme" "$TEMP_ICON" 2>/dev/null || true
+        if [ -d "$TEMP_ICON" ]; then
+            $SUDO cp -r "$TEMP_ICON/dist/MacTahoe"* "$ROOTFS_REC/usr/share/icons/" 2>/dev/null || true
+            rm -rf "$TEMP_ICON"
+        fi
     fi
 fi
 

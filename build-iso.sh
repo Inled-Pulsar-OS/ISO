@@ -2188,7 +2188,7 @@ if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
     set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 fi
 
-menuentry "Pulsar OS Live (RAM)" --class pulsaros --class gnu-linux --class os {
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $RAM_PARAMS
     initrd /live/initrd
 }
@@ -2198,12 +2198,12 @@ menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class o
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros --class gnu-linux --class os {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $DEBUG_PARAMS
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros --class gnu-linux --class os {
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $LEGACY_PARAMS
     initrd /live/initrd
 }
@@ -2242,22 +2242,22 @@ if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
     set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 fi
 
-menuentry "Pulsar OS Live (RAM)" {
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Normal)" {
+menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (No Plymouth / Debug)" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
@@ -2561,22 +2561,22 @@ if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
     set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 fi
 
-menuentry "Pulsar OS Live (RAM)" {
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Normal)" {
+menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (No Plymouth / Debug)" {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
