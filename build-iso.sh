@@ -1958,11 +1958,28 @@ unmount_tree "$ROOTFS_TARGET"
     $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es" "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/" 2>/dev/null || true
     $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/pulsar-circle-to-search" 2>/dev/null || true
 
+    # 5. pulsaros-gnome overrides & dconf settings
+    if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome" ]; then
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/share/glib-2.0/schemas/." "$ROOTFS_TARGET/usr/share/glib-2.0/schemas/" 2>/dev/null || true
+        $SUDO mkdir -p "$ROOTFS_TARGET/etc/dconf/db/local.d"
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/dconf/db/local.d/." "$ROOTFS_TARGET/etc/dconf/db/local.d/" 2>/dev/null || true
+    fi
+
     # Remove unwanted GNOME extensions from rootfs
     echo "🧹 Removing unwanted GNOME extensions (places-menu, window-list)..."
     $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/search-light@icedman.github.com" 2>/dev/null || true
+
+    # Recompile glib schemas and update dconf database
+    echo "⚙️ Recompiling GLib schemas and updating dconf database..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
+        find /usr/share/gnome-shell/extensions -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
+        if command -v dconf >/dev/null 2>&1; then
+            dconf update 2>/dev/null || true
+        fi
+    " 2>/dev/null || true
 
 # ── Deep clean rootfs before compression ──────────────────────────────────
 echo "🧹 Deep-cleaning rootfs before SquashFS compression..."
