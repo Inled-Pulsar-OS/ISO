@@ -2116,40 +2116,51 @@ if [ "$BOOTLOADER" = "grub" ]; then
     echo "⚙️ Configuring GRUB for ISO..."
     $SUDO mkdir -p "$ISO_STAGING/boot/grub"
     
-    # Copy the custom GRUB theme to the ISO staging directory / Copiar el tema de GRUB personalizado
-    GRUB_THEME_SRC=""
-    if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
-        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
-    elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
-    elif [ -d "$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme"
-    elif [ -d "$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme"
+    # Prepare clean GRUB theme for ISO staging (overlay-free, clean background, icon-free live entries)
+    echo "🎨 Preparando tema limpio de GRUB para la ISO..."
+    $SUDO rm -rf "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+
+    TMP_GRUB_STAGE="/tmp/iso-grub-theme-stage-${VARIANT_NAME}-${BOOTLOADER}-$$"
+    $SUDO rm -rf "$TMP_GRUB_STAGE"
+    mkdir -p "$TMP_GRUB_STAGE"
+    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/grub.theme" "$TMP_GRUB_STAGE/theme" >/dev/null 2>&1 || true
+
+    if [ -f "$TMP_GRUB_STAGE/theme/generate.sh" ]; then
+        (cd "$TMP_GRUB_STAGE/theme" && ./generate.sh -d "$ISO_STAGING/boot/grub/themes" -t window -s 1080p >/dev/null 2>&1 || true)
     fi
-    if [ -z "$GRUB_THEME_SRC" ] && [ -f "$SCRIPT_DIR/../PKG/pulsaros-grub/prepare-assets.sh" ]; then
-        echo "🎨 Preparando tema de GRUB para la ISO..."
-        TMP_GRUB_STAGE="/tmp/iso-grub-theme-stage-${VARIANT_NAME}-${BOOTLOADER}-$$"
-        $SUDO rm -rf "$TMP_GRUB_STAGE"
-        mkdir -p "$TMP_GRUB_STAGE"
-        bash "$SCRIPT_DIR/../PKG/pulsaros-grub/prepare-assets.sh" "$TMP_GRUB_STAGE" >/dev/null 2>&1 || true
-        if [ -d "$TMP_GRUB_STAGE/boot/grub/themes/grub-theme" ]; then
-            GRUB_THEME_SRC="$TMP_GRUB_STAGE/boot/grub/themes/grub-theme"
+
+    # Ensure clean wallpaper background.jpg without frosted glass box
+    if [ -f "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" ]; then
+        if command -v magick >/dev/null 2>&1; then
+            magick "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
+        elif command -v convert >/dev/null 2>&1; then
+            convert "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
         fi
     fi
-    if [ -n "$GRUB_THEME_SRC" ] && [ -d "$GRUB_THEME_SRC" ]; then
-        echo "🎨 Copying Pulsar OS GRUB theme ($GRUB_THEME_SRC) to the ISO staging..."
-        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
-        $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
-        if [ -d "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common" ]; then
-            $SUDO cp -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
-        fi
+
+    # Purge any overlay assets (window.png, sidebar.png, info.png)
+    $SUDO rm -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/info.png" \
+                "$ISO_STAGING/boot/grub/themes/Particle-circle-window/window.png" \
+                "$ISO_STAGING/boot/grub/themes/Particle-circle-window/sidebar.png"
+
+    # Remove all icons for Live ISO
+    $SUDO rm -rf "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+
+    # Enforce icon-free and wide menu settings in theme.txt
+    if [ -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt" ]; then
+        $SUDO sed -i '/\+ image {/,/}/d' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/icon_width = .*/icon_width = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/icon_height = .*/icon_height = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/item_icon_space = .*/item_icon_space = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/width = .*/width = 65%/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
     fi
-    BOOT_ICONS_DIR="$(resolve_boot_icons)"
-    if [ -d "$BOOT_ICONS_DIR/grub" ]; then
-        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
-        $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
+
+    if [ -d "$TMP_GRUB_STAGE/theme/common" ]; then
+        $SUDO cp -f "$TMP_GRUB_STAGE/theme/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
     fi
+    $SUDO rm -rf "$TMP_GRUB_STAGE"
     
     # Copiar la fuente unicode.pf2 para evitar caracteres rotos [?] en el menú de GRUB
     $SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
@@ -2499,27 +2510,50 @@ EOF
     $SUDO rm -rf "$REFIND_THEME_DIR_TMP"
 
     # Copy the custom GRUB theme to the ISO staging directory for Ventoy compatibility
-    GRUB_THEME_SRC=""
-    if [ -d "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window" ]; then
-        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
-    elif [ -d "$ROOTFS_TARGET/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$ROOTFS_TARGET/boot/grub/themes/grub-theme"
-    elif [ -d "$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/build/pkg-staging/pulsaros-grub/boot/grub/themes/grub-theme"
-    elif [ -d "$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme" ]; then
-        GRUB_THEME_SRC="$SCRIPT_DIR/../PKG/arch/pkgbuilds/pulsaros-grub/src/staging/boot/grub/themes/grub-theme"
+    echo "🎨 Preparando tema limpio de GRUB para Ventoy..."
+    $SUDO rm -rf "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
+
+    TMP_GRUB_STAGE="/tmp/iso-grub-theme-stage-ventoy-${VARIANT_NAME}-${BOOTLOADER}-$$"
+    $SUDO rm -rf "$TMP_GRUB_STAGE"
+    mkdir -p "$TMP_GRUB_STAGE"
+    git clone --depth=1 "https://github.com/Inled-Pulsar-OS/grub.theme" "$TMP_GRUB_STAGE/theme" >/dev/null 2>&1 || true
+
+    if [ -f "$TMP_GRUB_STAGE/theme/generate.sh" ]; then
+        (cd "$TMP_GRUB_STAGE/theme" && ./generate.sh -d "$ISO_STAGING/boot/grub/themes" -t window -s 1080p >/dev/null 2>&1 || true)
     fi
-    if [ -n "$GRUB_THEME_SRC" ] && [ -d "$GRUB_THEME_SRC" ]; then
-        $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
-        $SUDO cp -rf "$GRUB_THEME_SRC"/* "$ISO_STAGING/boot/grub/themes/Particle-circle-window/"
-        if [ -d "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common" ]; then
-            $SUDO cp -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
-        fi
-        if [ -d "$BOOT_ICONS_DIR/grub" ]; then
-            $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
-            $SUDO cp -f "$BOOT_ICONS_DIR/grub"/icons-1080p/*.png "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons/" 2>/dev/null || true
+
+    # Ensure clean wallpaper background.jpg without frosted glass box
+    if [ -f "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" ]; then
+        if command -v magick >/dev/null 2>&1; then
+            magick "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
+        elif command -v convert >/dev/null 2>&1; then
+            convert "$SCRIPT_DIR/../PKG/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
         fi
     fi
+
+    # Purge any overlay assets (window.png, sidebar.png, info.png)
+    $SUDO rm -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/info.png" \
+                "$ISO_STAGING/boot/grub/themes/Particle-circle-window/window.png" \
+                "$ISO_STAGING/boot/grub/themes/Particle-circle-window/sidebar.png"
+
+    # Remove all icons for Live ISO
+    $SUDO rm -rf "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+    $SUDO mkdir -p "$ISO_STAGING/boot/grub/themes/Particle-circle-window/icons"
+
+    # Enforce icon-free and wide menu settings in theme.txt
+    if [ -f "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt" ]; then
+        $SUDO sed -i '/\+ image {/,/}/d' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/icon_width = .*/icon_width = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/icon_height = .*/icon_height = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/item_icon_space = .*/item_icon_space = 0/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+        $SUDO sed -i 's/width = .*/width = 65%/' "$ISO_STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+    fi
+
+    if [ -d "$TMP_GRUB_STAGE/theme/common" ]; then
+        $SUDO cp -f "$TMP_GRUB_STAGE/theme/common"/*.pf2 "$ISO_STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
+    fi
+    $SUDO rm -rf "$TMP_GRUB_STAGE"
     # Copy unicode.pf2 for Ventoy's GRUB menus
     $SUDO mkdir -p "$ISO_STAGING/boot/grub/fonts"
     if [ -f "/usr/share/grub/unicode.pf2" ]; then
