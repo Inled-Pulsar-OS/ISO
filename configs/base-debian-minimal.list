@@ -78,6 +78,9 @@ flatpak
 # ── GNOME Extensions ─────────────────────────────────────────────────────────
 gnome-shell-extensions
 gnome-shell-extension-appindicator
+gnome-shell-extension-gsconnect
+gir1.2-ayatanaappindicator3-0.1
+libayatana-appindicator3-1
 
 # ── Fildem HUD / Global Menu Dependencies ────────────────────────────────────
 python3-gi
@@ -88,6 +91,8 @@ gir1.2-gtk-3.0
 gir1.2-gtk4layershell-1.0
 gir1.2-webkit2-4.1
 gir1.2-glib-2.0
+gir1.2-gst-plugins-base-1.0
+gir1.2-gstreamer-1.0
 bamfdaemon
 libbamf3-dev
 libkeybinder-3.0-dev
@@ -152,6 +157,7 @@ zip
 locales
 autokey-gtk
 alsa-utils
+tesseract-ocr
 
 # ── Graphics Acceleration ────────────────────────────────────────────────────
 mesa-utils
