@@ -825,7 +825,7 @@ NoProgressBar
 ParallelDownloads = 1
 
 [inled]
-SigLevel = Never
+SigLevel = Optional TrustAll
 Server = https://apt.inled.es/arch/
 
 [core]
