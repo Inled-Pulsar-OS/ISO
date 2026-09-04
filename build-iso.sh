@@ -1326,21 +1326,24 @@ EOF
             set -e
             export DEBIAN_FRONTEND=noninteractive
             export PULSAR_BUILD_CHROOT=1
+            export LANG=C.UTF-8
+            export LC_ALL=C.UTF-8
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update || true
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
-            yes | apt-get install -y --allow-downgrades --no-install-recommends \$BOOTLOADER_PKGS
-            if [ "$MINIMAL" = "false" ]; then
-                yes | apt-get install -y --allow-downgrades \
-                    /tmp/packages/*.deb \
-                    droidtux \
-                    macboat \
-                    appinstall \
-                    seafari || yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
-            else
-                yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
-            fi
+            yes | apt-get install -y --allow-downgrades --no-install-recommends $BOOTLOADER_PKGS
+            yes | apt-get install -y --allow-downgrades \
+                /tmp/packages/*.deb \
+                droidtux \
+                macboat \
+                appinstall \
+                seafari || {
+                    echo '⚠️ Direct batch install encountered conflicts, resolving...'
+                    apt-get install -y --fix-broken || true
+                    yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
+                    apt-get install -y --allow-downgrades droidtux macboat appinstall seafari || true
+                }
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1359,14 +1362,12 @@ EOF
             set -e
             export DEBIAN_FRONTEND=noninteractive
             export PULSAR_BUILD_CHROOT=1
+            export LANG=C.UTF-8
+            export LC_ALL=C.UTF-8
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
-            echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
+            echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
-            EXTRA_COMPAT_PKGS=\"\"
-            if [ \"$MINIMAL\" = \"false\" ]; then
-                EXTRA_COMPAT_PKGS=\"droidtux macboat appinstall seafari\"
-            fi
             yes | apt-get install -y --allow-downgrades --no-install-recommends \
                 \$BOOTLOADER_PKGS \
                 pulsaros-branding \
@@ -1389,7 +1390,10 @@ EOF
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                \$EXTRA_COMPAT_PKGS
+                droidtux \
+                macboat \
+                appinstall \
+                seafari
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1407,7 +1411,7 @@ EOF
         dpkg-divert --remove --rename /usr/bin/gpg 2>/dev/null || true
     "
 
-    # Pre-generate Debian locales (es_ES.UTF-8 and en_US.UTF-8)
+    # Pre-generate Debian locales (es_ES.UTF-8 and en_US.UTF-8) with default en_US.UTF-8
     echo "🔤 Configuring and generating Debian locales..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
@@ -1418,7 +1422,9 @@ EOF
         grep -q '^es_ES.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'es_ES.UTF-8 UTF-8' >> /etc/locale.gen
         grep -q '^en_US.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
         locale-gen
-        update-locale LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 2>/dev/null || true
+        update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 2>/dev/null || true
+        echo 'LANG=en_US.UTF-8' > /etc/default/locale
+        echo 'LANG=en_US.UTF-8' > /etc/locale.conf
     "
 fi
 
@@ -1433,7 +1439,7 @@ fi
 # architecture-specific: it must be compiled on the same distro as the target
 # rootfs (Arch binary for Arch ISOs, Debian binary for Debian ISOs).
 # ==============================================================================
-echo "🦀 Installing pre-compiled pulsaros-welcome Tauri binary..."
+echo "🦀 Checking pulsaros-welcome Tauri binary..."
 WELCOME_PKG_SRC="$ISO_DIR/../PKG/pulsaros-welcome"
 WELCOME_TAURI_BIN="$WELCOME_PKG_SRC/usr/share/pulsaros-welcome/src-tauri/target/release/pulsaros-welcome"
 
@@ -1450,11 +1456,11 @@ if [ -f "$WELCOME_TAURI_BIN" ] && [ -x "$WELCOME_TAURI_BIN" ]; then
         $SUDO cp -rf "$WELCOME_PKG_SRC/usr/share/pulsaros-welcome/dist" \
                      "$ROOTFS_TARGET/usr/share/pulsaros-welcome/"
     fi
-    echo "✅ pulsaros-welcome Tauri binary installed at /usr/lib/pulsaros-welcome/pulsaros-welcome"
+    echo "✅ pulsaros-welcome Tauri binary installed from local build at /usr/lib/pulsaros-welcome/pulsaros-welcome"
+elif [ -f "$ROOTFS_TARGET/usr/lib/pulsaros-welcome/pulsaros-welcome" ] && [ -x "$ROOTFS_TARGET/usr/lib/pulsaros-welcome/pulsaros-welcome" ]; then
+    echo "✅ pulsaros-welcome Tauri binary already present in rootfs from package (/usr/lib/pulsaros-welcome/pulsaros-welcome)"
 else
-    echo "⚠️  pulsaros-welcome Tauri binary not found at $WELCOME_TAURI_BIN"
-    echo "   Run 'npx tauri build' inside PKG/pulsaros-welcome/usr/share/pulsaros-welcome"
-    echo "   to compile it before building the ISO. Python fallback will be used."
+    echo "⚠️  pulsaros-welcome Tauri binary not found. Python fallback will be used."
 fi
 
 # ==============================================================================
@@ -1566,7 +1572,11 @@ fi
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
-    _iso_ver="${PULSAR_VERSION:-rolling}"
+    if [ "$DISTRO" = "debian" ]; then
+        _iso_ver="${PULSAR_VERSION:-${DEBIAN_VERSION:-13}}"
+    else
+        _iso_ver="${PULSAR_VERSION:-rolling}"
+    fi
     _iso_base="Pulsar OS Bitten Fruit ${DISTRO^} Based"
     _iso_pretty="$_iso_base"
     if [ -n "$PULSAR_VERSION" ] && [ "$PULSAR_VERSION" != "rolling" ]; then
@@ -1582,7 +1592,7 @@ VERSION="${_iso_ver}"
 BUILD_ID="${_build_id}"
 IMAGE_VERSION="${_iso_ver}"
 ID=pulsaros
-ID_LIKE=arch
+ID_LIKE=${DISTRO}
 HOME_URL="https://os.inled.es"
 DOCUMENTATION_URL="https://os.inled.es/help/"
 SUPPORT_URL="https://link.inled.es/discord"
@@ -1926,7 +1936,7 @@ unmount_tree "$ROOTFS_TARGET"
                 flock -x 200
                 if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
                     echo "📦 Building dedicated Debian Recovery environment..."
-                    $SUDO BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+                    $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
                 fi
             ) 200>"$BUILD_DIR/.recovery.lock"
         fi
@@ -1987,6 +1997,8 @@ unmount_tree "$ROOTFS_TARGET"
     # 4. pulsaros-circle-to-search
     $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/bin/pulsar-circle-to-search" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
     $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es" "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/" 2>/dev/null || true
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/share/applications/pulsar-circle-to-search.desktop" "$ROOTFS_TARGET/usr/share/applications/" 2>/dev/null || true
+    $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-circle-to-search/usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es/schemas/"*.xml "$ROOTFS_TARGET/usr/share/glib-2.0/schemas/" 2>/dev/null || true
     $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/pulsar-circle-to-search" 2>/dev/null || true
 
     # 5. pulsaros-gnome overrides & dconf settings
@@ -2002,11 +2014,17 @@ unmount_tree "$ROOTFS_TARGET"
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/search-light@icedman.github.com" 2>/dev/null || true
 
-    # Recompile glib schemas and update dconf database
-    echo "⚙️ Recompiling GLib schemas and updating dconf database..."
+    # Recompile glib schemas, update desktop database and dconf database
+    echo "⚙️ Recompiling GLib schemas and updating desktop/dconf database..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
         find /usr/share/gnome-shell/extensions -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications 2>/dev/null || true
+        fi
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -f -q /usr/share/icons/hicolor 2>/dev/null || true
+        fi
         if command -v dconf >/dev/null 2>&1; then
             dconf update 2>/dev/null || true
         fi
@@ -2108,10 +2126,10 @@ if [ "$DISTRO" = "arch" ]; then
     DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --"
     LEGACY_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --"
 else
-    KERNEL_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    RAM_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    DEBUG_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
-    LEGACY_PARAMS="boot=live components username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    RAM_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    DEBUG_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
+    LEGACY_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
 resolve_boot_icons() {
