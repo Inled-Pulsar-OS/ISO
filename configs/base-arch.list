@@ -176,6 +176,4 @@ wpa_supplicant
 python-yaml
 # OCR & Circle to Search dependencies
 tesseract
-tesseract-data-eng
-tesseract-data-spa
 ydotool

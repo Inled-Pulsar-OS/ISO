@@ -2171,7 +2171,7 @@ if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
     set theme=/boot/grub/themes/Particle-circle-window/theme.txt
 fi
 
-menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class gnu-linux --class os {
+menuentry "Pulsar OS Live (RAM)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $RAM_PARAMS
     initrd /live/initrd
 }
@@ -2181,12 +2181,12 @@ menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class o
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class terminal --class gnu-linux {
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $DEBUG_PARAMS
     initrd /live/initrd
 }
 
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class driver --class gnu-linux {
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros --class gnu-linux --class os {
     linux /live/vmlinuz $LEGACY_PARAMS
     initrd /live/initrd
 }
