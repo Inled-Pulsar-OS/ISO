@@ -119,6 +119,17 @@ if [ ! -f "$BASE_DIR/etc/debian_version" ]; then
 
     PACKAGES=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
 
+    if ! command -v mmdebstrap >/dev/null 2>&1 && ! command -v debootstrap >/dev/null 2>&1; then
+        if command -v pacman >/dev/null 2>&1; then
+            echo "📥 Installing debootstrap and debian-archive-keyring on Arch host..."
+            $SUDO pacman -Sy --noconfirm --needed debootstrap debian-archive-keyring 2>/dev/null || true
+        elif command -v apt-get >/dev/null 2>&1; then
+            echo "📥 Installing mmdebstrap and debian-archive-keyring on Debian/Ubuntu host..."
+            $SUDO apt-get update -y 2>/dev/null || true
+            $SUDO apt-get install -y mmdebstrap debian-archive-keyring 2>/dev/null || true
+        fi
+    fi
+
     if command -v mmdebstrap >/dev/null 2>&1; then
         echo "Using mmdebstrap..."
         $SUDO mmdebstrap \
