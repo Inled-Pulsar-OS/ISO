@@ -1124,7 +1124,6 @@ $pkg_name"
                 pulsaros-theme \
                 pulsaros-gnome \
                 sayri \
-                pulsaros-circle-to-search \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1146,6 +1145,9 @@ $pkg_name"
                 qt6-multimedia \
                 qt6-multimedia-gstreamer \
                 winboat-bin
+
+            # Install pulsaros-circle-to-search if published in repo (or workspace sync handles it)
+            /usr/bin/pacman -S --noconfirm --overwrite '*' pulsaros-circle-to-search 2>/dev/null || true
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
