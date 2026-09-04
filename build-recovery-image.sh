@@ -53,12 +53,22 @@ echo "======================================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 
-cleanup_rec() {
-    for mp in "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev" "$BASE_DIR/dev/pts" "$BASE_DIR/dev" "$BASE_DIR/sys" "$BASE_DIR/proc"; do
-        if [ -d "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
-            $SUDO umount -l "$mp" 2>/dev/null || true
-        fi
+## Helper: Unmount directory tree safely
+unmount_tree() {
+    local target_dir="$1"
+    [ -z "$target_dir" ] && return 0
+    [ ! -d "$target_dir" ] && return 0
+    awk '$2 ~ "^'"$target_dir"'/" || $2 == "'"$target_dir"'" {print $2}' /proc/self/mounts 2>/dev/null | sort -r | while read -r mp; do
+        $SUDO umount -l "$mp" 2>/dev/null || true
     done
+    for mp in "$target_dir/dev/pts" "$target_dir/dev/shm" "$target_dir/dev" "$target_dir/proc" "$target_dir/sys" "$target_dir/run"; do
+        $SUDO umount -l "$mp" 2>/dev/null || true
+    done
+}
+
+cleanup_rec() {
+    unmount_tree "$ROOTFS_REC"
+    unmount_tree "$BASE_DIR"
     if [ -e /dev/kvm ]; then
         $SUDO chmod 666 /dev/kvm 2>/dev/null || true
         $SUDO chown root:kvm /dev/kvm 2>/dev/null || true
@@ -636,20 +646,7 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
 
 # Thoroughly unmount all virtual filesystems in $ROOTFS_REC
 echo "🧹 Unmounting all virtual filesystems in recovery rootfs..."
-for mp in "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev/shm" "$ROOTFS_REC/dev" "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/run"; do
-    if [ -d "$mp" ]; then
-        while mountpoint -q "$mp" 2>/dev/null; do
-            $SUDO umount -l "$mp" 2>/dev/null || true
-            sleep 0.1
-        done
-    fi
-done
-
-if [ -f /proc/mounts ]; then
-    grep "$ROOTFS_REC" /proc/mounts | cut -d' ' -f2 | sort -r | while read -r mnt; do
-        [ -n "$mnt" ] && $SUDO umount -l "$mnt" 2>/dev/null || true
-    done
-fi
+unmount_tree "$ROOTFS_REC"
 
 # Extract recovery kernel and initramfs
 echo "📦 Extracting recovery kernel and initramfs..."
@@ -701,10 +698,7 @@ echo "   → SquashFS must be at: <partition>/live/filesystem.squashfs"
 echo ""
 
 # Clean up working rootfs (the base is kept cached)
-echo "🧹 Cleaning working rootfs..."
-for mp in "$ROOTFS_REC/proc" "$ROOTFS_REC/sys" "$ROOTFS_REC/dev/pts" "$ROOTFS_REC/dev"; do
-    $SUDO umount -l "$mp" 2>/dev/null || true
-done
+unmount_tree "$ROOTFS_REC"
 $SUDO rm -rf "$ROOTFS_REC"
 
 echo "======================================================================="
