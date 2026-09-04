@@ -88,7 +88,7 @@ jobs:
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
-              pacman -Syu --noconfirm base-devel git arch-install-scripts squashfs-tools grub xorriso mtools binutils dosfstools libisoburn rsync jq curl wget unzip sassc imagemagick psmisc
+              pacman -Syu --noconfirm base-devel git arch-install-scripts debootstrap debian-archive-keyring squashfs-tools grub xorriso mtools binutils dosfstools libisoburn rsync jq curl wget unzip sassc imagemagick psmisc
 
               chmod +x ./build-iso.sh
               ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version \"${{ github.event.inputs.version }}\"

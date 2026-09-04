@@ -1369,7 +1369,7 @@ EOF
             apt-get update
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
             yes | apt-get install -y --allow-downgrades --no-install-recommends \
-                \$BOOTLOADER_PKGS \
+                $BOOTLOADER_PKGS \
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
@@ -1381,7 +1381,7 @@ EOF
                 pulsaros-circle-to-search \
                 pulsaros-sddm \
                 pulsaros-plymouth \
-                pulsaros-\$BOOTLOADER \
+                pulsaros-$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
                 pulsaros-recovery \
