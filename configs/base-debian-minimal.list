@@ -1,0 +1,179 @@
+# =============================================================================
+# Pulsar OS - Minimal Debian Package List
+# =============================================================================
+# Stripped-down list for lightweight ISO (~2-3GB compressed target).
+# Heavy optional apps (Docker, VM tools, multimedia, compatibility apps)
+# are installed on-demand by Welcome OOTB or recovery.
+# =============================================================================
+
+linux-image-amd64
+systemd-sysv
+udev
+apt
+iproute2
+netbase
+procps
+isc-dhcp-client
+bash-completion
+sudo
+passwd
+initramfs-tools
+libpam-modules
+util-linux
+dbus
+
+# ── GNOME Desktop (core only) ────────────────────────────────────────────────
+gnome-shell
+gnome-session
+gnome-session-xsession
+gnome-control-center
+gnome-terminal
+xwayland
+xserver-xorg-core
+
+# ── SDDM Display Manager ─────────────────────────────────────────────────────
+sddm
+qt6-image-formats-plugins
+qml6-module-qtquick-layouts
+qml6-module-qtquick-templates
+qml6-module-qtquick-controls
+qml6-module-qtquick-window
+qml6-module-qt5compat-graphicaleffects
+qml6-module-org-kde-breeze
+qml6-module-org-kde-kirigami
+qml6-module-org-kde-kquickcontrolsaddons
+qml6-module-org-kde-iconthemes
+libqt6svg6
+qt6-svg-plugins
+
+# ── Session, PAM & Permissions ───────────────────────────────────────────────
+libpam-systemd
+polkitd
+dbus-user-session
+accountsservice
+at-spi2-core
+libpam-runtime
+libnss-systemd
+zstd
+
+# ── MacTahoe Theme Dependencies ──────────────────────────────────────────────
+sassc
+libglib2.0-dev-bin
+libxml2-utils
+git
+ca-certificates
+
+# ── Configuration Tools ──────────────────────────────────────────────────────
+dconf-cli
+gnome-tweaks
+gnome-shell-extension-manager
+wget
+curl
+unzip
+imagemagick
+
+# ── Flatpak ──────────────────────────────────────────────────────────────────
+flatpak
+
+# ── GNOME Extensions ─────────────────────────────────────────────────────────
+gnome-shell-extensions
+gnome-shell-extension-appindicator
+
+# ── Fildem HUD / Global Menu Dependencies ────────────────────────────────────
+python3-gi
+python3-dbus
+gir1.2-bamf-3
+gir1.2-keybinder-3.0
+gir1.2-gtk-3.0
+gir1.2-gtk4layershell-1.0
+gir1.2-webkit2-4.1
+gir1.2-glib-2.0
+bamfdaemon
+libbamf3-dev
+libkeybinder-3.0-dev
+appmenu-gtk3-module
+python3-setuptools
+python3-pip
+python3-xlib
+python3-numpy
+python3-cairo
+
+# ── Bootloader ───────────────────────────────────────────────────────────────
+grub-pc
+grub-efi-amd64-bin
+efibootmgr
+os-prober
+
+# ── Essential Apps ───────────────────────────────────────────────────────────
+gnome-calculator
+gnome-calendar
+gnome-text-editor
+nano
+
+# ── File Manager & Portals ───────────────────────────────────────────────────
+nautilus
+file-roller
+gnome-keyring
+xdg-desktop-portal-gnome
+xdg-desktop-portal
+xdg-user-dirs
+xdg-utils
+
+# ── Audio (PipeWire) ────────────────────────────────────────────────────────
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pavucontrol
+
+# ── Networking ───────────────────────────────────────────────────────────────
+network-manager
+network-manager-gnome
+gvfs
+gvfs-backends
+bluez
+bluez-tools
+rfkill
+
+# ── System Utilities (lightweight) ───────────────────────────────────────────
+e2fsprogs
+dosfstools
+xfsprogs
+ntfs-3g
+gparted
+gnome-disk-utility
+gnome-system-monitor
+gnome-logs
+baobab
+htop
+inxi
+wl-clipboard
+p7zip-full
+zip
+locales
+autokey-gtk
+alsa-utils
+
+# ── Graphics Acceleration ────────────────────────────────────────────────────
+mesa-utils
+mesa-va-drivers
+mesa-vulkan-drivers
+virgl-server
+libvirglrenderer1
+qemu-guest-agent
+spice-vdagent
+
+# ── Firmware & Live Boot ─────────────────────────────────────────────────────
+firmware-linux-free
+firmware-misc-nonfree
+firmware-amd-graphics
+firmware-intel-sound
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-libertas
+firmware-brcm80211
+intel-microcode
+amd64-microcode
+squashfs-tools
+live-boot
+live-boot-initramfs-tools

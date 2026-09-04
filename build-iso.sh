@@ -485,16 +485,29 @@ if [ "$DISTRO" = "arch" ]; then
         PACKAGE_LIST_FILE="$ISO_DIR/configs/base-arch.list"
     fi
 else
-    PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
+    if $MINIMAL; then
+        echo "🪶 Minimal mode: using trimmed Debian package list (~2-3GB target)"
+        PACKAGE_LIST_FILE="$ISO_DIR/configs/base-debian-minimal.list"
+    else
+        PACKAGE_LIST_FILE="$ISO_DIR/configs/base.list"
+    fi
 fi
 
 # Adjust paths / Fallback to root repo configuration if local config is missing
 # Corregir rutas / Usar configuración del repo raíz como fallback si no existe el de la ISO
 if [ ! -f "$PACKAGE_LIST_FILE" ]; then
     if [ "$DISTRO" = "arch" ]; then
-        PACKAGE_LIST_FILE="$ISO_DIR/../configs/base-arch.list"
+        if $MINIMAL; then
+            PACKAGE_LIST_FILE="$ISO_DIR/../configs/base-arch-minimal.list"
+        else
+            PACKAGE_LIST_FILE="$ISO_DIR/../configs/base-arch.list"
+        fi
     else
-        PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
+        if $MINIMAL; then
+            PACKAGE_LIST_FILE="$ISO_DIR/../configs/base-debian-minimal.list"
+        else
+            PACKAGE_LIST_FILE="$ISO_DIR/../configs/base.list"
+        fi
     fi
 fi
 
@@ -1317,13 +1330,17 @@ EOF
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update || true
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
-            yes | apt-get install -y --no-install-recommends \$BOOTLOADER_PKGS
-            yes | apt-get install -y \
-                /tmp/packages/*.deb \
-                droidtux \
-                macboat \
-                appinstall \
-                seafari || yes | apt-get install -y /tmp/packages/*.deb
+            yes | apt-get install -y --allow-downgrades --no-install-recommends \$BOOTLOADER_PKGS
+            if [ "$MINIMAL" = "false" ]; then
+                yes | apt-get install -y --allow-downgrades \
+                    /tmp/packages/*.deb \
+                    droidtux \
+                    macboat \
+                    appinstall \
+                    seafari || yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
+            else
+                yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
+            fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1346,8 +1363,12 @@ EOF
             echo 'DPkg::options { "--force-overwrite"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
-            yes | apt-get install -y --no-install-recommends \
-                $BOOTLOADER_PKGS \
+            EXTRA_COMPAT_PKGS=\"\"
+            if [ \"$MINIMAL\" = \"false\" ]; then
+                EXTRA_COMPAT_PKGS=\"droidtux macboat appinstall seafari\"
+            fi
+            yes | apt-get install -y --allow-downgrades --no-install-recommends \
+                \$BOOTLOADER_PKGS \
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
@@ -1356,9 +1377,10 @@ EOF
                 pulsaros-control-center \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
+                pulsaros-circle-to-search \
                 pulsaros-sddm \
                 pulsaros-plymouth \
-                pulsaros-$BOOTLOADER \
+                pulsaros-\$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
                 pulsaros-recovery \
@@ -1367,10 +1389,7 @@ EOF
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                droidtux \
-                macboat \
-                appinstall \
-                seafari
+                \$EXTRA_COMPAT_PKGS
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1383,9 +1402,23 @@ EOF
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
 
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        dpkg-divert --remove --rename /usr/bin/curl
-        dpkg-divert --remove --rename /usr/bin/wget
-        dpkg-divert --remove --rename /usr/bin/gpg
+        dpkg-divert --remove --rename /usr/bin/curl 2>/dev/null || true
+        dpkg-divert --remove --rename /usr/bin/wget 2>/dev/null || true
+        dpkg-divert --remove --rename /usr/bin/gpg 2>/dev/null || true
+    "
+
+    # Pre-generate Debian locales (es_ES.UTF-8 and en_US.UTF-8)
+    echo "🔤 Configuring and generating Debian locales..."
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+        mkdir -p /etc
+        sed -i 's/^# *\(es_ES.UTF-8 UTF-8\)/\1/' /etc/locale.gen 2>/dev/null || true
+        sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen 2>/dev/null || true
+        grep -q '^es_ES.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'es_ES.UTF-8 UTF-8' >> /etc/locale.gen
+        grep -q '^en_US.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
+        locale-gen
+        update-locale LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 2>/dev/null || true
     "
 fi
 
@@ -1453,8 +1486,6 @@ if [ "$DISTRO" = "debian" ]; then
     "
 fi
 
-#
-
 # ==============================================================================
 # PHASE 5.5: Configure System Apps (Flatpak and External Winboat)
 # FASE 5.5: Configuración de Aplicaciones del Sistema (Flatpak y Winboat)
@@ -1474,7 +1505,7 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     fi
 "
 
-if [ "$DISTRO" = "debian" ]; then
+if [ "$DISTRO" = "debian" ] && ! $MINIMAL; then
     # Download external winboat dependencies on host and copy to chroot
     echo "📥 Downloading external dependencies (Winboat) on the host..."
     WINBOAT_TMP="$BUILD_DIR/winboat-${VARIANT_NAME}-${BOOTLOADER}-$$.deb"
