@@ -825,7 +825,7 @@ NoProgressBar
 ParallelDownloads = 1
 
 [inled]
-SigLevel = Optional TrustAll
+SigLevel = Never
 Server = https://apt.inled.es/arch/
 
 [core]
@@ -1068,7 +1068,7 @@ $pkg_name"
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
-            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Optional TrustAll\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
+            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Never\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
         fi
         echo "✅ Successfully installed local Arch packages."
     else
