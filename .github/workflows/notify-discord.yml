@@ -15,10 +15,11 @@ jobs:
     steps:
       - name: Notify Discord
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || 'https://discord.com/api/webhooks/1538846676930920468/xU-qv0vAMi7MqcoR2q-dEt3E5iSmIwvnYZfno11mY5Nm5oJcH53cnUYANZPD1gVVV7BD' }}
           RELEASE_NAME: ${{ github.event.release.name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
           VERSION="${RELEASE_NAME:-$INPUT_VERSION}"
           if [ -n "$VERSION" ]; then
             ESCAPED=$(echo "$VERSION" | sed 's/"/\\"/g')
