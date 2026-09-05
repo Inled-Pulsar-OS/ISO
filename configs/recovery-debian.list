@@ -65,7 +65,7 @@ fluxbox
 xterm
 feh
 
-# Graphic Libraries for Rust Recovery Assistant (GTK4 / Libadwaita)
+# Graphic Libraries for Rust Recovery Assistant & Time Machine (GTK4 / Libadwaita / Python)
 libgtk-4-1
 libadwaita-1-0
 librsvg2-common
@@ -73,6 +73,10 @@ gsettings-desktop-schemas
 adwaita-icon-theme
 hicolor-icon-theme
 desktop-file-utils
+python3
+python3-gi
+gir1.2-gtk-4.0
+gir1.2-adw-1
 
 # Auxiliary Recovery Utilities
 gparted

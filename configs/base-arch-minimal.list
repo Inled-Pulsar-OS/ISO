@@ -168,3 +168,10 @@ gnome-calendar
 archiso
 mkinitcpio-archiso
 squashfs-tools
+
+# ── Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba) ─────────
+btrfs-progs
+restic
+rclone
+cifs-utils
+smbclient

@@ -280,13 +280,14 @@ Pin-Priority: 1001
 INLEDPIN"
 
 # Install Pulsar OS packages from apt.inled.es
-echo "📦 Installing Pulsar OS packages (pulsaros-recovery, pulsaros-boot-icons, pulsaros-plymouth, pulsaros-theme)..."
+echo "📦 Installing Pulsar OS packages (pulsaros-recovery, pulsaros-timemachine, pulsaros-boot-icons, pulsaros-plymouth, pulsaros-theme)..."
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     export DEBIAN_FRONTEND=noninteractive
     echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
     apt-get update
     apt-get install -y --no-install-recommends \
         pulsaros-recovery \
+        pulsaros-timemachine \
         pulsaros-boot-icons \
         pulsaros-plymouth \
         pulsaros-theme || true
@@ -302,6 +303,14 @@ if [ "$USE_LOCAL_PKGS" = "true" ] || [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/us
     fi
     if [ -d "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery" ]; then
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/share/pulsaros-recovery/." "$ROOTFS_REC/usr/share/pulsaros-recovery/" 2>/dev/null || true
+    fi
+    if [ -d "$PULSAR_ROOT/PKG/pulsaros-timemachine" ]; then
+        echo "📂 Overriding with local Time Machine package files..."
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr/bin/pulsaros-timemachine" "$ROOTFS_REC/usr/bin/" 2>/dev/null || true
+        $SUDO mkdir -p "$ROOTFS_REC/usr/share/pulsaros-timemachine" "$ROOTFS_REC/usr/share/applications"
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr/share/pulsaros-timemachine/." "$ROOTFS_REC/usr/share/pulsaros-timemachine/" 2>/dev/null || true
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr/share/applications/pulsaros-timemachine.desktop" "$ROOTFS_REC/usr/share/applications/" 2>/dev/null || true
+        $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsaros-timemachine" "$ROOTFS_REC/usr/share/pulsaros-timemachine/cli.py" 2>/dev/null || true
     fi
     if [ -d "$PULSAR_ROOT/PKG/pulsar-boot-icons" ]; then
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsar-boot-icons/." "$ROOTFS_REC/usr/share/pulsar-boot-icons/" 2>/dev/null || true
