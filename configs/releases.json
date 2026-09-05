@@ -1,5 +1,5 @@
 {
-  "latest_version": "0.3-beta-bittenfruit",
+  "latest_version": "0.4-beta-bittenfruit",
   "mirrors": [
     {
       "id": "auto",
@@ -52,6 +52,36 @@
         "refind": {
           "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs",
           "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 2800000000
+        }
+      }
+    },
+    "0.4-beta-bittenfruit": {
+      "arch": {
+        "grub": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 3145728000
+        },
+        "refind": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 3145728000
+        }
+      },
+      "debian": {
+        "grub": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 2800000000
+        },
+        "refind": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso",
           "sha256": "",
           "size_bytes": 2800000000
         }
