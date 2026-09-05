@@ -111,7 +111,7 @@ jobs:
 
           jq -n \
             --arg title "🎉 SourceForge ISO & SquashFS Upload Complete" \
-            --arg desc "Se han subido correctamente los archivos a SourceForge." \
+            --arg desc "Files have been successfully uploaded to SourceForge." \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg files "$(printf "%b" "$file_list")" \
             --arg sf_url "$SF_URL" \
@@ -123,9 +123,37 @@ jobs:
                   description: $desc,
                   color: 3066993,
                   fields: [
-                    { name: "📦 Versión", value: $ver, inline: true },
-                    { name: "📥 Archivos Subidos", value: (if ($files | length) > 0 then $files else "Archivos subidos" end), inline: false },
-                    { name: "🌐 Enlaces", value: ("• [Descargas en SourceForge](" + $sf_url + ")\n• [Ver Run](" + $run_url + ")"), inline: false }
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "📥 Uploaded Files", value: (if ($files | length) > 0 then $files else "Files uploaded" end), inline: false },
+                    { name: "🌐 Links", value: ("• [Downloads on SourceForge](" + $sf_url + ")\n• [View Run](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+
+      - name: Notify Discord on Failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || 'https://discord.com/api/webhooks/1538846676930920468/xU-qv0vAMi7MqcoR2q-dEt3E5iSmIwvnYZfno11mY5Nm5oJcH53cnUYANZPD1gVVV7BD' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          jq -n \
+            --arg title "❌ SourceForge Upload Failed" \
+            --arg desc "An error occurred while uploading files to SourceForge." \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 15158332,
+                  fields: [
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🔍 Error Logs", value: ("[View detailed logs in GitHub Actions](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
