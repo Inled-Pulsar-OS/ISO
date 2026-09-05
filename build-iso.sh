@@ -1036,29 +1036,29 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init keyring, import Inled repo key first, then sync and populate
+            # Init pacman keyring and populate archlinux first
             /usr/bin/pacman-key --init
+            /usr/bin/pacman -Syy --noconfirm
+            /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg 2>/dev/null || /usr/bin/pacman -S --noconfirm archlinux-keyring
+            /usr/bin/pacman-key --populate archlinux
 
-            # Import and sign Inled repo key from bundled file (before syncing Inled repo)
+            # Import and sign Inled repo key from bundled file with ultimate trust
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
                 /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
                 /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+                echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
             fi
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
-
-            /usr/bin/pacman -Syy --noconfirm
-            /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg
-            /usr/bin/pacman-key --populate archlinux
-
-            # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
-            pacman -Syu --noconfirm --overwrite '*'
 
             # Arch now ships libnautilus-extension as a separate package, but our
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
             if pacman -Q libnautilus-extension >/dev/null 2>&1; then
                 pacman -Rdd --noconfirm libnautilus-extension || true
             fi
+
+            # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
+            pacman -Syu --noconfirm --overwrite '*'
 
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
@@ -1081,7 +1081,7 @@ $pkg_name"
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
-            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Never\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
+            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Optional TrustAll\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
         fi
         echo "✅ Successfully installed local Arch packages."
     else
@@ -1105,20 +1105,20 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init keyring, import Inled key, then sync and populate
+            # Init pacman keyring and populate archlinux first
             /usr/bin/pacman-key --init
-
-            # Import and sign Inled repo key from bundled file (before syncing Inled repo)
-            if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
-                /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
-            fi
-            chmod 755 /etc/pacman.d/gnupg
-            chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
-
             /usr/bin/pacman -Syy --noconfirm
             /usr/bin/pacman -S --noconfirm archlinux-keyring
             /usr/bin/pacman-key --populate archlinux
+
+            # Import and sign Inled repo key from bundled file with ultimate trust
+            if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
+                /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
+                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+                echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
+            fi
+            chmod 755 /etc/pacman.d/gnupg
+            chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
 
             # Arch now ships libnautilus-extension as a separate package, but our
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
@@ -1415,14 +1415,22 @@ EOF
     echo "🔤 Configuring and generating Debian locales..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         set -e
+        export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\${PATH:-}\"
         export DEBIAN_FRONTEND=noninteractive
         mkdir -p /etc
         sed -i 's/^# *\(es_ES.UTF-8 UTF-8\)/\1/' /etc/locale.gen 2>/dev/null || true
         sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen 2>/dev/null || true
         grep -q '^es_ES.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'es_ES.UTF-8 UTF-8' >> /etc/locale.gen
         grep -q '^en_US.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
-        locale-gen
-        update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 2>/dev/null || true
+        if command -v locale-gen >/dev/null 2>&1; then
+            locale-gen || true
+        elif command -v localedef >/dev/null 2>&1; then
+            localedef -i en_US -f UTF-8 en_US.UTF-8 2>/dev/null || true
+            localedef -i es_ES -f UTF-8 es_ES.UTF-8 2>/dev/null || true
+        fi
+        if command -v update-locale >/dev/null 2>&1; then
+            update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 2>/dev/null || true
+        fi
         echo 'LANG=en_US.UTF-8' > /etc/default/locale
         echo 'LANG=en_US.UTF-8' > /etc/locale.conf
     "
@@ -1874,8 +1882,34 @@ EOF
         fi
     "
 else
-    echo "--- 🔄 Finalizando y actualizando initramfs ---"
+    echo "--- 🔄 Finalizando y actualizando initramfs y servicios de sistema (Debian) ---"
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        mkdir -p /etc/systemd/system/poweroff.target.wants \
+                 /etc/systemd/system/reboot.target.wants \
+                 /etc/systemd/system/halt.target.wants 2>/dev/null || true
+        for srv in plymouth-poweroff.service plymouth-reboot.service plymouth-halt.service; do
+            for d in /lib/systemd/system /usr/lib/systemd/system; do
+                if [ -f \"\$d/\$srv\" ]; then
+                    case \"\$srv\" in
+                        plymouth-poweroff.service) ln -sf \"\$d/\$srv\" /etc/systemd/system/poweroff.target.wants/ ;;
+                        plymouth-reboot.service)   ln -sf \"\$d/\$srv\" /etc/systemd/system/reboot.target.wants/ ;;
+                        plymouth-halt.service)     ln -sf \"\$d/\$srv\" /etc/systemd/system/halt.target.wants/ ;;
+                    esac
+                fi
+            done
+        done
+        mkdir -p /etc/systemd/sleep.conf.d
+        cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+[Sleep]
+AllowHibernation=yes
+AllowHybridSleep=yes
+AllowSuspendThenHibernate=yes
+HibernateMode=shutdown
+HibernateState=disk
+EOF
+        if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+            plymouth-set-default-theme pulsar-plymouth 2>/dev/null || true
+        fi
         update-initramfs -u -k all
     "
 fi
@@ -1928,16 +1962,14 @@ $SUDO find "$ROOTFS_TARGET/home" -mindepth 1 -maxdepth 1 ! -name 'live' -exec rm
 echo "Unmounting virtual filesystems in target..."
 unmount_tree "$ROOTFS_TARGET"
 
-    # Build dedicated Debian Recovery environment (always — base is cached internally)
+    # Build dedicated Debian Recovery environment (base is cached internally for speed)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
     if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
+        if [ "$USE_LOCAL_PKGS" = "true" ] || [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
             (
                 flock -x 200
-                if [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
-                    echo "📦 Building dedicated Debian Recovery environment..."
-                    $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
-                fi
+                echo "📦 Building / Updating dedicated Debian Recovery environment..."
+                $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" $([ "$USE_LOCAL_PKGS" = "true" ] && echo "--local-pkgs") || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
             ) 200>"$BUILD_DIR/.recovery.lock"
         fi
     fi
@@ -2017,6 +2049,16 @@ unmount_tree "$ROOTFS_TARGET"
     # Recompile glib schemas, update desktop database and dconf database
     echo "⚙️ Recompiling GLib schemas and updating desktop/dconf database..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        mkdir -p /usr/share/icons/default
+        cat << 'DEFCUR' > /usr/share/icons/default/index.theme
+[Icon Theme]
+Inherits=MacTahoe-dark,Adwaita
+DEFCUR
+        for icondir in /usr/share/icons/MacTahoe-*; do
+            if [ -d \"\$icondir\" ] && [ ! -e \"\$icondir/cursors\" ] && [ -d /usr/share/icons/MacTahoe-dark/cursors ]; then
+                ln -sfn ../MacTahoe-dark/cursors \"\$icondir/cursors\" 2>/dev/null || true
+            fi
+        done
         glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
         find /usr/share/gnome-shell/extensions -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
         if command -v update-desktop-database >/dev/null 2>&1; then
