@@ -33,19 +33,20 @@ jobs:
           run-id: ${{ github.event.inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Gather, Rename and Checksum ISO Files
+      - name: Gather, Rename and Checksum Files
         run: |
           mkdir dist
-          find artifacts/ -name "*.iso" -exec cp -v {} dist/ \;
+          find artifacts/ \( -name "*.iso" -o -name "*.squashfs" \) -exec cp -v {} dist/ \;
           cd dist
-          for f in *.iso; do
+          for f in *; do
+            [ -f "$f" ] || continue
             new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
             if [ "$f" != "$new_name" ]; then
               mv -v "$f" "$new_name"
             fi
           done
-          sha256sum *.iso > SHA256SUMS
-          echo "ISOs to upload:"
+          sha256sum *.iso *.squashfs > SHA256SUMS 2>/dev/null || sha256sum * > SHA256SUMS
+          echo "Files to upload:"
           ls -la
 
       - name: Prepare and Diagnose SSH Key
@@ -65,7 +66,7 @@ jobs:
           echo "has PEM header: $(grep -c '^-----BEGIN' ~/.ssh/sourceforge || true)"
           echo "looks like a public key: $(grep -cE '^(ssh-|ecdsa-)' ~/.ssh/sourceforge || true)"
 
-      - name: Upload ISOs to SourceForge
+      - name: Upload ISOs and SquashFS to SourceForge
         run: |
           if ! ssh-keygen -y -f ~/.ssh/sourceforge >/dev/null 2>&1; then
             echo "::error::SF_SSH_KEY could not be parsed as a private key (see the diagnostics step). Re-add the secret with the full UNENCRYPTED private key content."
@@ -90,3 +91,44 @@ jobs:
           printf 'ls -la /home/frs/project/%s/\nquit\n' "$SF_PROJECT" | \
             sftp -i ~/.ssh/sourceforge -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
               "$SF_USER@$SF_HOST"
+
+      - name: Notify Discord on Success
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SF_URL="https://sourceforge.net/projects/${SF_PROJECT:-pulsaros}/files/"
+          
+          file_list=""
+          for f in dist/*.iso dist/*.squashfs; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            size=$(ls -lh "$f" | awk '{print $5}')
+            file_list="${file_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${name}) (${size})\n"
+          done
+
+          jq -n \
+            --arg title "🎉 SourceForge ISO & SquashFS Upload Complete" \
+            --arg desc "Se han subido correctamente los archivos a SourceForge." \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg files "$(printf "%b" "$file_list")" \
+            --arg sf_url "$SF_URL" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 3066993,
+                  fields: [
+                    { name: "📦 Versión", value: $ver, inline: true },
+                    { name: "📥 Archivos Subidos", value: (if ($files | length) > 0 then $files else "Archivos subidos" end), inline: false },
+                    { name: "🌐 Enlaces", value: ("• [Descargas en SourceForge](" + $sf_url + ")\n• [Ver Run](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
