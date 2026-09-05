@@ -8,3 +8,5 @@ build/
 # Archivos temporales de QEMU
 .qemu_9p/
 __pycache__/
+.wrangler/
+public/
