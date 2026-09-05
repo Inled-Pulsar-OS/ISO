@@ -183,4 +183,10 @@ xserver-xorg-video-intel
 mesa-va-drivers
 mesa-vulkan-drivers
 intel-media-va-driver-non-free
+# Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba)
+btrfs-progs
+restic
+rclone
+cifs-utils
+smbclient
 
