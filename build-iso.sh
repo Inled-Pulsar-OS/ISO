@@ -2382,9 +2382,9 @@ EOF
     fi
 
     if $WITH_NVIDIA; then
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}${VER_SUFFIX}-nvidia.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}-nvidia.iso"
     else
-        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}${VER_SUFFIX}.iso"
+        ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}.iso"
     fi
     # Create a temporary xorriso wrapper to force -iso-level 3
     # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
@@ -2431,7 +2431,6 @@ EOF
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
     rm -f "$WRAPPER_PATH"
-    $SUDO ln -sfn "$(basename "$ISO_OUTPUT")" "$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}.iso" 2>/dev/null || true
 
 else
     # --------------------------------------------------------------------------

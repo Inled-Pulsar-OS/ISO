@@ -31,9 +31,10 @@ jobs:
     steps:
       - name: Send Discord Start Notification
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
+          [ -z "$WEBHOOK_URL" ] && exit 0
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "🚀 Pulsar OS ISO Build Started" \
@@ -61,7 +62,7 @@ jobs:
                   timestamp: (now | todate)
                 }
               ]
-            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+            }' | curl -s -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d @- || true
 
   build:
     name: Build ISO (${{ matrix.name }})
@@ -158,9 +159,10 @@ jobs:
       - name: Notify Discord on Build Failure
         if: failure()
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
+          [ -z "$WEBHOOK_URL" ] && exit 0
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Build Failed (${{ matrix.name }})" \
@@ -185,7 +187,7 @@ jobs:
                   timestamp: (now | todate)
                 }
               ]
-            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+            }' | curl -s -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d @- || true
 
   create-release:
     name: Publish Release, Upload SourceForge & Deploy Pages
@@ -245,6 +247,7 @@ jobs:
           python3 generate-manifest.py \
             --version "${{ github.event.inputs.version }}" \
             --project "${{ env.SF_PROJECT || 'pulsaros-inled' }}" \
+            --dist-dir dist \
             --output-json public/releases.json \
             --html-dir public \
             --set-latest
@@ -267,6 +270,7 @@ jobs:
 
       # 7. Generate release notes with SourceForge download links
       - name: Generate Release Notes Body
+      # ...
         env:
           SF_CONFIGURED: ${{ steps.sfconfig.outputs.configured }}
         run: |
@@ -362,9 +366,10 @@ jobs:
       - name: Notify Discord on Success
         if: success()
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
+          [ -z "$WEBHOOK_URL" ] && exit 0
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           GH_RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/latest"
           SF_URL="https://sourceforge.net/projects/${SF_PROJECT:-pulsaros}/files/"
@@ -408,15 +413,16 @@ jobs:
                   timestamp: (now | todate)
                 }
               ]
-            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+            }' | curl -s -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d @- || true
 
       # 12. Notify Discord on Failure
       - name: Notify Discord on Release Failure
         if: failure()
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
+          [ -z "$WEBHOOK_URL" ] && exit 0
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Release & Upload to SourceForge Failed" \
@@ -437,4 +443,4 @@ jobs:
                   timestamp: (now | todate)
                 }
               ]
-            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+            }' | curl -s -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d @- || true
