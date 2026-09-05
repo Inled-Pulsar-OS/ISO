@@ -370,9 +370,10 @@ jobs:
         run: |
           WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
           [ -z "$WEBHOOK_URL" ] && exit 0
+          SF_PROJECT="${SF_PROJECT:-pulsaros-inled}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           GH_RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/latest"
-          SF_URL="https://sourceforge.net/projects/${SF_PROJECT:-pulsaros}/files/"
+          SF_URL="https://sourceforge.net/projects/${SF_PROJECT}/files/"
           CF_PAGES_URL="https://pulsaros-releases.pages.dev"
           
           file_list=""
@@ -380,11 +381,7 @@ jobs:
             [ -f "$f" ] || continue
             name=$(basename "$f")
             size=$(ls -lh "$f" | awk '{print $5}')
-            if [ -n "$SF_PROJECT" ]; then
-              file_list="${file_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${name}) (${size})\n"
-            else
-              file_list="${file_list}• ${name} (${size})\n"
-            fi
+            file_list="${file_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${name}) (${size})\n"
           done
 
           jq -n \
