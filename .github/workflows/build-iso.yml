@@ -1,107 +1,440 @@
-name: 🌌 Build & Publish Pulsar OS ISO & Internet Recovery
+name: Build and Release ISO
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release Version Tag'
+        description: 'ISO version used in the filenames (e.g. 0.3-beta-bittenfruit)'
         required: true
         default: '0.3-beta-bittenfruit'
-      base:
-        description: 'Base distribution (arch or debian)'
+      release_title:
+        description: 'Title for the GitHub release'
         required: true
-        default: 'arch'
+        default: 'Pulsar OS Bitten Fruit Latest'
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: 'stable'
         type: choice
         options:
-          - arch
-          - debian
-      bootloader:
-        description: 'Bootloader (grub or refind)'
-        required: true
-        default: 'grub'
-        type: choice
-        options:
-          - grub
-          - refind
+          - stable
+          - forky
+          - rolling
 
 permissions:
   contents: write
 
 jobs:
-  build-and-publish:
+  notify-start:
+    name: Notify Build Started
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - name: Send Discord Start Notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          jq -n \
+            --arg title "🚀 Pulsar OS ISO Build Started" \
+            --arg desc "Starting compilation and packaging of ISO images and Recovery SquashFS." \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg branch "${{ github.event.inputs.branch }}" \
+            --arg release_title "${{ github.event.inputs.release_title }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 3447003,
+                  fields: [
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🌿 Branch", value: $branch, inline: true },
+                    { name: "🏷️ Release", value: $release_title, inline: true },
+                    { name: "👤 Triggered by", value: $actor, inline: true },
+                    { name: "📋 Editions in Queue", value: "• Debian (GRUB)\n• Debian (rEFInd)\n• Arch Linux (GRUB)\n• Arch Linux (rEFInd)", inline: false },
+                    { name: "🔗 Real-time Progress", value: ("[View execution in GitHub Actions](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
 
-      - name: 🛠️ Set up Build Environment
+  build:
+    name: Build ISO (${{ matrix.name }})
+    needs: notify-start
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'debian-grub'
+            args: '--debian --grub'
+            base: 'debian'
+            bootloader: 'grub'
+            use_docker: false
+          - name: 'debian-refind'
+            args: '--debian --refind'
+            base: 'debian'
+            bootloader: 'refind'
+            use_docker: false
+          - name: 'arch-grub'
+            args: '--arch --grub'
+            base: 'arch'
+            bootloader: 'grub'
+            use_docker: true
+          - name: 'arch-refind'
+            args: '--arch --refind'
+            base: 'arch'
+            bootloader: 'refind'
+            use_docker: true
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      # 2. Build on host (for Debian)
+      - name: Build Debian ISO on Host
+        if: matrix.use_docker == false
         run: |
           sudo apt-get update
-          sudo apt-get install -y squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools rsync curl jq
+          sudo apt-get install -y \
+            mmdebstrap \
+            rsync \
+            squashfs-tools \
+            grub-common \
+            grub-efi-amd64-bin \
+            grub-pc-bin \
+            xorriso \
+            mtools \
+            dosfstools \
+            binutils \
+            unzip \
+            sassc \
+            imagemagick \
+            psmisc \
+            debian-archive-keyring
+          sudo ALLOW_HOST_INSTALL=true ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version "${{ github.event.inputs.version }}"
 
-      - name: 🚀 Build Pulsar OS ISO & Recovery SquashFS
-        env:
-          VERSION: ${{ github.event.inputs.version || '0.3-beta-bittenfruit' }}
-          BASE: ${{ github.event.inputs.base || 'arch' }}
-          BOOTLOADER: ${{ github.event.inputs.bootloader || 'grub' }}
+      # 3. Build inside privileged Docker container (for Arch)
+      - name: Build Arch ISO inside Docker
+        if: matrix.use_docker == true
         run: |
-          echo "Building Pulsar OS for $BASE with $BOOTLOADER (Version: $VERSION)..."
-          # Run build script
-          sudo ./ISO/build-iso.sh --base "$BASE" --bootloader "$BOOTLOADER" --version "$VERSION" || true
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          docker run --rm --privileged \
+            --cap-add=SYS_ADMIN \
+            --security-opt apparmor=unconfined \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            archlinux:base-devel \
+            bash -c '
+              pacman -Syu --noconfirm --needed archiso grub dosfstools mtools xorriso squashfs-tools git binutils unzip bc imagemagick psmisc
+              ALLOW_HOST_INSTALL=true ./build-iso.sh ${{ matrix.args }} --branch ${{ github.event.inputs.branch }} --version "${{ github.event.inputs.version }}"
+            '
 
-      - name: ☁️ Upload ISO and SquashFS to SourceForge
-        env:
-          SF_USER: ${{ secrets.SF_USER || secrets.SOURCEFORGE_USER }}
-          SF_KEY: ${{ secrets.SF_SSH_KEY || secrets.SOURCEFORGE_SSH_KEY }}
-          VERSION: ${{ github.event.inputs.version || '0.3-beta-bittenfruit' }}
+      # 4. Gather artifacts
+      - name: Gather Build Artifacts
         run: |
-          if [ -n "$SF_USER" ] && [ -n "$SF_KEY" ]; then
-            echo "Uploading artifacts to SourceForge..."
-            mkdir -p ~/.ssh
-            echo "$SF_KEY" > ~/.ssh/id_rsa
-            chmod 600 ~/.ssh/id_rsa
-            ssh-keyscan frs.sourceforge.net >> ~/.ssh/known_hosts 2>/dev/null || true
-            # rsync -avP ISO/build/*.iso ISO/build/*.squashfs "${SF_USER}@frs.sourceforge.net:/home/frs/project/pulsaros-inled/"
+          mkdir -p artifacts
+          find . -maxdepth 2 -name "*.iso" -exec cp -v {} artifacts/ \;
+          find . -maxdepth 3 -name "*.squashfs" -exec cp -v {} artifacts/ \;
+          ls -la artifacts/
+
+      # 5. Upload artifacts for release step
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsaros-iso-${{ matrix.name }}
+          path: artifacts/
+          retention-days: 1
+
+      # 6. Notify Discord on Build Failure
+      - name: Notify Discord on Build Failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          jq -n \
+            --arg title "❌ ISO Build Failed (${{ matrix.name }})" \
+            --arg desc "An error occurred while compiling the ISO image." \
+            --arg edition "${{ matrix.name }}" \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg branch "${{ github.event.inputs.branch }}" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 15158332,
+                  fields: [
+                    { name: "⚠️ Failed Edition", value: $edition, inline: true },
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🌿 Branch", value: $branch, inline: true },
+                    { name: "🔍 Error Logs", value: ("[View detailed logs in GitHub Actions](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+
+  create-release:
+    name: Publish Release, Upload SourceForge & Deploy Pages
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Check if SourceForge deployment is configured
+      - name: Check SourceForge configuration
+        id: sfconfig
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ secrets.SF_USER }}
+        run: |
+          if [ -n "$SF_SSH_KEY" ] && [ -n "$SF_USER" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "SF_USER=$SF_USER" >> "$GITHUB_ENV"
+            echo "SF_PROJECT=${{ vars.SF_PROJECT || 'pulsaros-inled' }}" >> "$GITHUB_ENV"
+            echo "SF_HOST=${{ vars.SF_HOST || 'frs.sourceforge.net' }}" >> "$GITHUB_ENV"
           else
-            echo "⚠️ SOURCEFORGE credentials not set; skipping upload in test mode."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SourceForge secrets (SF_SSH_KEY / SF_USER) are not set. Upload to SourceForge will be skipped."
           fi
 
-      - name: 📝 Update Manifest & Build Static Web
-        env:
-          VERSION: ${{ github.event.inputs.version || '0.3-beta-bittenfruit' }}
-          BASE: ${{ github.event.inputs.base || 'arch' }}
-          BOOTLOADER: ${{ github.event.inputs.bootloader || 'grub' }}
+      # 3. Download all ISO and SquashFS artifacts
+      - name: Download all ISO artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pulsaros-iso-*
+          merge-multiple: true
+          path: artifacts/
+
+      # 4. Gather, rename, and generate checksums
+      - name: Gather and Checksum Files
+        run: |
+          mkdir -p dist
+          find artifacts/ \( -name "*.iso" -o -name "*.squashfs" \) -exec cp -v {} dist/ \;
+          cd dist
+          for f in *; do
+            [ -f "$f" ] || continue
+            new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
+            if [ "$f" != "$new_name" ]; then
+              mv -v "$f" "$new_name"
+            fi
+          done
+          sha256sum *.iso *.squashfs > SHA256SUMS 2>/dev/null || sha256sum * > SHA256SUMS
+          echo "Files ready in dist/:"
+          ls -la
+
+      # 5. Generate Manifest JSON and Static Pages for Internet Recovery
+      - name: Generate Releases Manifest and Static Pages
         run: |
           mkdir -p public
-          python3 ./ISO/generate-manifest.py \
-            --version "$VERSION" \
-            --base "$BASE" \
-            --bootloader "$BOOTLOADER" \
+          python3 generate-manifest.py \
+            --version "${{ github.event.inputs.version }}" \
+            --project "${{ env.SF_PROJECT || 'pulsaros-inled' }}" \
             --output-json public/releases.json \
             --html-dir public \
             --set-latest
-          cp ISO/configs/releases.json public/releases.json 2>/dev/null || true
+          cp -f public/releases.json configs/releases.json || true
+          echo "Generated manifest and public directory:"
+          ls -la public/
+          cat public/releases.json
 
-      - name: ⚡ Deploy to Cloudflare Pages
+      # 6. Deploy Manifest & Recovery Site to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy public --project-name=pulsaros-releases --commit-dirty=true
+          command: pages deploy public --project-name=pulsaros-releases --branch=main --commit-dirty=true
 
-      - name: 📢 Notify Webhook on Completion
-        if: always()
+      # 7. Generate release notes with SourceForge download links
+      - name: Generate Release Notes Body
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK || secrets.WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          VERSION: ${{ github.event.inputs.version || '0.3-beta-bittenfruit' }}
-          BASE: ${{ github.event.inputs.base || 'arch' }}
-          BOOTLOADER: ${{ github.event.inputs.bootloader || 'grub' }}
+          SF_CONFIGURED: ${{ steps.sfconfig.outputs.configured }}
         run: |
-          SQUASHFS_URL="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-${VERSION}-${BASE}-${BOOTLOADER}-${VERSION}.squashfs"
-          ISO_URL="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-${VERSION}-${BASE}-${BOOTLOADER}-${VERSION}.iso"
-          ./ISO/notify-webhook.sh "$VERSION" "$BASE" "$BOOTLOADER" "$SQUASHFS_URL" "$ISO_URL" "${{ job.status }}"
+          {
+          cat <<'EOF'
+          Official release of **${{ github.event.inputs.release_title }}** (`${{ github.event.inputs.version }}`).
+
+          ### Included Editions
+          - **Debian (GRUB)**: Debian-based stable edition with standard GRUB bootloader.
+          - **Debian (rEFInd)**: Debian-based edition featuring the graphical rEFInd boot menu.
+          - **Arch Linux (GRUB)**: Arch-based rolling edition with GRUB.
+          - **Arch Linux (rEFInd)**: Arch-based edition with the modern rEFInd bootloader.
+
+          All ISO and Recovery SquashFS images are hosted on SourceForge for fast, unrestricted downloads.
+
+          ---
+          EOF
+          } > body.md
+          if [ "$SF_CONFIGURED" = "true" ]; then
+            {
+              printf '\n### Downloads\n\n'
+              printf 'The ISO images and Recovery SquashFS images are hosted on SourceForge:\n\n'
+              for f in dist/*.iso dist/*.squashfs; do
+                [ -f "$f" ] || continue
+                name=$(basename "$f")
+                printf -- '- [%s](https://downloads.sourceforge.net/project/%s/%s)\n' "$name" "$SF_PROJECT" "$name"
+              done
+            } >> body.md
+          fi
+          {
+            printf '\n### 📡 Internet Recovery Endpoint\n\n'
+            printf 'Recovery Manifest: [https://pulsaros-releases.pages.dev/releases.json](https://pulsaros-releases.pages.dev/releases.json)\n\n'
+            printf '\n### Verification (SHA-256)\n\n```\n'
+            cat dist/SHA256SUMS
+            printf '```\n'
+          } >> body.md
+          cat body.md
+
+      # 8. Create GitHub Release with checksums and SourceForge links
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest
+          name: ${{ github.event.inputs.release_title }}
+          body_path: body.md
+          files: |
+            dist/SHA256SUMS
+            public/releases.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 9. Upload all ISOs and SquashFS to SourceForge FRS via rsync over SSH
+      - name: Upload ISOs and SquashFS to SourceForge
+        if: steps.sfconfig.outputs.configured == 'true'
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%b' "$SF_SSH_KEY" | sed -e 's/\r//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > ~/.ssh/sourceforge
+          chmod 600 ~/.ssh/sourceforge
+          [ -n "$(tail -c 1 ~/.ssh/sourceforge)" ] && printf '\n' >> ~/.ssh/sourceforge
+          if ! head -1 ~/.ssh/sourceforge | grep -q '^-----BEGIN'; then
+            echo "::error::SF_SSH_KEY is not a private key (no PEM header). Re-add the secret with the full private key content."
+            exit 1
+          fi
+          if ! ssh-keygen -y -f ~/.ssh/sourceforge >/dev/null 2>&1; then
+            echo "::error::SF_SSH_KEY could not be parsed. Use an UNENCRYPTED private key (not the .pub file, no passphrase)."
+            exit 1
+          fi
+          if ! printf 'quit\n' | sftp -i ~/.ssh/sourceforge -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$SF_USER@$SF_HOST" >/dev/null 2>&1; then
+            echo "::error::SSH auth to SourceForge failed. Check the PUBLIC key is registered in the SourceForge account (Account Settings > SSH Public Keys) for user $SF_USER."
+            exit 1
+          fi
+          ssh-keyscan -H "$SF_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -avz -e "ssh -i ~/.ssh/sourceforge -o StrictHostKeyChecking=accept-new" \
+            dist/ \
+            "$SF_USER@$SF_HOST:/home/frs/project/$SF_PROJECT/"
+
+      # 10. Verify SourceForge Upload
+      - name: Verify SourceForge Upload
+        if: steps.sfconfig.outputs.configured == 'true'
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          printf 'ls -la /home/frs/project/%s/\nquit\n' "$SF_PROJECT" | \
+            sftp -i ~/.ssh/sourceforge -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$SF_USER@$SF_HOST"
+
+      # 11. Notify Discord on Success
+      - name: Notify Discord on Success
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          GH_RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/latest"
+          SF_URL="https://sourceforge.net/projects/${SF_PROJECT:-pulsaros}/files/"
+          CF_PAGES_URL="https://pulsaros-releases.pages.dev"
+          
+          file_list=""
+          for f in dist/*.iso dist/*.squashfs; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            size=$(ls -lh "$f" | awk '{print $5}')
+            if [ -n "$SF_PROJECT" ]; then
+              file_list="${file_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${name}) (${size})\n"
+            else
+              file_list="${file_list}• ${name} (${size})\n"
+            fi
+          done
+
+          jq -n \
+            --arg title "🎉 Pulsar OS ISO & Recovery Images Published!" \
+            --arg desc "All ISO images and Recovery SquashFS images have been successfully built, uploaded to SourceForge, and deployed to Cloudflare Pages." \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg release_title "${{ github.event.inputs.release_title }}" \
+            --arg files "$(printf "%b" "$file_list")" \
+            --arg sf_url "$SF_URL" \
+            --arg gh_release "$GH_RELEASE_URL" \
+            --arg cf_pages "$CF_PAGES_URL" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 3066993,
+                  fields: [
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🏷️ Release", value: $release_title, inline: true },
+                    { name: "📥 Published Files (SourceForge)", value: (if ($files | length) > 0 then $files else "Images uploaded to SourceForge" end), inline: false },
+                    { name: "🌐 Links", value: ("• [SourceForge Downloads](" + $sf_url + ")\n• [Cloudflare Pages Recovery](" + $cf_pages + ")\n• [GitHub Release](" + $gh_release + ")\n• [View GitHub Actions Run](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+
+      # 12. Notify Discord on Failure
+      - name: Notify Discord on Release Failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+        run: |
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          jq -n \
+            --arg title "❌ ISO Release & Upload to SourceForge Failed" \
+            --arg desc "An error occurred while creating the GitHub release or uploading to SourceForge." \
+            --arg ver "${{ github.event.inputs.version }}" \
+            --arg run_url "$RUN_URL" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: $desc,
+                  color: 15158332,
+                  fields: [
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🔍 Error Logs", value: ("[View detailed logs in GitHub Actions](" + $run_url + ")"), inline: false }
+                  ],
+                  footer: { text: "Pulsar OS Continuous Delivery" },
+                  timestamp: (now | todate)
+                }
+              ]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
