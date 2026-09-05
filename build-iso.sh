@@ -1036,20 +1036,24 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init pacman keyring and populate archlinux first
+            # Init pacman keyring and import Inled repo key BEFORE syncing databases
             /usr/bin/pacman-key --init
-            /usr/bin/pacman -Syy --noconfirm
-            /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg 2>/dev/null || /usr/bin/pacman -S --noconfirm archlinux-keyring
-            /usr/bin/pacman-key --populate archlinux
+            /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
             # Import and sign Inled repo key from bundled file with ultimate trust
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
                 /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
-                echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
+            else
+                curl -fsSL https://apt.inled.es/archive.key 2>/dev/null | /usr/bin/pacman-key -a - 2>/dev/null || true
             fi
+            /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+            echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
+
+            /usr/bin/pacman -Syy --noconfirm
+            /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg 2>/dev/null || /usr/bin/pacman -S --noconfirm archlinux-keyring
+            /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
             # Arch now ships libnautilus-extension as a separate package, but our
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
@@ -1105,20 +1109,24 @@ $pkg_name"
             # Write mirrorlist
             echo 'Server = $MIRROR' > /etc/pacman.d/mirrorlist
 
-            # Init pacman keyring and populate archlinux first
+            # Init pacman keyring and import Inled repo key BEFORE syncing databases
             /usr/bin/pacman-key --init
-            /usr/bin/pacman -Syy --noconfirm
-            /usr/bin/pacman -S --noconfirm archlinux-keyring
-            /usr/bin/pacman-key --populate archlinux
+            /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
             # Import and sign Inled repo key from bundled file with ultimate trust
             if [ -f /usr/share/keyrings/inled-archive-keyring.gpg ]; then
                 /usr/bin/pacman-key --add /usr/share/keyrings/inled-archive-keyring.gpg
-                /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
-                echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
+            else
+                curl -fsSL https://apt.inled.es/archive.key 2>/dev/null | /usr/bin/pacman-key -a - 2>/dev/null || true
             fi
+            /usr/bin/pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true
+            echo "89F828A9675B63CD0077CE9965AA57CF36E2018F:6:" | gpg --homedir /etc/pacman.d/gnupg --import-ownertrust 2>/dev/null || true
             chmod 755 /etc/pacman.d/gnupg
             chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
+
+            /usr/bin/pacman -Syy --noconfirm
+            /usr/bin/pacman -S --noconfirm archlinux-keyring 2>/dev/null || true
+            /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
             # Arch now ships libnautilus-extension as a separate package, but our
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
