@@ -62,28 +62,28 @@
         "grub": {
           "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs",
           "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 3145728000
+          "sha256": "56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d",
+          "size_bytes": 3448373248
         },
         "refind": {
           "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs",
           "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 3145728000
+          "sha256": "a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752",
+          "size_bytes": 3450373248
         }
       },
       "debian": {
         "grub": {
           "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs",
           "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 2800000000
+          "sha256": "f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b",
+          "size_bytes": 2840000000
         },
         "refind": {
           "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs",
           "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 2800000000
+          "sha256": "a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb",
+          "size_bytes": 2842000000
         }
       }
     }
