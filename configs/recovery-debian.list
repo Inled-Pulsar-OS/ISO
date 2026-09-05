@@ -45,6 +45,12 @@ network-manager
 network-manager-gnome
 wpasupplicant
 wireless-tools
+cifs-utils
+smbclient
+
+# Time Machine (Btrfs + Restic + Rclone) Backup & Recovery
+restic
+rclone
 
 # Minimal X11 & Fluxbox
 xserver-xorg-core
