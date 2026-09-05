@@ -1654,7 +1654,7 @@ if [ "$DISTRO" = "arch" ]; then
     # Create mkinitcpio hook configuration for live booting
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf" > /dev/null
-    echo 'MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs_drm vboxvideo vmwgfx 9p 9pnet 9pnet_virtio virtio_pci virtio_blk)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
+    echo 'MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs vboxvideo vmwgfx 9p 9pnet 9pnet_virtio virtio_pci virtio_blk)' | $SUDO tee "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/kms.conf" > /dev/null
     
     # Ensure /usr/share/pixmaps/archlinux-logo.png exists so mkinitcpio's plymouth hook does not error out
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/pixmaps"
@@ -1676,7 +1676,7 @@ if [ "$DISTRO" = "arch" ]; then
         echo "⚙️ Estableciendo HOOKS y MODULES canónicos en /etc/mkinitcpio.conf del sistema instalado..."
         $SUDO sed -i 's/^HOOKS=.*/HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole plymouth block filesystems fsck btrfs)/' \
             "$ROOTFS_TARGET/etc/mkinitcpio.conf"
-        $SUDO sed -i 's/^MODULES=.*/MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs_drm vboxvideo vmwgfx 9p 9pnet 9pnet_virtio virtio_pci virtio_blk)/' \
+        $SUDO sed -i 's/^MODULES=.*/MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs vboxvideo vmwgfx 9p 9pnet 9pnet_virtio virtio_pci virtio_blk)/' \
             "$ROOTFS_TARGET/etc/mkinitcpio.conf"
         echo "   HOOKS → $(grep '^HOOKS=' "$ROOTFS_TARGET/etc/mkinitcpio.conf")"
         echo "   MODULES → $(grep '^MODULES=' "$ROOTFS_TARGET/etc/mkinitcpio.conf")"
