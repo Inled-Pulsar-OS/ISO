@@ -88,14 +88,17 @@ if [ ! -f "$PACKAGE_LIST_FILE" ]; then
 fi
 
 # Optional: compile local Rust recovery assistant binary if in local development mode
-if [ "$USE_LOCAL_PKGS" = "true" ] && [ -d "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery" ] && command -v cargo >/dev/null 2>&1; then
-    echo "🦀 Compiling Pulsar OS Recovery Assistant (Rust) from local source..."
-    (
-        cd "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery"
-        cargo build --release
-        mkdir -p "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin"
-        cp -f target/release/pulsar-recovery-assistant "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant"
-    ) || echo "⚠️ Local Rust recovery compilation failed, using package from repository."
+if [ -d "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery" ]; then
+    [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env" 2>/dev/null || true
+    if command -v cargo >/dev/null 2>&1; then
+        echo "🦀 Compiling Pulsar OS Recovery Assistant (Rust) from local source..."
+        (
+            cd "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery"
+            cargo build --release
+            mkdir -p "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin"
+            cp -f target/release/pulsar-recovery-assistant "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant"
+        ) || echo "⚠️ Local Rust recovery compilation failed, using existing binary."
+    fi
 fi
 
 # ==============================================================================
@@ -104,12 +107,12 @@ fi
 
 base_list_changed=false
 if [ -d "$BASE_DIR" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
-    current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | sort)
+    current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | sort -u)
     if [ ! -f "$BASE_DIR/etc/pulsaros-recovery-base.list" ]; then
         echo "🔄 Base package list not found in cache. Rebuilding base..."
         base_list_changed=true
     else
-        cached_list=$(cat "$BASE_DIR/etc/pulsaros-recovery-base.list")
+        cached_list=$(grep -v '^#' "$BASE_DIR/etc/pulsaros-recovery-base.list" 2>/dev/null | grep -v '^$' | sort -u || true)
         if [ "$current_list" != "$cached_list" ]; then
             echo "🔄 Package list changed since last base build. Rebuilding base..."
             base_list_changed=true
@@ -191,7 +194,7 @@ SOURCES"
     fi
 
     # Save the package list into the base for future change detection
-    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$BASE_DIR/etc/pulsaros-recovery-base.list" > /dev/null
+    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | sort -u | $SUDO tee "$BASE_DIR/etc/pulsaros-recovery-base.list" > /dev/null
 
     echo "✅ Clean Debian base bootstrapped at $BASE_DIR"
 else
@@ -292,7 +295,7 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
 "
 
 # Optional local overrides for development mode
-if [ "$USE_LOCAL_PKGS" = "true" ]; then
+if [ "$USE_LOCAL_PKGS" = "true" ] || [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ]; then
     if [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ]; then
         echo "📂 Overriding with local Rust recovery assistant binary..."
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" "$ROOTFS_REC/usr/bin/"
@@ -348,7 +351,7 @@ Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=GTK_THEME=MacTahoe-Dark
-Environment=XCURSOR_THEME=MacTahoe-blue-dark
+Environment=XCURSOR_THEME=MacTahoe-dark
 Environment=XCURSOR_SIZE=24
 TTYPath=/dev/tty1
 StandardInput=tty
@@ -386,7 +389,7 @@ xset s off -dpms
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 export GTK_THEME=\"MacTahoe-Dark\"
-export XCURSOR_THEME=\"MacTahoe-blue-dark\"
+export XCURSOR_THEME=\"MacTahoe-dark\"
 export XCURSOR_SIZE=\"24\"
 /usr/bin/pulsar-recovery-assistant &
 exec /usr/bin/fluxbox
@@ -399,7 +402,7 @@ xsetroot -solid '#18181b'
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 export GTK_THEME=\"MacTahoe-Dark\"
-export XCURSOR_THEME=\"MacTahoe-blue-dark\"
+export XCURSOR_THEME=\"MacTahoe-dark\"
 export XCURSOR_SIZE=\"24\"
 exec /usr/bin/fluxbox
 FLUX_STARTUP"
@@ -527,7 +530,7 @@ $SUDO bash -c "cat << 'GTK3CONF' > '$ROOTFS_REC/etc/gtk-3.0/settings.ini'
 [Settings]
 gtk-theme-name = MacTahoe-Dark
 gtk-icon-theme-name = MacTahoe-blue-dark
-gtk-cursor-theme-name = MacTahoe-blue-dark
+gtk-cursor-theme-name = MacTahoe-dark
 gtk-cursor-theme-size = 24
 gtk-application-prefer-dark-theme = 1
 gtk-font-name = Inter 10
@@ -545,7 +548,7 @@ fi
 
 # Set Xresources for MacTahoe cursors
 $SUDO bash -c "cat << 'XRES' > '$ROOTFS_REC/home/live/.Xresources'
-Xcursor.theme: MacTahoe-blue-dark
+Xcursor.theme: MacTahoe-dark
 Xcursor.size: 24
 XRES"
 $SUDO cp -f "$ROOTFS_REC/home/live/.Xresources" "$ROOTFS_REC/etc/skel/.Xresources"
@@ -554,7 +557,7 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.Xresources" "$ROOTFS_REC/root/.Xresources"
 # Configure environment variables
 $SUDO bash -c "cat << 'ENVVARS' >> '$ROOTFS_REC/etc/environment'
 GTK_THEME=MacTahoe-Dark
-XCURSOR_THEME=MacTahoe-blue-dark
+XCURSOR_THEME=MacTahoe-dark
 XCURSOR_SIZE=24
 ENVVARS"
 

@@ -35,6 +35,10 @@ squashfs-tools
 parted
 efibootmgr
 zstd
+udisks2
+ntfs-3g
+exfatprogs
+zenity
 
 # Networking
 network-manager

@@ -167,7 +167,7 @@ jobs:
           - **Arch Linux (GRUB)**: Arch-based edition with GRUB bootloader.
           - **Arch Linux (rEFInd)**: Arch-based edition with the modern rEFInd bootloader.
 
-          Recovery SquashFS images are attached directly to this release for the **Pulsar OS Internet Recovery** feature.
+          All ISO and Recovery SquashFS images are hosted on SourceForge for fast, unrestricted downloads.
 
           ---
           EOF
@@ -175,8 +175,9 @@ jobs:
           if [ "$SF_CONFIGURED" = "true" ]; then
             {
               printf '\n### Downloads\n\n'
-              printf 'The ISO images are hosted on SourceForge:\n\n'
-              for f in dist/*.iso; do
+              printf 'The ISO images and Recovery SquashFS images are hosted on SourceForge:\n\n'
+              for f in dist/*.iso dist/*.squashfs; do
+                [ -f "$f" ] || continue
                 name=$(basename "$f")
                 printf -- '- [%s](https://downloads.sourceforge.net/project/%s/%s)\n' "$name" "$SF_PROJECT" "$name"
               done
@@ -189,7 +190,7 @@ jobs:
           } >> body.md
           cat body.md
 
-      # 6. Create the GitHub release. Attaches the SquashFS recovery images and checksums.
+      # 6. Create the GitHub release with checksums (large assets hosted on SourceForge)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -198,7 +199,6 @@ jobs:
           body_path: body.md
           files: |
             dist/SHA256SUMS
-            dist/*.squashfs
           draft: false
           prerelease: false
         env:
