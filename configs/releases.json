@@ -1,0 +1,61 @@
+{
+  "latest_version": "0.3-beta-bittenfruit",
+  "mirrors": [
+    {
+      "id": "auto",
+      "name": "Automático (SourceForge CDN / Fast Anycast)"
+    },
+    {
+      "id": "netix",
+      "name": "NetIX (Europa / Internacional)"
+    },
+    {
+      "id": "deac-riga",
+      "name": "DEAC Riga (Europa del Norte)"
+    },
+    {
+      "id": "altushost-swe",
+      "name": "AltusHost (Suecia)"
+    },
+    {
+      "id": "liquidtelecom",
+      "name": "Liquid Telecom (África / Global)"
+    },
+    {
+      "id": "cfhcable",
+      "name": "CFH Cable (Norteamérica)"
+    }
+  ],
+  "versions": {
+    "0.3-beta-bittenfruit": {
+      "arch": {
+        "grub": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 3145728000
+        },
+        "refind": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 3145728000
+        }
+      },
+      "debian": {
+        "grub": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 2800000000
+        },
+        "refind": {
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 2800000000
+        }
+      }
+    }
+  }
+}
