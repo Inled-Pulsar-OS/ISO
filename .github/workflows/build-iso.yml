@@ -37,7 +37,7 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "🚀 Pulsar OS ISO Build Started" \
-            --arg desc "Iniciando compilación y empaquetado de imágenes ISO y Recovery SquashFS." \
+            --arg desc "Starting compilation and packaging of ISO images and Recovery SquashFS." \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg branch "${{ github.event.inputs.branch }}" \
             --arg release_title "${{ github.event.inputs.release_title }}" \
@@ -50,12 +50,12 @@ jobs:
                   description: $desc,
                   color: 3447003,
                   fields: [
-                    { name: "📦 Versión", value: $ver, inline: true },
-                    { name: "🌿 Rama", value: $branch, inline: true },
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🌿 Branch", value: $branch, inline: true },
                     { name: "🏷️ Release", value: $release_title, inline: true },
-                    { name: "👤 Disparado por", value: $actor, inline: true },
-                    { name: "📋 Ediciones en cola", value: "• Debian (GRUB)\n• Debian (rEFInd)\n• Arch Linux (GRUB)\n• Arch Linux (rEFInd)", inline: false },
-                    { name: "🔗 Seguimiento en tiempo real", value: ("[Ver ejecución en GitHub Actions](" + $run_url + ")"), inline: false }
+                    { name: "👤 Triggered by", value: $actor, inline: true },
+                    { name: "📋 Editions in Queue", value: "• Debian (GRUB)\n• Debian (rEFInd)\n• Arch Linux (GRUB)\n• Arch Linux (rEFInd)", inline: false },
+                    { name: "🔗 Real-time Progress", value: ("[View execution in GitHub Actions](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
@@ -153,7 +153,7 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Build Failed (${{ matrix.name }})" \
-            --arg desc "Ha ocurrido un error durante la compilación de la imagen ISO." \
+            --arg desc "An error occurred while compiling the ISO image." \
             --arg edition "${{ matrix.name }}" \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg branch "${{ github.event.inputs.branch }}" \
@@ -165,10 +165,10 @@ jobs:
                   description: $desc,
                   color: 15158332,
                   fields: [
-                    { name: "⚠️ Edición Fallida", value: $edition, inline: true },
-                    { name: "📦 Versión", value: $ver, inline: true },
-                    { name: "🌿 Rama", value: $branch, inline: true },
-                    { name: "🔍 Logs del Error", value: ("[Ver logs detallados en GitHub Actions](" + $run_url + ")"), inline: false }
+                    { name: "⚠️ Failed Edition", value: $edition, inline: true },
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🌿 Branch", value: $branch, inline: true },
+                    { name: "🔍 Error Logs", value: ("[View detailed logs in GitHub Actions](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
@@ -345,7 +345,7 @@ jobs:
 
           jq -n \
             --arg title "🎉 Pulsar OS ISO & Recovery Images Published!" \
-            --arg desc "Se han empaquetado y subido correctamente todas las imágenes ISO y SquashFS a SourceForge." \
+            --arg desc "All ISO images and Recovery SquashFS images have been successfully built and uploaded to SourceForge." \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg release_title "${{ github.event.inputs.release_title }}" \
             --arg files "$(printf "%b" "$file_list")" \
@@ -359,10 +359,10 @@ jobs:
                   description: $desc,
                   color: 3066993,
                   fields: [
-                    { name: "📦 Versión", value: $ver, inline: true },
+                    { name: "📦 Version", value: $ver, inline: true },
                     { name: "🏷️ Release", value: $release_title, inline: true },
-                    { name: "📥 Archivos Publicados (SourceForge)", value: (if ($files | length) > 0 then $files else "Imágenes subidas a SourceForge" end), inline: false },
-                    { name: "🌐 Enlaces", value: ("• [Descargas en SourceForge](" + $sf_url + ")\n• [Release en GitHub](" + $gh_release + ")\n• [Ver Run de GitHub Actions](" + $run_url + ")"), inline: false }
+                    { name: "📥 Published Files (SourceForge)", value: (if ($files | length) > 0 then $files else "Images uploaded to SourceForge" end), inline: false },
+                    { name: "🌐 Links", value: ("• [SourceForge Downloads](" + $sf_url + ")\n• [GitHub Release](" + $gh_release + ")\n• [View GitHub Actions Run](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
@@ -380,7 +380,7 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Release & Upload to SourceForge Failed" \
-            --arg desc "Ha ocurrido un error durante la creación de la release o la subida a SourceForge." \
+            --arg desc "An error occurred while creating the GitHub release or uploading to SourceForge." \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg run_url "$RUN_URL" \
             '{
@@ -390,8 +390,8 @@ jobs:
                   description: $desc,
                   color: 15158332,
                   fields: [
-                    { name: "📦 Versión", value: $ver, inline: true },
-                    { name: "🔍 Logs del Error", value: ("[Ver logs detallados en GitHub Actions](" + $run_url + ")"), inline: false }
+                    { name: "📦 Version", value: $ver, inline: true },
+                    { name: "🔍 Error Logs", value: ("[View detailed logs in GitHub Actions](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
