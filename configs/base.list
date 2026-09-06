@@ -125,6 +125,10 @@ wireplumber
 pavucontrol
 # Red y Sistemas de Archivos GVFS
 network-manager-gnome
+wpasupplicant
+wireless-tools
+iw
+wireless-regdb
 gvfs
 gvfs-backends
 # Utilidades de Sistema

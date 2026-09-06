@@ -133,6 +133,10 @@ pavucontrol
 # ── Networking ───────────────────────────────────────────────────────────────
 network-manager
 network-manager-gnome
+wpasupplicant
+wireless-tools
+iw
+wireless-regdb
 gvfs
 gvfs-backends
 bluez

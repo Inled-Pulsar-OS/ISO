@@ -173,6 +173,9 @@ open-vm-tools
 virtualbox-guest-utils
 # Soporte de Wi-Fi para NetworkManager
 wpa_supplicant
+wireless_tools
+iw
+wireless-regdb
 python-yaml
 # OCR & Circle to Search dependencies
 tesseract

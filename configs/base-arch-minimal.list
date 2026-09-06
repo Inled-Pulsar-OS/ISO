@@ -48,6 +48,9 @@ networkmanager
 network-manager-applet
 iputils
 wpa_supplicant
+wireless_tools
+iw
+wireless-regdb
 bluez
 bluez-utils
 rfkill

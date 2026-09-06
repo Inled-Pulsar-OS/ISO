@@ -790,7 +790,7 @@ if [ "$DISTRO" = "arch" ]; then
     # Purge previously cached Inled-repo packages and obsolete packages (like calamares):
     # an interrupted download or obsolete package leaves stale/broken .pkg.tar.zst in the
     # bind-mounted cache that fails signature checks or reintroduces removed packages.
-    for pattern in "pulsaros-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
+    for pattern in "pulsaros-*" "pulsar-store-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
                    "droidtux-*" "macboat-*" "appinstall-*" "seafari-*" \
                    "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
                    "pulsar-pear-sound-theme-*" "*-debug-*"; do
@@ -1162,6 +1162,7 @@ $pkg_name"
                 droidtux \
                 macboat \
                 appinstall \
+                pulsar-store \
                 seafari \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer \
@@ -1401,6 +1402,7 @@ EOF
                 droidtux \
                 macboat \
                 appinstall \
+                pulsar-store \
                 seafari
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
