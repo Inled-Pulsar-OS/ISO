@@ -33,8 +33,8 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
-          [ -z "$WEBHOOK_URL" ] && exit 0
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="$DISCORD_WEBHOOK"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "🚀 Pulsar OS ISO Build Started" \
@@ -161,8 +161,8 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
-          [ -z "$WEBHOOK_URL" ] && exit 0
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="$DISCORD_WEBHOOK"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Build Failed (${{ matrix.name }})" \
@@ -368,8 +368,8 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
-          [ -z "$WEBHOOK_URL" ] && exit 0
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="$DISCORD_WEBHOOK"
           SF_PROJECT="${SF_PROJECT:-pulsaros-inled}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           GH_RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/latest"
@@ -418,8 +418,8 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          WEBHOOK_URL="${DISCORD_WEBHOOK:-}"
-          [ -z "$WEBHOOK_URL" ] && exit 0
+          [ -z "$DISCORD_WEBHOOK" ] && exit 0
+          WEBHOOK_URL="$DISCORD_WEBHOOK"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           jq -n \
             --arg title "❌ ISO Release & Upload to SourceForge Failed" \

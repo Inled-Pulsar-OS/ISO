@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Notify Discord
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK || '' }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           RELEASE_NAME: ${{ github.event.release.name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
