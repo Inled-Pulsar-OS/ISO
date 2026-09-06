@@ -618,7 +618,7 @@ if [ -d "$ROOTFS_BASE" ] && [ -f "$PACKAGE_LIST_FILE" ]; then
     elif $WITH_NVIDIA; then
         current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$')
     else
-        current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64')
+        current_list=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings')
     fi
     
     if [ ! -f "$ROOTFS_BASE/etc/pulsaros-base.list" ]; then
@@ -713,11 +713,11 @@ CLEANEof
                 echo "--- 📥 Creating Clean Debian Base (mmdebstrap) ---"
                 
                 if $WITH_NVIDIA; then
-                    echo "💚 Including proprietary hardware drivers (NVIDIA, Broadcom STA, DKMS, Headers) in the installation..."
+                    echo "💚 Including proprietary NVIDIA hardware drivers in the installation..."
                     PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
                 else
-                    echo "💙 Excluding proprietary drivers (NVIDIA, Broadcom STA, DKMS, Headers) from installation..."
-                    PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | tr '\n' ',' | sed 's/,$//')
+                    echo "💙 Excluding proprietary NVIDIA drivers from base (Broadcom STA & DKMS included for Mac/PC Wi-Fi)..."
+                    PACKAGE_LIST=$(grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings' | tr '\n' ',' | sed 's/,$//')
                 fi
                 
                 # Add Debian keyring parameter if it exists (required on Ubuntu/Mint hosts)
@@ -742,7 +742,7 @@ CLEANEof
                 if $WITH_NVIDIA; then
                     grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
                 else
-                    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings|broadcom-sta-dkms|dkms|linux-headers-amd64' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
+                    grep -v '^#' "$PACKAGE_LIST_FILE" | grep -v '^$' | grep -v -E 'nvidia-driver|nvidia-settings' | $SUDO tee "$ROOTFS_BASE/etc/pulsaros-base.list" > /dev/null
                 fi
                 
                 echo "✅ Base Debian Bootstrap completed in: $ROOTFS_BASE"
@@ -1653,6 +1653,33 @@ if [ -f "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" ]; then
     echo "⚙️ Forzando UseSimpledrm=false en /etc/plymouth/plymouthd.conf..."
     $SUDO sed -i 's/^UseSimpledrm=.*/UseSimpledrm=false/' "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf"
 fi
+
+# Configure NetworkManager and modprobe for Broadcom Wi-Fi stability on MacBooks (prevent MAC randomization and module conflict failures)
+echo "📡 Configuring NetworkManager & modprobe rules for Broadcom/MacBook Wi-Fi compatibility..."
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/NetworkManager/conf.d"
+cat << 'EOF' | $SUDO tee "$ROOTFS_TARGET/etc/NetworkManager/conf.d/99-broadcom-mac.conf" > /dev/null
+[device]
+wifi.scan-rand-mac-address=no
+
+[connection]
+wifi.cloned-mac-address=preserve
+ethernet.cloned-mac-address=preserve
+wifi.powersave=2
+EOF
+$SUDO chmod 644 "$ROOTFS_TARGET/etc/NetworkManager/conf.d/99-broadcom-mac.conf"
+
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/modprobe.d"
+cat << 'EOF' | $SUDO tee "$ROOTFS_TARGET/etc/modprobe.d/broadcom-wl-blacklist.conf" > /dev/null
+blacklist b43
+blacklist b43legacy
+blacklist ssb
+blacklist bcm43xx
+blacklist brcm80211
+blacklist brcmfmac
+blacklist brcmsmac
+blacklist bcma
+EOF
+$SUDO chmod 644 "$ROOTFS_TARGET/etc/modprobe.d/broadcom-wl-blacklist.conf"
 
 # ==============================================================================
 # PHASE 6: Final Tasks (Initramfs regeneration and cleanup)

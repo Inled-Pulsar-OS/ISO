@@ -146,8 +146,9 @@ mkinitcpio-archiso
 # with Driver Manager if needed for pre-Turing cards).
 nvidia-open
 nvidia-settings
-# Broadcom Drivers (AUR - descomentar si se necesita)
-# broadcom-wl-dkms
+# Broadcom Drivers (MacBook & PC Wi-Fi)
+broadcom-wl-dkms
+dkms
 # Firmware
 linux-firmware
 # Microcódigo de CPU (Intel y AMD)

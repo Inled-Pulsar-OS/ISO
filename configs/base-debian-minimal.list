@@ -163,14 +163,21 @@ autokey-gtk
 alsa-utils
 tesseract-ocr
 
-# ── Graphics Acceleration ────────────────────────────────────────────────────
+# ── Graphics Acceleration & Intel Drivers ────────────────────────────────────
 mesa-utils
 mesa-va-drivers
 mesa-vulkan-drivers
+xserver-xorg-video-intel
+intel-media-va-driver-non-free
 virgl-server
 libvirglrenderer1
 qemu-guest-agent
 spice-vdagent
+
+# ── Broadcom Drivers & Kernel Headers (MacBook Wi-Fi Offline Support) ────────
+broadcom-sta-dkms
+dkms
+linux-headers-amd64
 
 # ── Firmware & Live Boot ─────────────────────────────────────────────────────
 firmware-linux-free
@@ -187,6 +194,9 @@ amd64-microcode
 squashfs-tools
 live-boot
 live-boot-initramfs-tools
+
+# ── Apple / Mac File System Support ──────────────────────────────────────────
+hfsprogs
 
 # ── Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba) ─────────
 btrfs-progs

@@ -136,6 +136,7 @@ e2fsprogs
 dosfstools
 xfsprogs
 ntfs-3g
+hfsprogs
 gparted
 gnome-disk-utility
 gnome-system-monitor

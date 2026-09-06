@@ -128,12 +128,16 @@ intel-media-driver
 intel-ucode
 amd-ucode
 
-# ── Firmware (essential only) ───────────────────────────────────────────────
+# ── Firmware & Broadcom Wi-Fi Drivers (MacBook & PC) ─────────────────────────
 # NOTE: linux-firmware meta-package is ~1GB. Use targeted sub-packages.
 # GPU firmware is loaded from initramfs via the kms hook.
 linux-firmware-amdgpu
 linux-firmware-intel
 linux-firmware-nvidia
+linux-firmware-broadcom
+broadcom-wl-dkms
+dkms
+linux-headers
 
 # ── Flatpak (for post-install apps) ──────────────────────────────────────────
 flatpak
