@@ -791,7 +791,7 @@ if [ "$DISTRO" = "arch" ]; then
     # an interrupted download or obsolete package leaves stale/broken .pkg.tar.zst in the
     # bind-mounted cache that fails signature checks or reintroduces removed packages.
     for pattern in "pulsaros-*" "pulsar-store-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
-                   "droidtux-*" "macboat-*" "appinstall-*" "seafari-*" \
+                   "droidtux-*" "appinstall-*" "seafari-*" \
                    "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
                    "pulsar-pear-sound-theme-*" "*-debug-*"; do
         $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst.sig 2>/dev/null || true
@@ -1073,11 +1073,10 @@ $pkg_name"
             fi
 
             # Install remaining dependencies and packages.
-            # droidtux/macboat/appinstall/seafari come from the [inled] repo via pacman.
+            # droidtux/appinstall/seafari come from the [inled] repo via pacman.
             pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 droidtux \
-                macboat \
                 appinstall \
                 seafari \
                 qt6-multimedia \
@@ -1160,7 +1159,6 @@ $pkg_name"
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
-                macboat \
                 appinstall \
                 pulsar-store \
                 seafari \
@@ -1345,13 +1343,12 @@ EOF
             yes | apt-get install -y --allow-downgrades \
                 /tmp/packages/*.deb \
                 droidtux \
-                macboat \
                 appinstall \
                 seafari || {
                     echo '⚠️ Direct batch install encountered conflicts, resolving...'
                     apt-get install -y --fix-broken || true
                     yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
-                    apt-get install -y --allow-downgrades droidtux macboat appinstall seafari || true
+                    apt-get install -y --allow-downgrades droidtux appinstall seafari || true
                 }
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
@@ -1400,7 +1397,6 @@ EOF
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 droidtux \
-                macboat \
                 appinstall \
                 pulsar-store \
                 seafari
@@ -1680,6 +1676,15 @@ blacklist brcmsmac
 blacklist bcma
 EOF
 $SUDO chmod 644 "$ROOTFS_TARGET/etc/modprobe.d/broadcom-wl-blacklist.conf"
+
+# Pre-install ultimate-macOS-KVM in hidden directory /opt/.ultimate-macOS-KVM
+echo "🍏 Pre-installing ultimate-macOS-KVM in /opt/.ultimate-macOS-KVM..."
+$SUDO mkdir -p "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
+if [ ! -f "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM/main.py" ]; then
+    $SUDO rm -rf "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
+    $SUDO git clone --depth=1 https://github.com/Coopydood/ultimate-macOS-KVM "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM" 2>/dev/null || true
+fi
+$SUDO chmod -R 777 "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM" 2>/dev/null || true
 
 # ==============================================================================
 # PHASE 6: Final Tasks (Initramfs regeneration and cleanup)

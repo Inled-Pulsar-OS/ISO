@@ -60,16 +60,16 @@
     "0.4-beta-bittenfruit": {
       "arch": {
         "grub": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso",
-          "sha256": "56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d",
-          "size_bytes": 3448373248
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-grub.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-grub.iso",
+          "sha256": "35a8d57b907ef9baae8210b01b597a3aec35bf49085e1decc2f962f1cd0e0d27",
+          "size_bytes": 3856076800
         },
         "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso",
-          "sha256": "a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752",
-          "size_bytes": 3450373248
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-refind.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-refind.iso",
+          "sha256": "b961c43b17a2e9a133f30e77a17b55931f21cef97be931d3645a52c76f19f5cd",
+          "size_bytes": 4125233152
         }
       },
       "debian": {
@@ -80,10 +80,10 @@
           "size_bytes": 2840000000
         },
         "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso",
-          "sha256": "a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb",
-          "size_bytes": 2842000000
+          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-debian-refind.squashfs",
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-debian-refind.iso",
+          "sha256": "532eced49dda4d0415ebee34001683645e442f50dfd9694a7aa74761481b9b85",
+          "size_bytes": 4104122368
         }
       }
     }

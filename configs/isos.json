@@ -1,0 +1,57 @@
+{
+  "latest_version": "0.4-beta-bittenfruit",
+  "mirrors": [
+    {
+      "id": "auto",
+      "name": "Automático (SourceForge CDN / Fast Anycast)"
+    },
+    {
+      "id": "netix",
+      "name": "NetIX (Europa / Internacional)"
+    },
+    {
+      "id": "deac-riga",
+      "name": "DEAC Riga (Europa del Norte)"
+    },
+    {
+      "id": "altushost-swe",
+      "name": "AltusHost (Suecia)"
+    },
+    {
+      "id": "liquidtelecom",
+      "name": "Liquid Telecom (África / Global)"
+    },
+    {
+      "id": "cfhcable",
+      "name": "CFH Cable (Norteamérica)"
+    }
+  ],
+  "versions": {
+    "0.4-beta-bittenfruit": {
+      "arch": {
+        "grub": {
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-grub.iso",
+          "sha256": "c531dd75ca2b354b547ca61e1eefcdda0dc26fdfa48316c61e70336157df65f5",
+          "size_bytes": 4776638464
+        },
+        "refind": {
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-refind.iso",
+          "sha256": "cc5cef280b54b0bb0409a6889fe216464716693fb33f7f5b0caab82acf537d13",
+          "size_bytes": 5817692160
+        }
+      },
+      "debian": {
+        "grub": {
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso",
+          "sha256": "",
+          "size_bytes": 4500000000
+        },
+        "refind": {
+          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-debian-refind.iso",
+          "sha256": "3c58a7013b9342f3f9ee5e23f29236f6479f32079678cce741ef37b6ee38d2e4",
+          "size_bytes": 5527388160
+        }
+      }
+    }
+  }
+}
