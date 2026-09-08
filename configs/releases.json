@@ -1,89 +1,46 @@
 {
-  "latest_version": "0.4-beta-bittenfruit",
+  "latest_edition": "bittenfruit",
   "mirrors": [
     {
       "id": "auto",
       "name": "Automático (SourceForge CDN / Fast Anycast)"
-    },
-    {
-      "id": "netix",
-      "name": "NetIX (Europa / Internacional)"
-    },
-    {
-      "id": "deac-riga",
-      "name": "DEAC Riga (Europa del Norte)"
-    },
-    {
-      "id": "altushost-swe",
-      "name": "AltusHost (Suecia)"
-    },
-    {
-      "id": "liquidtelecom",
-      "name": "Liquid Telecom (África / Global)"
-    },
-    {
-      "id": "cfhcable",
-      "name": "CFH Cable (Norteamérica)"
     }
   ],
-  "versions": {
-    "0.3-beta-bittenfruit": {
-      "arch": {
-        "grub": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 3145728000
-        },
-        "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 3145728000
-        }
-      },
-      "debian": {
-        "grub": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 2800000000
-        },
-        "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.iso",
-          "sha256": "",
-          "size_bytes": 2800000000
-        }
-      }
-    },
-    "0.4-beta-bittenfruit": {
-      "arch": {
-        "grub": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-grub.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-grub.iso",
-          "sha256": "35a8d57b907ef9baae8210b01b597a3aec35bf49085e1decc2f962f1cd0e0d27",
-          "size_bytes": 3856076800
-        },
-        "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-refind.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-arch-refind.iso",
-          "sha256": "b961c43b17a2e9a133f30e77a17b55931f21cef97be931d3645a52c76f19f5cd",
-          "size_bytes": 4125233152
-        }
-      },
-      "debian": {
-        "grub": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso",
-          "sha256": "f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b",
-          "size_bytes": 2840000000
-        },
-        "refind": {
-          "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-debian-refind.squashfs",
-          "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-stable-debian-refind.iso",
-          "sha256": "532eced49dda4d0415ebee34001683645e442f50dfd9694a7aa74761481b9b85",
-          "size_bytes": 4104122368
+  "editions": {
+    "bittenfruit": {
+      "id": "bittenfruit",
+      "name": "Bittenfruit",
+      "latest_version": "0.4-beta",
+      "versions": {
+        "0.4-beta": {
+          "arch": {
+            "grub": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso",
+              "sha256": "df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91",
+              "size_bytes": 5476085760
+            },
+            "refind": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso",
+              "sha256": "f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461",
+              "size_bytes": 5476085760
+            }
+          },
+          "debian": {
+            "grub": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso",
+              "sha256": "7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb",
+              "size_bytes": 4500000000
+            },
+            "refind": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso",
+              "sha256": "bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e",
+              "size_bytes": 4500000000
+            }
+          }
         }
       }
     }
