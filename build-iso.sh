@@ -1930,6 +1930,7 @@ EOF
 else
     echo "--- 🔄 Finalizando y actualizando initramfs y servicios de sistema (Debian) ---"
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         mkdir -p /etc/systemd/system/poweroff.target.wants \
                  /etc/systemd/system/reboot.target.wants \
                  /etc/systemd/system/halt.target.wants 2>/dev/null || true
@@ -1956,7 +1957,9 @@ EOF
         if command -v plymouth-set-default-theme >/dev/null 2>&1; then
             plymouth-set-default-theme pulsar-plymouth 2>/dev/null || true
         fi
-        update-initramfs -u -k all
+        if command -v update-initramfs >/dev/null 2>&1; then
+            update-initramfs -u -k all
+        fi
     "
 fi
 
@@ -2099,6 +2102,15 @@ unmount_tree "$ROOTFS_TARGET"
             $SUDO cp -rf "$ROOTFS_TARGET/etc/skel/." "$ROOTFS_TARGET/home/live/" 2>/dev/null || true
             $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "chown -R live:live /home/live 2>/dev/null || true" 2>/dev/null || true
         fi
+    fi
+
+    # 6. pulsaros-essential (install-macos app, desktop entry, and icons)
+    if [ -d "$PULSAR_ROOT/PKG/pulsaros-essential" ]; then
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/bin/install-macos" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/applications/install-macos.desktop" "$ROOTFS_TARGET/usr/share/applications/" 2>/dev/null || true
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/icons/." "$ROOTFS_TARGET/usr/share/icons/" 2>/dev/null || true
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/pixmaps/." "$ROOTFS_TARGET/usr/share/pixmaps/" 2>/dev/null || true
+        $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
     fi
 
     # Remove unwanted GNOME extensions from rootfs
@@ -2800,6 +2812,7 @@ EOF
         exit 1
     fi
     $SUDO xorriso -as mkisofs \
+      -iso-level 3 \
       -o "$ISO_OUTPUT" \
       -J -R -V "PULSAR_ISO" \
       -isohybrid-mbr "$HYBRID_MBR" \

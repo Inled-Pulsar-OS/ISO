@@ -40,6 +40,10 @@
     .edition-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
     .edition-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
     .edition-card .meta { color: var(--text-secondary); font-size: 14px; }
+    .dl-group { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .dl-group .btn { align-self: flex-end; }
+    .instructions-link { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.2s; }
+    .instructions-link:hover { color: var(--accent); text-decoration: underline; }
     .chip { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; }
     .chip-arch { background: rgba(0,113,227,0.12); color: #005bbb; }
     .chip-debian { background: rgba(215,10,83,0.12); color: #b30045; }
@@ -132,11 +136,14 @@
                   <h3>Bittenfruit · 0.4-beta</h3>
                   <div class="meta">Arch Linux &middot; GRUB boot &middot; 5.10 GB</div>
                 </div>
-                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
               </div>
               <div class="file-block">
-                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso</div>
-                <div class="hash">SHA-256 &nbsp;56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d</div>
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91</div>
               </div>
             </div>
             <div class="card">
@@ -149,11 +156,14 @@
                   <h3>Bittenfruit · 0.4-beta</h3>
                   <div class="meta">Arch Linux &middot; rEFInd boot &middot; 5.10 GB</div>
                 </div>
-                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
               </div>
               <div class="file-block">
-                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso</div>
-                <div class="hash">SHA-256 &nbsp;a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752</div>
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461</div>
               </div>
             </div>
             <div class="card">
@@ -166,11 +176,14 @@
                   <h3>Bittenfruit · 0.4-beta</h3>
                   <div class="meta">Debian &middot; GRUB boot &middot; 4.19 GB</div>
                 </div>
-                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
               </div>
               <div class="file-block">
-                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso</div>
-                <div class="hash">SHA-256 &nbsp;f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b</div>
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb</div>
               </div>
             </div>
             <div class="card">
@@ -183,11 +196,14 @@
                   <h3>Bittenfruit · 0.4-beta</h3>
                   <div class="meta">Debian &middot; rEFInd boot &middot; 4.19 GB</div>
                 </div>
-                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
               </div>
               <div class="file-block">
-                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso</div>
-                <div class="hash">SHA-256 &nbsp;a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb</div>
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e</div>
               </div>
             </div>
       </div>
@@ -209,16 +225,20 @@
         <div class="v-field">
           <label for="v-select"><span class="step-num">1</span> Choose the edition and image you downloaded</label>
           <select id="v-select" data-editions='{"latest": "bittenfruit", "editions": [{"id": "bittenfruit", "name": "Bittenfruit", "version": "0.4-beta"}]}'>
-            <option value="56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · GRUB</option>
-          <option value="a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · rEFInd</option>
-          <option value="f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · GRUB</option>
-          <option value="a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · rEFInd</option>
+            <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · GRUB · ISO</option>
+          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · rEFInd · ISO</option>
+          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · GRUB · ISO</option>
+          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · rEFInd · ISO</option>
+          <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · Arch Linux · GRUB · Recovery</option>
+          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · Arch Linux · rEFInd · Recovery</option>
+          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · Debian · GRUB · Recovery</option>
+          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · Debian · rEFInd · Recovery</option>
           </select>
         </div>
         <div>
-          <div class="v-field"><label><span class="step-num">2</span> Select the ISO file from your downloads</label></div>
+          <div class="v-field"><label><span class="step-num">2</span> Select the file from your downloads</label></div>
           <div class="dropzone" id="v-drop">
-            <div class="dz-title">Click here and choose your downloaded ISO</div>
+            <div class="dz-title">Click here and choose your downloaded file</div>
             <div class="dz-sub">You can also drag and drop the file onto this box.</div>
             <input type="file" id="v-file">
           </div>

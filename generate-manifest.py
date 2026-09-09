@@ -261,9 +261,15 @@ def generate_manifest(args):
 
         isos_dir = html_dir / "isos"
         isos_dir.mkdir(parents=True, exist_ok=True)
-        generate_isos_html(isos_data, isos_dir / "index.html")
-        generate_isos_html(isos_data, html_dir / "isos.html")
+        generate_isos_html(releases_data, isos_data, isos_dir / "index.html")
+        generate_isos_html(releases_data, isos_data, html_dir / "isos.html")
         print(f"Generated dedicated ISO download page to: {isos_dir / 'index.html'} and {html_dir / 'isos.html'}")
+
+        flash_dir = html_dir / "flash"
+        flash_dir.mkdir(parents=True, exist_ok=True)
+        generate_flash_html(flash_dir / "index.html")
+        generate_flash_html(html_dir / "flash.html")
+        print(f"Generated flash guide page to: {flash_dir / 'index.html'} and {html_dir / 'flash.html'}")
 
         # Copy committed JSON + checksums + dino game for static hosting
         for name in ("releases.json", "isos.json", "SHA256SUMS"):
@@ -281,7 +287,7 @@ def generate_manifest(args):
 
         # Cloudflare Pages _redirects and _headers
         with open(html_dir / "_redirects", "w", encoding="utf-8") as f:
-            f.write("/isos /isos/index.html 200\n/releases /index.html 200\n")
+            f.write("/isos /isos/index.html 200\n/flash /flash/index.html 200\n/releases /index.html 200\n")
         with open(html_dir / "_headers", "w", encoding="utf-8") as f:
             f.write("/*\n  Access-Control-Allow-Origin: *\n")
 
@@ -335,6 +341,10 @@ def get_common_styles() -> str:
     .edition-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
     .edition-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
     .edition-card .meta { color: var(--text-secondary); font-size: 14px; }
+    .dl-group { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .dl-group .btn { align-self: flex-end; }
+    .instructions-link { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.2s; }
+    .instructions-link:hover { color: var(--accent); text-decoration: underline; }
     .chip { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; }
     .chip-arch { background: rgba(0,113,227,0.12); color: #005bbb; }
     .chip-debian { background: rgba(215,10,83,0.12); color: #b30045; }
@@ -446,7 +456,10 @@ def _render_cards(editions_root: dict, latest_edition: str) -> str:
                   <h3>{name} · {ver}</h3>
                   <div class="meta">{base_label} &middot; {boot_label} boot &middot; {size_fmt}</div>
                 </div>
-                <a class="btn" href="{iso_url}" target="_blank" rel="noopener">Download ISO</a>
+                <div class="dl-group">
+                  <a class="btn" href="{iso_url}" target="_blank" rel="noopener">Download ISO</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
               </div>
               <div class="file-block">
                 <div class="fname">{fname}</div>
@@ -456,6 +469,51 @@ def _render_cards(editions_root: dict, latest_edition: str) -> str:
         panels.append(f"""
       <div class="edition-panel" data-edition="{eid}"{'' if eid == latest_edition else ' hidden'}>
         {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No ISO images available for this edition yet.</p>'}
+      </div>""")
+    return "\n".join(panels)
+
+
+def _render_recovery_cards(editions_root: dict, latest_edition: str) -> str:
+    """Render one panel of SquashFS recovery cards per edition."""
+    panels = []
+    for eid, name, ver in _edition_meta(editions_root):
+        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
+        cards = []
+        for base, boots in node.items():
+            chip_cls = "chip-arch" if base == "arch" else "chip-debian"
+            base_label = "Arch Linux" if base == "arch" else "Debian"
+            for boot, info in boots.items():
+                squashfs_url = info.get("squashfs", "")
+                if not squashfs_url:
+                    continue
+                fname = Path(squashfs_url).name if squashfs_url else ""
+                size_fmt = format_size(info.get("size_bytes", 0))
+                hash_str = info.get("sha256", "—")
+                boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                cards.append(f"""
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip {chip_cls}">{base_label}</span>
+                    <span class="chip chip-ver">{boot_label}</span>
+                  </div>
+                  <h3>{name} · {ver}</h3>
+                  <div class="meta">{base_label} &middot; {boot_label} boot &middot; {size_fmt}</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="{squashfs_url}" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">{fname}</div>
+                <div class="hash">SHA-256 &nbsp;{hash_str}</div>
+              </div>
+            </div>""")
+        panels.append(f"""
+      <div class="edition-panel" data-edition="{eid}"{'' if eid == latest_edition else ' hidden'}>
+        {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No recovery images available for this edition yet.</p>'}
       </div>""")
     return "\n".join(panels)
 
@@ -477,13 +535,78 @@ def _edition_json(editions_root: dict) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
-def get_verifier_html(editions_root: dict, latest_edition: str) -> str:
+def _render_recovery_verifier_options(editions_root: dict) -> str:
+    """Render all editions' SquashFS images as <option> for the recovery verifier."""
+    opts = []
+    for eid, name, ver in _edition_meta(editions_root):
+        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
+        for base, boots in node.items():
+            base_label = "Arch Linux" if base == "arch" else "Debian"
+            for boot, info in boots.items():
+                sha = info.get("sha256", "") or ""
+                squashfs = info.get("squashfs", "")
+                if not sha or not squashfs:
+                    continue
+                fname = Path(squashfs).name if squashfs else f"pulsaros-{ver}-{eid}-{base}-{boot}-{ver}-{eid}.squashfs"
+                boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                opts.append(
+                    f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · Recovery</option>'
+                )
+    return "\n          ".join(opts)
+
+
+def _render_merged_verifier_options(editions_root: dict, releases_root: dict) -> str:
+    """Render both ISO and SquashFS hashes in one <select> for the unified verifier."""
+    seen = set()
+    opts = []
+    for eid, name, ver in _edition_meta(editions_root):
+        # ISO options from isos_data
+        iso_node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
+        for base, boots in iso_node.items():
+            base_label = "Arch Linux" if base == "arch" else "Debian"
+            for boot, info in boots.items():
+                sha = info.get("sha256", "") or ""
+                iso = info.get("iso", "")
+                if not sha or not iso:
+                    continue
+                fname = Path(iso).name if iso else ""
+                boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                key = f"{eid}-{base}-{boot}-iso"
+                if key not in seen:
+                    seen.add(key)
+                    opts.append(
+                        f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · ISO</option>'
+                    )
+        # SquashFS options from releases_data
+        rel_node = releases_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
+        for base, boots in rel_node.items():
+            base_label = "Arch Linux" if base == "arch" else "Debian"
+            for boot, info in boots.items():
+                sha = info.get("sha256", "") or ""
+                squashfs = info.get("squashfs", "")
+                if not sha or not squashfs:
+                    continue
+                fname = Path(squashfs).name if squashfs else ""
+                boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                key = f"{eid}-{base}-{boot}-squashfs"
+                if key not in seen:
+                    seen.add(key)
+                    opts.append(
+                        f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · Recovery</option>'
+                    )
+    return "\n          ".join(opts)
+
+
+def get_verifier_html(editions_root: dict, latest_edition: str, releases_root: dict = None) -> str:
     heading = "Check that your file isn't corrupted"
     lead = "This only takes a moment and it all happens in your browser — your file is never uploaded anywhere."
     step1 = "Choose the edition and image you downloaded"
-    step2 = "Select the ISO file from your downloads"
+    step2 = "Select the file from your downloads"
     tabs = _edition_tabs(editions_root, latest_edition)
-    options = _render_verifier_options(editions_root)
+    if releases_root:
+        options = _render_merged_verifier_options(editions_root, releases_root)
+    else:
+        options = _render_verifier_options(editions_root)
     options_meta = _edition_json(editions_root)
 
     return f"""
@@ -503,7 +626,7 @@ def get_verifier_html(editions_root: dict, latest_edition: str) -> str:
         <div>
           <div class="v-field"><label><span class="step-num">2</span> {step2}</label></div>
           <div class="dropzone" id="v-drop">
-            <div class="dz-title">Click here and choose your downloaded ISO</div>
+            <div class="dz-title">Click here and choose your downloaded file</div>
             <div class="dz-sub">You can also drag and drop the file onto this box.</div>
             <input type="file" id="v-file">
           </div>
@@ -815,7 +938,7 @@ def generate_main_html(releases_data: dict, isos_data: dict, out_file: Path):
       <h2>Always check your download</h2>
     </div>
     <p class="verify-steps" style="margin-top:0;">Once your download finishes, use the check below to make sure the file is intact — it's quick and private, right here in your browser.</p>
-    {get_verifier_html(isos_data, latest_edition)}
+    {get_verifier_html(isos_data, latest_edition, releases_root=releases_data)}
   </main>
   <div class="footer">Pulsar OS &middot; Downloads and recovery</div>
 """
@@ -828,15 +951,15 @@ def generate_main_html(releases_data: dict, isos_data: dict, out_file: Path):
         f.write(html)
 
 
-def generate_isos_html(isos_data: dict, out_file: Path):
-    latest_edition = isos_data.get("latest_edition", "")
-    latest_isos = isos_data.get("editions", {}).get(latest_edition, {})
-    latest_ver = latest_isos.get("latest_version", "N/A")
+def generate_isos_html(releases_data: dict, isos_data: dict, out_file: Path):
+    latest_edition = releases_data.get("latest_edition", "")
+    latest_releases = releases_data.get("editions", {}).get(latest_edition, {})
+    latest_ver = latest_releases.get("latest_version", "N/A")
 
-    cards_html = _render_cards(isos_data, latest_edition)
-    tabs_html = _edition_tabs(isos_data, latest_edition)
+    cards_html = _render_recovery_cards(releases_data, latest_edition)
+    tabs_html = _edition_tabs(releases_data, latest_edition)
 
-    html = _page_head("Recovery — Pulsar OS", "isos", isos_data, latest_edition)
+    html = _page_head("Recovery — Pulsar OS", "isos", releases_data, latest_edition)
     html += f"""
     <div class="hero">
       <div class="eyebrow">Internet Recovery</div>
@@ -860,7 +983,7 @@ def generate_isos_html(isos_data: dict, out_file: Path):
     </div>
 
     <div class="section-header" style="margin-top:24px;"><h2>Always check your download</h2></div>
-    {get_verifier_html(isos_data, latest_edition)}
+    {get_verifier_html(releases_data, latest_edition, releases_root=releases_data)}
   </main>
   <div class="footer">Pulsar OS &middot; Downloads and recovery</div>
 """
@@ -871,6 +994,229 @@ def generate_isos_html(isos_data: dict, out_file: Path):
 """
     with open(out_file, "w", encoding="utf-8") as f:
         f.write(html)
+
+
+def generate_flash_html(out_file: Path):
+    html = _page_head("How to Flash — Pulsar OS", "flash", {}, "")
+    html += """
+    <style>
+      .flash-step { display: flex; gap: 16px; margin-bottom: 18px; align-items: flex-start; }
+      .flash-step .step-circle { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+      .flash-step .step-body { flex: 1; }
+      .flash-step .step-body h4 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+      .flash-step .step-body p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+      .os-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 20px; }
+      .os-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+      .os-card .os-tag { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
+      .os-card .os-tag.win { background: rgba(0,120,212,0.12); color: #0078d4; }
+      .os-card .os-tag.linux { background: rgba(255,152,0,0.12); color: #e65100; }
+      .os-card .os-tag.mac { background: rgba(0,0,0,0.08); color: var(--text); }
+      .os-card .os-desc { color: var(--text-secondary); font-size: 14px; margin: 0 0 16px; }
+      .os-card .app-name { font-weight: 600; color: var(--text); }
+      .tip-box { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 20px 0; }
+      .tip-box .tip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+      .tip-box p { margin: 0; font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+      .ai-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-top: 32px; }
+      .ai-box h3 { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
+      .ai-box .ai-desc { color: var(--text-secondary); font-size: 14px; margin: 0 0 16px; }
+      .ai-input-wrap { display: flex; gap: 10px; }
+      .ai-input-wrap input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 14px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.2s; }
+      .ai-input-wrap input:focus { border-color: var(--accent); }
+      .ai-input-wrap .ai-btn { background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 12px 22px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+      .ai-input-wrap .ai-btn:hover { background: var(--accent-hover); }
+      .ai-hint { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+    </style>
+
+    <div class="hero">
+      <div class="eyebrow">Getting started</div>
+      <h1>How to flash and boot Pulsar OS.</h1>
+      <p>Everything you need to put Pulsar OS on a USB drive and start using it — no technical knowledge required.</p>
+    </div>
+
+    <div class="section-header">
+      <h2>What you need</h2>
+    </div>
+    <div class="tip-box">
+      <div class="tip-title">Before you begin</div>
+      <p>A USB drive of <strong>at least 8 GB</strong> (the contents will be erased), the Pulsar OS file you downloaded, and one of the apps below depending on your operating system.</p>
+    </div>
+
+    <div class="section-header" style="margin-top:32px;">
+      <h2>Pick your operating system</h2>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag win">Windows</span> Rufus</h3>
+      <p class="os-desc"><span class="app-name">Rufus</span> is a free, lightweight app for Windows that creates bootable USB drives in a few clicks.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Download and open Rufus</h4>
+          <p>Get it from <a href="https://rufus.ie" target="_blank" rel="noopener">rufus.ie</a> — no installation needed, just run the file.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Plug in your USB drive</h4>
+          <p>Rufus will detect it automatically. Make sure the right device is selected under "Device".</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Select your Pulsar OS file</h4>
+          <p>Click "SELECT" and find the ISO or recovery file you downloaded.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Start flashing</h4>
+          <p>Leave all other settings as they are and click "START". Wait for it to finish — this may take a few minutes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag linux">Linux</span> GNOME Disks</h3>
+      <p class="os-desc"><span class="app-name">GNOME Disks</span> comes pre-installed on most Linux distributions with a graphical desktop.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Open GNOME Disks</h4>
+          <p>Search for "Disks" in your app launcher, or type <code>gnome-disks</code> in a terminal.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Select your USB drive</h4>
+          <p>Click on the USB drive in the left sidebar. Be careful to pick the right one.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Restore the image</h4>
+          <p>Click the menu button (three dots) in the top-right corner and choose "Restore Disk Image…". Select your Pulsar OS file and confirm.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Wait for it to finish</h4>
+          <p>The process takes a few minutes. Once done, safely eject the USB drive.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag mac">macOS</span> balenaEtcher</h3>
+      <p class="os-desc"><span class="app-name">balenaEtcher</span> is a free app for macOS that makes flashing USB drives simple and safe.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Download and open balenaEtcher</h4>
+          <p>Get it from <a href="https://etcher.balena.io" target="_blank" rel="noopener">etcher.balena.io</a>. On macOS you may need to right-click → Open the first time to bypass Gatekeeper.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Select your Pulsar OS file</h4>
+          <p>Click "Flash from file" and choose the ISO or recovery file you downloaded.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Pick your USB drive</h4>
+          <p>Click "Select target" and choose your USB drive. Confirm the selection.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Flash!</h4>
+          <p>Click "Flash!" and wait. You may be asked for your Mac password. Once done, close the app and eject the USB.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:40px;">
+      <h2>Boot from the USB</h2>
+    </div>
+    <p style="color:var(--text-secondary); font-size:15px; margin-top:0;">Now that your USB is ready, here's how to start your computer from it.</p>
+
+    <div class="flash-step">
+      <div class="step-circle">1</div>
+      <div class="step-body">
+        <h4>Plug in the USB drive</h4>
+        <p>Keep it plugged in and restart your computer.</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">2</div>
+      <div class="step-body">
+        <h4>Open the boot menu</h4>
+        <p>As soon as your computer starts (before the operating system loads), press the key that opens the boot menu. This is usually <strong>F12</strong>, <strong>F2</strong>, <strong>Esc</strong>, or <strong>F10</strong> — it depends on your computer brand. See the section below to find the right key for your model.</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">3</div>
+      <div class="step-body">
+        <h4>Select your USB drive</h4>
+        <p>In the boot menu, use the arrow keys to highlight your USB drive and press Enter. It may appear as the brand name of your USB (like "SanDisk" or "Kingston") or as "USB HDD".</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">4</div>
+      <div class="step-body">
+        <h4>Start Pulsar OS in live mode</h4>
+        <p>Pulsar OS will load from the USB. You'll see a welcome screen — choose "Try Pulsar OS" or "Live mode" to explore without changing anything on your computer. If you like it, you can install it later from within the live session.</p>
+      </div>
+    </div>
+
+    <div class="tip-box">
+      <div class="tip-title">What is live mode?</div>
+      <p>Live mode lets you run Pulsar OS directly from the USB drive without installing anything. Your files and settings stay on the USB, and your computer's hard drive is not touched. It's a safe way to try Pulsar OS before deciding.</p>
+    </div>
+
+    <div class="ai-box">
+      <h3>Find your boot menu key</h3>
+      <p class="ai-desc">Not sure which key to press? Type your computer model below and we'll look it up for you.</p>
+      <div class="ai-input-wrap">
+        <input type="text" id="boot-model-input" placeholder="e.g. Dell Inspiron 15, Lenovo ThinkPad X1, HP Pavilion...">
+        <button class="ai-btn" id="boot-lookup-btn" type="button">Look it up</button>
+      </div>
+      <p class="ai-hint">Opens a Google search with the answer for your specific model.</p>
+    </div>
+
+  </main>
+  <div class="footer">Pulsar OS &middot; Downloads and recovery</div>
+"""
+    html += """
+  <script>
+    (function () {
+      var input = document.getElementById('boot-model-input');
+      var btn = document.getElementById('boot-lookup-btn');
+      function lookup() {
+        var model = (input.value || '').trim();
+        if (!model) { input.focus(); return; }
+        var q = encodeURIComponent('how to access boot menu on ' + model + ' step by step');
+        window.open('https://www.google.com/search?q=' + q, '_blank');
+      }
+      btn.addEventListener('click', lookup);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(); });
+    })();
+  </script>
+</body>
+</html>
+"""
+    with open(out_file, "w", encoding="utf-8") as f:
+        f.write(html)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Pulsar OS releases.json & isos.json manifest and pages")

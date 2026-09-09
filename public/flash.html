@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How to Flash — Pulsar OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f7;
+      --border: rgba(0,0,0,0.1);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; line-height: 1.5; font-feature-settings: 'liga' 1, 'calt' 1; }
+    .nav-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px clamp(16px, 4vw, 40px); background: rgba(251,251,253,0.82); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .nav-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 600; color: var(--text); }
+    .brand-logo { width: 26px; height: 26px; object-fit: contain; }
+    .nav-links { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 14px; padding: 7px 12px; border-radius: 8px; transition: color 0.2s, background 0.2s; }
+    .nav-links a:hover { color: var(--text); background: rgba(0,0,0,0.04); }
+    .nav-links a.active-nav { color: var(--text); font-weight: 600; }
+    .nav-links a.nav-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    main { max-width: 960px; margin: 0 auto; padding: 40px clamp(16px, 4vw, 24px) 80px; }
+    .hero { text-align: center; padding: clamp(32px, 6vw, 64px) 0 40px; }
+    .hero h1 { font-size: clamp(34px, 6vw, 52px); font-weight: 700; letter-spacing: -0.025em; margin: 0 0 12px; }
+    .hero p { font-size: clamp(17px, 2.4vw, 21px); color: var(--text-secondary); margin: 0 auto; max-width: 620px; }
+    .hero .eyebrow { display: inline-block; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 500; margin-bottom: 22px; }
+    .section-header { display: flex; justify-content: space-between; align-items: baseline; margin: 48px 0 16px; }
+    .section-header h2 { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+    .section-header .sub { color: var(--text-secondary); font-size: 14px; }
+    .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.04); }
+    .edition-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .edition-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+    .edition-card .meta { color: var(--text-secondary); font-size: 14px; }
+    .dl-group { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .dl-group .btn { align-self: flex-end; }
+    .instructions-link { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.2s; }
+    .instructions-link:hover { color: var(--accent); text-decoration: underline; }
+    .chip { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; }
+    .chip-arch { background: rgba(0,113,227,0.12); color: #005bbb; }
+    .chip-debian { background: rgba(215,10,83,0.12); color: #b30045; }
+    .chip-ver { background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); }
+    .file-block { background: var(--bg-secondary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; font-size: 13.5px; }
+    .file-block .fname { font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+    .hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-secondary); word-break: break-all; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; background: var(--accent); color: #fff !important; text-decoration: none !important; padding: 9px 18px; border-radius: 980px; font-size: 14px; font-weight: 500; transition: background 0.2s, transform 0.1s; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:active { transform: scale(0.98); }
+    .dino-wrap { width: 100%; margin: 24px auto 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #fff; }
+    .dino-wrap .dino-label { padding: 14px 22px 0; font-size: 13px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+    .dino-wrap iframe { display: block; width: 100%; height: 260px; border: 0; }
+    pre { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 16px; font-size: 13px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .footer { text-align: center; color: var(--text-secondary); font-size: 13px; padding: 32px 0 16px; border-top: 1px solid var(--border); margin-top: 48px; }
+    .verify-steps { font-size: 14px; color: var(--text-secondary); }
+    ul.endpoint-list { margin: 0; list-style: none; padding: 0; font-size: 15px; display: grid; gap: 12px; }
+    ul.endpoint-list .hash { font-size: 13px; }
+    .verifier { display: grid; gap: 22px; }
+    .v-field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+    .v-field select { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 14px; background: var(--bg); color: var(--text); appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236e6e73' d='M6 8.5 1.5 4h9z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+    .dropzone { border: 1.5px dashed var(--border); border-radius: 14px; padding: 34px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--bg-secondary); }
+    .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: rgba(0,113,227,0.05); }
+    .dropzone .dz-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .dropzone .dz-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .dropzone input[type="file"] { display: none; }
+    .v-fileinfo { display: none; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
+    .v-fileinfo .fname { font-weight: 600; word-break: break-all; }
+    .v-fileinfo .fsize { color: var(--text-secondary); font-size: 13px; }
+    .v-fileinfo .change { margin-left: auto; color: var(--accent); background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .v-fileinfo .change:hover { text-decoration: underline; }
+    .v-progress { height: 6px; background: var(--bg-secondary); border-radius: 999px; overflow: hidden; display: none; }
+    .v-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+    .v-result { display: none; align-items: center; gap: 12px; padding: 16px 18px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+    .v-result .badge-v { font-size: 26px; line-height: 1; }
+    .v-result.match { display: flex; background: rgba(52,199,89,0.12); color: #146e35; }
+    .v-result.mismatch { display: flex; background: rgba(255,59,48,0.12); color: #b3002f; }
+    .v-result .detail { font-weight: 400; font-size: 13.5px; color: var(--text-secondary); word-break: break-all; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; vertical-align: middle; }
+    .edition-switch { display: flex; flex-wrap: wrap; gap: 10px; }
+    .edition-tab { padding: 10px 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+    .edition-tab:hover { border-color: var(--text-secondary); color: var(--text); }
+    .edition-tab.active-tab { background: var(--bg-secondary); border-color: var(--text-secondary); color: var(--text); }
+    .edition-panel[hidden] { display: none; }
+    #v-reset { background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
+    @media (max-width: 640px) { .nav-links .nav-mono { display: none; } }
+    </style>
+</head>
+<body>
+  
+    <nav class="nav-bar">
+      <div class="nav-brand"><img class="brand-logo" src="https://hosted.inled.es/cdn/pulsar-logo-simple-sf.png" alt="Pulsar OS logo"><strong>Pulsar OS</strong></div>
+      <div class="nav-links">
+        <a href="/" class="">Downloads</a>
+        <a href="/isos" class="">Recovery</a>
+        <a class="nav-mono" href="/releases.json" target="_blank" rel="noopener">releases.json</a>
+        <a class="nav-mono" href="/isos.json" target="_blank" rel="noopener">isos.json</a>
+        <a class="nav-mono" href="/SHA256SUMS" target="_blank" rel="noopener">SHA256SUMS</a>
+      </div>
+    </nav>
+    
+  <main>
+
+    <style>
+      .flash-step { display: flex; gap: 16px; margin-bottom: 18px; align-items: flex-start; }
+      .flash-step .step-circle { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+      .flash-step .step-body { flex: 1; }
+      .flash-step .step-body h4 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+      .flash-step .step-body p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+      .os-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 20px; }
+      .os-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+      .os-card .os-tag { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
+      .os-card .os-tag.win { background: rgba(0,120,212,0.12); color: #0078d4; }
+      .os-card .os-tag.linux { background: rgba(255,152,0,0.12); color: #e65100; }
+      .os-card .os-tag.mac { background: rgba(0,0,0,0.08); color: var(--text); }
+      .os-card .os-desc { color: var(--text-secondary); font-size: 14px; margin: 0 0 16px; }
+      .os-card .app-name { font-weight: 600; color: var(--text); }
+      .tip-box { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 20px 0; }
+      .tip-box .tip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+      .tip-box p { margin: 0; font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+      .ai-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-top: 32px; }
+      .ai-box h3 { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
+      .ai-box .ai-desc { color: var(--text-secondary); font-size: 14px; margin: 0 0 16px; }
+      .ai-input-wrap { display: flex; gap: 10px; }
+      .ai-input-wrap input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 14px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.2s; }
+      .ai-input-wrap input:focus { border-color: var(--accent); }
+      .ai-input-wrap .ai-btn { background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 12px 22px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+      .ai-input-wrap .ai-btn:hover { background: var(--accent-hover); }
+      .ai-hint { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+    </style>
+
+    <div class="hero">
+      <div class="eyebrow">Getting started</div>
+      <h1>How to flash and boot Pulsar OS.</h1>
+      <p>Everything you need to put Pulsar OS on a USB drive and start using it — no technical knowledge required.</p>
+    </div>
+
+    <div class="section-header">
+      <h2>What you need</h2>
+    </div>
+    <div class="tip-box">
+      <div class="tip-title">Before you begin</div>
+      <p>A USB drive of <strong>at least 8 GB</strong> (the contents will be erased), the Pulsar OS file you downloaded, and one of the apps below depending on your operating system.</p>
+    </div>
+
+    <div class="section-header" style="margin-top:32px;">
+      <h2>Pick your operating system</h2>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag win">Windows</span> Rufus</h3>
+      <p class="os-desc"><span class="app-name">Rufus</span> is a free, lightweight app for Windows that creates bootable USB drives in a few clicks.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Download and open Rufus</h4>
+          <p>Get it from <a href="https://rufus.ie" target="_blank" rel="noopener">rufus.ie</a> — no installation needed, just run the file.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Plug in your USB drive</h4>
+          <p>Rufus will detect it automatically. Make sure the right device is selected under "Device".</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Select your Pulsar OS file</h4>
+          <p>Click "SELECT" and find the ISO or recovery file you downloaded.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Start flashing</h4>
+          <p>Leave all other settings as they are and click "START". Wait for it to finish — this may take a few minutes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag linux">Linux</span> GNOME Disks</h3>
+      <p class="os-desc"><span class="app-name">GNOME Disks</span> comes pre-installed on most Linux distributions with a graphical desktop.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Open GNOME Disks</h4>
+          <p>Search for "Disks" in your app launcher, or type <code>gnome-disks</code> in a terminal.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Select your USB drive</h4>
+          <p>Click on the USB drive in the left sidebar. Be careful to pick the right one.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Restore the image</h4>
+          <p>Click the menu button (three dots) in the top-right corner and choose "Restore Disk Image…". Select your Pulsar OS file and confirm.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Wait for it to finish</h4>
+          <p>The process takes a few minutes. Once done, safely eject the USB drive.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="os-card">
+      <h3><span class="os-tag mac">macOS</span> balenaEtcher</h3>
+      <p class="os-desc"><span class="app-name">balenaEtcher</span> is a free app for macOS that makes flashing USB drives simple and safe.</p>
+      <div class="flash-step">
+        <div class="step-circle">1</div>
+        <div class="step-body">
+          <h4>Download and open balenaEtcher</h4>
+          <p>Get it from <a href="https://etcher.balena.io" target="_blank" rel="noopener">etcher.balena.io</a>. On macOS you may need to right-click → Open the first time to bypass Gatekeeper.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">2</div>
+        <div class="step-body">
+          <h4>Select your Pulsar OS file</h4>
+          <p>Click "Flash from file" and choose the ISO or recovery file you downloaded.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">3</div>
+        <div class="step-body">
+          <h4>Pick your USB drive</h4>
+          <p>Click "Select target" and choose your USB drive. Confirm the selection.</p>
+        </div>
+      </div>
+      <div class="flash-step">
+        <div class="step-circle">4</div>
+        <div class="step-body">
+          <h4>Flash!</h4>
+          <p>Click "Flash!" and wait. You may be asked for your Mac password. Once done, close the app and eject the USB.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:40px;">
+      <h2>Boot from the USB</h2>
+    </div>
+    <p style="color:var(--text-secondary); font-size:15px; margin-top:0;">Now that your USB is ready, here's how to start your computer from it.</p>
+
+    <div class="flash-step">
+      <div class="step-circle">1</div>
+      <div class="step-body">
+        <h4>Plug in the USB drive</h4>
+        <p>Keep it plugged in and restart your computer.</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">2</div>
+      <div class="step-body">
+        <h4>Open the boot menu</h4>
+        <p>As soon as your computer starts (before the operating system loads), press the key that opens the boot menu. This is usually <strong>F12</strong>, <strong>F2</strong>, <strong>Esc</strong>, or <strong>F10</strong> — it depends on your computer brand. See the section below to find the right key for your model.</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">3</div>
+      <div class="step-body">
+        <h4>Select your USB drive</h4>
+        <p>In the boot menu, use the arrow keys to highlight your USB drive and press Enter. It may appear as the brand name of your USB (like "SanDisk" or "Kingston") or as "USB HDD".</p>
+      </div>
+    </div>
+    <div class="flash-step">
+      <div class="step-circle">4</div>
+      <div class="step-body">
+        <h4>Start Pulsar OS in live mode</h4>
+        <p>Pulsar OS will load from the USB. You'll see a welcome screen — choose "Try Pulsar OS" or "Live mode" to explore without changing anything on your computer. If you like it, you can install it later from within the live session.</p>
+      </div>
+    </div>
+
+    <div class="tip-box">
+      <div class="tip-title">What is live mode?</div>
+      <p>Live mode lets you run Pulsar OS directly from the USB drive without installing anything. Your files and settings stay on the USB, and your computer's hard drive is not touched. It's a safe way to try Pulsar OS before deciding.</p>
+    </div>
+
+    <div class="ai-box">
+      <h3>Find your boot menu key</h3>
+      <p class="ai-desc">Not sure which key to press? Type your computer model below and we'll look it up for you.</p>
+      <div class="ai-input-wrap">
+        <input type="text" id="boot-model-input" placeholder="e.g. Dell Inspiron 15, Lenovo ThinkPad X1, HP Pavilion...">
+        <button class="ai-btn" id="boot-lookup-btn" type="button">Look it up</button>
+      </div>
+      <p class="ai-hint">Opens a Google search with the answer for your specific model.</p>
+    </div>
+
+  </main>
+  <div class="footer">Pulsar OS &middot; Downloads and recovery</div>
+
+  <script>
+    (function () {
+      var input = document.getElementById('boot-model-input');
+      var btn = document.getElementById('boot-lookup-btn');
+      function lookup() {
+        var model = (input.value || '').trim();
+        if (!model) { input.focus(); return; }
+        var q = encodeURIComponent('how to access boot menu on ' + model + ' step by step');
+        window.open('https://www.google.com/search?q=' + q, '_blank');
+      }
+      btn.addEventListener('click', lookup);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(); });
+    })();
+  </script>
+</body>
+</html>

@@ -100,6 +100,7 @@ gnome-text-editor
 e2fsprogs
 dosfstools
 ntfs-3g
+gnome-disk-utility
 gparted
 gnome-system-monitor
 htop
