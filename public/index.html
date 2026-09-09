@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulsar OS — Downloads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f7;
+      --border: rgba(0,0,0,0.1);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; line-height: 1.5; font-feature-settings: 'liga' 1, 'calt' 1; }
+    .nav-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px clamp(16px, 4vw, 40px); background: rgba(251,251,253,0.82); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .nav-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 600; color: var(--text); }
+    .brand-logo { width: 26px; height: 26px; object-fit: contain; }
+    .nav-links { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 14px; padding: 7px 12px; border-radius: 8px; transition: color 0.2s, background 0.2s; }
+    .nav-links a:hover { color: var(--text); background: rgba(0,0,0,0.04); }
+    .nav-links a.active-nav { color: var(--text); font-weight: 600; }
+    .nav-links a.nav-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    main { max-width: 960px; margin: 0 auto; padding: 40px clamp(16px, 4vw, 24px) 80px; }
+    .hero { text-align: center; padding: clamp(32px, 6vw, 64px) 0 40px; }
+    .hero h1 { font-size: clamp(34px, 6vw, 52px); font-weight: 700; letter-spacing: -0.025em; margin: 0 0 12px; }
+    .hero p { font-size: clamp(17px, 2.4vw, 21px); color: var(--text-secondary); margin: 0 auto; max-width: 620px; }
+    .hero .eyebrow { display: inline-block; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 500; margin-bottom: 22px; }
+    .section-header { display: flex; justify-content: space-between; align-items: baseline; margin: 48px 0 16px; }
+    .section-header h2 { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+    .section-header .sub { color: var(--text-secondary); font-size: 14px; }
+    .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.04); }
+    .edition-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .edition-card h3 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+    .edition-card .meta { color: var(--text-secondary); font-size: 14px; }
+    .chip { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; }
+    .chip-arch { background: rgba(0,113,227,0.12); color: #005bbb; }
+    .chip-debian { background: rgba(215,10,83,0.12); color: #b30045; }
+    .chip-ver { background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); }
+    .file-block { background: var(--bg-secondary); border-radius: 12px; padding: 14px 16px; margin: 16px 0; font-size: 13.5px; }
+    .file-block .fname { font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+    .hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-secondary); word-break: break-all; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; background: var(--accent); color: #fff !important; text-decoration: none !important; padding: 9px 18px; border-radius: 980px; font-size: 14px; font-weight: 500; transition: background 0.2s, transform 0.1s; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:active { transform: scale(0.98); }
+    .dino-wrap { width: 100%; margin: 24px auto 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #fff; }
+    .dino-wrap .dino-label { padding: 14px 22px 0; font-size: 13px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+    .dino-wrap iframe { display: block; width: 100%; height: 260px; border: 0; }
+    pre { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 16px; font-size: 13px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .footer { text-align: center; color: var(--text-secondary); font-size: 13px; padding: 32px 0 16px; border-top: 1px solid var(--border); margin-top: 48px; }
+    .verify-steps { font-size: 14px; color: var(--text-secondary); }
+    ul.endpoint-list { margin: 0; list-style: none; padding: 0; font-size: 15px; display: grid; gap: 12px; }
+    ul.endpoint-list .hash { font-size: 13px; }
+    .verifier { display: grid; gap: 22px; }
+    .v-field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+    .v-field select { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 14px; background: var(--bg); color: var(--text); appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236e6e73' d='M6 8.5 1.5 4h9z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+    .dropzone { border: 1.5px dashed var(--border); border-radius: 14px; padding: 34px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--bg-secondary); }
+    .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: rgba(0,113,227,0.05); }
+    .dropzone .dz-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .dropzone .dz-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .dropzone input[type="file"] { display: none; }
+    .v-fileinfo { display: none; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
+    .v-fileinfo .fname { font-weight: 600; word-break: break-all; }
+    .v-fileinfo .fsize { color: var(--text-secondary); font-size: 13px; }
+    .v-fileinfo .change { margin-left: auto; color: var(--accent); background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .v-fileinfo .change:hover { text-decoration: underline; }
+    .v-progress { height: 6px; background: var(--bg-secondary); border-radius: 999px; overflow: hidden; display: none; }
+    .v-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+    .v-result { display: none; align-items: center; gap: 12px; padding: 16px 18px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+    .v-result .badge-v { font-size: 26px; line-height: 1; }
+    .v-result.match { display: flex; background: rgba(52,199,89,0.12); color: #146e35; }
+    .v-result.mismatch { display: flex; background: rgba(255,59,48,0.12); color: #b3002f; }
+    .v-result .detail { font-weight: 400; font-size: 13.5px; color: var(--text-secondary); word-break: break-all; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; vertical-align: middle; }
+    .edition-switch { display: flex; flex-wrap: wrap; gap: 10px; }
+    .edition-tab { padding: 10px 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+    .edition-tab:hover { border-color: var(--text-secondary); color: var(--text); }
+    .edition-tab.active-tab { background: var(--bg-secondary); border-color: var(--text-secondary); color: var(--text); }
+    .edition-panel[hidden] { display: none; }
+    #v-reset { background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
+    @media (max-width: 640px) { .nav-links .nav-mono { display: none; } }
+    </style>
+</head>
+<body>
+  
+    <nav class="nav-bar">
+      <div class="nav-brand"><img class="brand-logo" src="https://hosted.inled.es/cdn/pulsar-logo-simple-sf.png" alt="Pulsar OS logo"><strong>Pulsar OS</strong></div>
+      <div class="nav-links">
+        <a href="/" class="active-nav">Downloads</a>
+        <a href="/isos" class="">Recovery</a>
+        <a class="nav-mono" href="/releases.json" target="_blank" rel="noopener">releases.json</a>
+        <a class="nav-mono" href="/isos.json" target="_blank" rel="noopener">isos.json</a>
+        <a class="nav-mono" href="/SHA256SUMS" target="_blank" rel="noopener">SHA256SUMS</a>
+      </div>
+    </nav>
+    
+  <main>
+
+    <div class="hero">
+      <div class="eyebrow">Pulsar OS · 0.4-beta</div>
+      <h1>Pulsar OS, ready to download.</h1>
+      <p>Pick an edition and the image that fits your computer, hit Download, and verify the file once it arrives.</p>
+    </div>
+
+    <div class="section-header">
+      <h2>Choose an edition</h2>
+      <span class="sub">1 editions available</span>
+    </div>
+    <div class="edition-switch"><button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button></div>
+
+    <div class="section-header" style="margin-top:28px;">
+      <h2>Choose and download</h2>
+    </div>
+    
+      <div class="edition-panel" data-edition="bittenfruit">
+        
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 0.4-beta</h3>
+                  <div class="meta">Arch Linux &middot; GRUB boot &middot; 5.10 GB</div>
+                </div>
+                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso</div>
+                <div class="hash">SHA-256 &nbsp;56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 0.4-beta</h3>
+                  <div class="meta">Arch Linux &middot; rEFInd boot &middot; 5.10 GB</div>
+                </div>
+                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso</div>
+                <div class="hash">SHA-256 &nbsp;a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 0.4-beta</h3>
+                  <div class="meta">Debian &middot; GRUB boot &middot; 4.19 GB</div>
+                </div>
+                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso</div>
+                <div class="hash">SHA-256 &nbsp;f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 0.4-beta</h3>
+                  <div class="meta">Debian &middot; rEFInd boot &middot; 4.19 GB</div>
+                </div>
+                <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso" target="_blank" rel="noopener">Download ISO</a>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso</div>
+                <div class="hash">SHA-256 &nbsp;a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb</div>
+              </div>
+            </div>
+      </div>
+
+    <div class="dino-wrap">
+      <div class="dino-label">Play while you wait</div>
+      <iframe src="/dino.html" title="Chrome Dino game — press space to start" loading="lazy"></iframe>
+    </div>
+
+    <div class="section-header" style="margin-top:24px;">
+      <h2>Always check your download</h2>
+    </div>
+    <p class="verify-steps" style="margin-top:0;">Once your download finishes, use the check below to make sure the file is intact — it's quick and private, right here in your browser.</p>
+    
+    <div class="card">
+      <h2 style="font-size:22px; margin:0 0 4px;">Check that your file isn't corrupted</h2>
+      <p class="verify-steps" style="margin:0 0 16px; color:var(--text-secondary);">This only takes a moment and it all happens in your browser — your file is never uploaded anywhere.</p>
+      <div class="edition-switch" id="v-editions">
+        <button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button>
+      </div>
+      <div class="verifier">
+        <div class="v-field">
+          <label for="v-select"><span class="step-num">1</span> Choose the edition and image you downloaded</label>
+          <select id="v-select" data-editions='{"latest": "bittenfruit", "editions": [{"id": "bittenfruit", "name": "Bittenfruit", "version": "0.4-beta"}]}'>
+            <option value="56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · GRUB</option>
+          <option value="a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · rEFInd</option>
+          <option value="f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · GRUB</option>
+          <option value="a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · rEFInd</option>
+          </select>
+        </div>
+        <div>
+          <div class="v-field"><label><span class="step-num">2</span> Select the ISO file from your downloads</label></div>
+          <div class="dropzone" id="v-drop">
+            <div class="dz-title">Click here and choose your downloaded ISO</div>
+            <div class="dz-sub">You can also drag and drop the file onto this box.</div>
+            <input type="file" id="v-file">
+          </div>
+          <div class="v-fileinfo" id="v-fileinfo" style="margin-top:10px;">
+            <div>
+              <div class="fname" id="v-fname"></div>
+              <div class="fsize" id="v-fsize"></div>
+            </div>
+            <button class="change" id="v-change" type="button">Change</button>
+          </div>
+        </div>
+        <div class="v-progress" id="v-progress"><div class="bar" id="v-bar"></div></div>
+        <div class="v-result" id="v-result">
+          <span class="badge-v" id="v-icon"></span>
+          <div>
+            <div class="v-result-title" id="v-title"></div>
+            <div class="detail" id="v-detail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </main>
+  <div class="footer">Pulsar OS &middot; Downloads and recovery</div>
+
+  <script>
+    (function () {
+      // Edition tabs (outside the verifier)
+      var tabs = document.querySelectorAll('.edition-tab');
+      var panels = document.querySelectorAll('.edition-panel');
+      function setEdition(eid, fromVerifier) {
+        tabs.forEach(function (t) { t.classList.toggle('active-tab', t.dataset.edition === eid); });
+        panels.forEach(function (p) { p.hidden = p.dataset.edition !== eid; });
+        if (fromVerifier !== true) syncVerifier(eid);
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { setEdition(t.dataset.edition, false); });
+      });
+
+      // Verifier
+      var drop = document.getElementById('v-drop');
+      var fileInput = document.getElementById('v-file');
+      var sel = document.getElementById('v-select');
+      var prog = document.getElementById('v-progress');
+      var bar = document.getElementById('v-bar');
+      var res = document.getElementById('v-result');
+      var icon = document.getElementById('v-icon');
+      var title = document.getElementById('v-title');
+      var detail = document.getElementById('v-detail');
+      var fileinfo = document.getElementById('v-fileinfo');
+      var fname = document.getElementById('v-fname');
+      var fsize = document.getElementById('v-fsize');
+      var changeBtn = document.getElementById('v-change');
+      var verifierTabs = document.getElementById('v-editions');
+
+      function activeEdition() {
+        var activeTab = document.querySelector('.edition-tab.active-tab');
+        return activeTab ? activeTab.dataset.edition : (sel.dataset.editions ? JSON.parse(sel.dataset.editions).latest : '');
+      }
+      function syncVerifier(eid) {
+        var opts = sel.querySelectorAll('option[data-edition]');
+        var firstFor = null;
+        opts.forEach(function (o) {
+          var match = o.dataset.edition === eid;
+          o.hidden = !match;
+          if (match && !firstFor) firstFor = o;
+        });
+        if (firstFor) { sel.value = firstFor.value; }
+        expected = buildExpected();
+      }
+      function buildExpected() {
+        var m = {};
+        sel.querySelectorAll('option[data-edition]:not([hidden])').forEach(function (o) {
+          m[o.value] = o.getAttribute('data-name');
+        });
+        return m;
+      }
+      var expected = buildExpected();
+      if (verifierTabs) {
+        verifierTabs.querySelectorAll('.edition-tab').forEach(function (t) {
+          t.addEventListener('click', function () {
+            setEdition(t.dataset.edition, true);
+            var p = sel.closest('.card');
+            if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          });
+        });
+      }
+
+      var busy = false;
+      function pick() {
+        if (busy) return;
+        prog.style.display = 'none';
+        fileinfo.style.display = 'none';
+        res.className = 'v-result';
+        fileInput.value = '';
+        fileInput.click();
+      }
+      drop.addEventListener('click', function () { pick(); });
+      changeBtn.addEventListener('click', function () { pick(); });
+      drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('drag'); });
+      drop.addEventListener('dragleave', function () { drop.classList.remove('drag'); });
+      drop.addEventListener('drop', function (e) {
+        e.preventDefault();
+        drop.classList.remove('drag');
+        if (!busy && e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener('change', function () {
+        if (fileInput.files.length) handleFile(fileInput.files[0]);
+      });
+
+      function fmtSize(n) {
+        if (n < 1024) return n + ' B';
+        var u = ['KB', 'MB', 'GB', 'TB'], i = -1;
+        do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+        return n.toFixed(2) + ' ' + u[i];
+      }
+
+      var K = new Uint32Array([
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+      ]);
+      function Sha256() {
+        this.h = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+        this.buf = new Uint8Array(64);
+        this.buflen = 0;
+        this.len = 0;
+      }
+      function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+      Sha256.prototype.process = function (block) {
+        var w = new Uint32Array(64), i;
+        for (i = 0; i < 16; i++) w[i] = (block[i*4]<<24) | (block[i*4+1]<<16) | (block[i*4+2]<<8) | block[i*4+3];
+        for (i = 16; i < 64; i++) {
+          var s0 = rotr(w[i-15],7) ^ rotr(w[i-15],18) ^ (w[i-15]>>>3);
+          var s1 = rotr(w[i-2],17) ^ rotr(w[i-2],19) ^ (w[i-2]>>>10);
+          w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+        }
+        var a=this.h[0],b=this.h[1],c=this.h[2],d=this.h[3],e=this.h[4],f=this.h[5],g=this.h[6],h=this.h[7];
+        for (i = 0; i < 64; i++) {
+          var S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+          var ch = (e & f) ^ (~e & g);
+          var t1 = (h + S1 + ch + K[i] + w[i]) | 0;
+          var S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+          var maj = (a & b) ^ (a & c) ^ (b & c);
+          var t2 = (S0 + maj) | 0;
+          h=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+        }
+        this.h[0]=(this.h[0]+a)|0; this.h[1]=(this.h[1]+b)|0; this.h[2]=(this.h[2]+c)|0; this.h[3]=(this.h[3]+d)|0;
+        this.h[4]=(this.h[4]+e)|0; this.h[5]=(this.h[5]+f)|0; this.h[6]=(this.h[6]+g)|0; this.h[7]=(this.h[7]+h)|0;
+      };
+      Sha256.prototype.update = function (data) {
+        this.len += data.length;
+        var i = 0;
+        if (this.buflen) {
+          var need = 64 - this.buflen;
+          var take = Math.min(need, data.length);
+          this.buf.set(data.subarray(0, take), this.buflen);
+          this.buflen += take;
+          i = take;
+          if (this.buflen === 64) { this.process(this.buf); this.buflen = 0; }
+        }
+        while (i + 64 <= data.length) { this.process(data.subarray(i, i + 64)); i += 64; }
+        if (i < data.length) { this.buf.set(data.subarray(i), 0); this.buflen = data.length - i; }
+      };
+      Sha256.prototype.digest = function () {
+        var bitLenHi = Math.floor(this.len / 0x20000000);
+        var bitLenLo = (this.len << 3) >>> 0;
+        var k = 55 - this.buflen; if (k < 0) k += 64;
+        var out = new Uint8Array(this.buflen + 1 + k + 8);
+        out.set(this.buf.subarray(0, this.buflen), 0);
+        out[this.buflen] = 0x80;
+        var dv = new DataView(out.buffer);
+        dv.setUint32(out.length - 8, bitLenHi);
+        dv.setUint32(out.length - 4, bitLenLo);
+        for (var pos = 0; pos < out.length; pos += 64) this.process(out.subarray(pos, pos + 64));
+        var hex = '';
+        for (var j = 0; j < 8; j++) hex += ('00000000' + this.h[j].toString(16)).slice(-8);
+        return hex;
+      };
+
+      function handleFile(file) {
+        if (busy) return;
+        busy = true;
+        res.className = 'v-result';
+        bar.style.width = '0%';
+        prog.style.display = 'block';
+        fileinfo.style.display = 'flex';
+        fname.textContent = file.name;
+        fsize.textContent = fmtSize(file.size);
+
+        var chunkSize = 16 * 1024 * 1024;
+        var offset = 0;
+        var total = file.size;
+        var h = new Sha256();
+
+        function readNext() {
+          if (offset >= total) {
+            prog.style.display = 'none';
+            busy = false;
+            finish(h.digest(), file);
+            return;
+          }
+          var next = Math.min(offset + chunkSize, total);
+          var fr = new FileReader();
+          fr.onload = function () {
+            try { h.update(new Uint8Array(fr.result)); }
+            catch (err) { fail(err); return; }
+            offset = next;
+            bar.style.width = Math.round(offset / total * 100) + '%';
+            setTimeout(readNext, 0);
+          };
+          fr.onerror = function () { fail(fr.error); };
+          fr.readAsArrayBuffer(file.slice(offset, next));
+        }
+        readNext();
+      }
+
+      function fail(err) {
+        busy = false;
+        prog.style.display = 'none';
+        res.className = 'v-result mismatch';
+        icon.textContent = '✕';
+        title.textContent = 'Could not verify file';
+        detail.textContent = String(err && err.message ? err.message : err);
+      }
+
+      function finish(computed, file) {
+        prog.style.display = 'none';
+        var want = sel.value;
+        var wantName = expected[want] || file.name;
+        if (computed === want) {
+          res.className = 'v-result match';
+          icon.textContent = '✓';
+          title.textContent = 'Checksum matched';
+          detail.textContent = file.name + ' is authentic and matches the official checksum (' + wantName + ').';
+        } else {
+          res.className = 'v-result mismatch';
+          icon.textContent = '✕';
+          title.textContent = 'Checksum mismatch';
+          detail.textContent = 'The file differs from what we publish. Try downloading it again — it may have been corrupted during transfer.';
+        }
+        res.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      syncVerifier(activeEdition() || (sel.dataset.editions ? JSON.parse(sel.dataset.editions).latest : ''));
+
+    })();
+    </script>
+</body>
+</html>

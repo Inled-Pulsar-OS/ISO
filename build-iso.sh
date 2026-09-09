@@ -36,6 +36,7 @@ set -e
 
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="$ISO_DIR"
+PULSAR_ROOT="$(cd "$ISO_DIR/.." && pwd)"
 BUILD_DIR="$ISO_DIR/build"
 
 # Guardar argumentos originales para la auto-elevación antes de ser consumidos por shift
@@ -2081,8 +2082,23 @@ unmount_tree "$ROOTFS_TARGET"
     # 5. pulsaros-gnome overrides & dconf settings
     if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome" ]; then
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/share/glib-2.0/schemas/." "$ROOTFS_TARGET/usr/share/glib-2.0/schemas/" 2>/dev/null || true
-        $SUDO mkdir -p "$ROOTFS_TARGET/etc/dconf/db/local.d"
+        $SUDO mkdir -p "$ROOTFS_TARGET/etc/dconf/db/local.d" "$ROOTFS_TARGET/etc/dconf/profile"
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/dconf/db/local.d/." "$ROOTFS_TARGET/etc/dconf/db/local.d/" 2>/dev/null || true
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/dconf/profile/user" "$ROOTFS_TARGET/etc/dconf/profile/user" 2>/dev/null || true
+        if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/skel" ]; then
+            $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/skel/." "$ROOTFS_TARGET/etc/skel/" 2>/dev/null || true
+        fi
+        if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/xdg" ]; then
+            $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/xdg/." "$ROOTFS_TARGET/etc/xdg/" 2>/dev/null || true
+        fi
+        if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/bin" ]; then
+            $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/bin/"* "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+        fi
+        # Ensure skeleton files are also synced to live user home directory
+        if [ -d "$ROOTFS_TARGET/home/live" ]; then
+            $SUDO cp -rf "$ROOTFS_TARGET/etc/skel/." "$ROOTFS_TARGET/home/live/" 2>/dev/null || true
+            $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "chown -R live:live /home/live 2>/dev/null || true" 2>/dev/null || true
+        fi
     fi
 
     # Remove unwanted GNOME extensions from rootfs
@@ -2462,6 +2478,7 @@ exec xorriso "${args[@]}" -iso-level 3 -volid PULSAR_ISO
 EOF
     chmod +x "$WRAPPER_PATH"
 
+    $SUDO rm -f "$ISO_OUTPUT"
     echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
     $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
     rm -f "$WRAPPER_PATH"
@@ -2761,6 +2778,7 @@ EOF
     else
         ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-refind${VER_SUFFIX}.iso"
     fi
+    $SUDO rm -f "$ISO_OUTPUT"
     echo "💿 Generando archivo ISO rEFInd en / Generating rEFInd ISO file at: $ISO_OUTPUT..."
     # Add a hybrid MBR so the ISO is a valid disk image: balenaEtcher requires it
     # and direct USB flashing (dd) needs it for UEFI to find the GPT ESP partition.
