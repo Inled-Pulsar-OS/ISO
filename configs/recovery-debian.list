@@ -20,6 +20,7 @@ polkitd
 dbus
 dbus-user-session
 util-linux
+fdisk
 locales
 ca-certificates
 curl

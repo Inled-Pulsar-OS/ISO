@@ -12,6 +12,7 @@ passwd
 initramfs-tools
 libpam-modules
 util-linux
+fdisk
 dbus
 # GNOME Base
 gnome-shell

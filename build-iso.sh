@@ -1269,10 +1269,10 @@ EOF
             echo "⚡ [SKIP-ALL] Reutilizando paquetes .deb ya compilados en build/packages (omitiendo compilación)..."
         elif [ -f "$pkg_dir_source/package-and-deploy.sh" ]; then
             chmod +x "$pkg_dir_source/package-and-deploy.sh" 2>/dev/null || true
-            pkg_cmd="./package-and-deploy.sh all --branch $BRANCH"
+            pkg_cmd="./package-and-deploy.sh all --branch $BRANCH --no-arch"
             if $INCREMENTAL_PKG_BUILD; then
                 echo "⚡ [INCREMENTAL] Comprobando y recompilando únicamente paquetes .deb modificados para $BRANCH..."
-                pkg_cmd="./package-and-deploy.sh all --incremental --branch $BRANCH"
+                pkg_cmd="./package-and-deploy.sh all --incremental --branch $BRANCH --no-arch"
             else
                 echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
             fi

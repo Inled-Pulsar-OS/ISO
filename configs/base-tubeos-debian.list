@@ -16,6 +16,7 @@ libpam-modules
 libpam-systemd
 polkitd
 util-linux
+fdisk
 dbus
 network-manager
 locales

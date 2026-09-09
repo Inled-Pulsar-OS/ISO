@@ -20,6 +20,7 @@ passwd
 initramfs-tools
 libpam-modules
 util-linux
+fdisk
 dbus
 
 # ── GNOME Desktop (core only) ────────────────────────────────────────────────
