@@ -55,7 +55,7 @@ jobs:
                     { name: "🌿 Branch", value: $branch, inline: true },
                     { name: "🏷️ Release", value: $release_title, inline: true },
                     { name: "👤 Triggered by", value: $actor, inline: true },
-                    { name: "📋 Editions in Queue", value: "• Debian (GRUB)\n• Debian (rEFInd)\n• Arch Linux (GRUB)\n• Arch Linux (rEFInd)", inline: false },
+                    { name: "📋 Editions in Queue", value: "• Debian (GRUB) Minimal\n• Debian (rEFInd) Minimal\n• Arch Linux (GRUB) Minimal\n• Arch Linux (rEFInd) Minimal", inline: false },
                     { name: "🔗 Real-time Progress", value: ("[View execution in GitHub Actions](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
@@ -72,23 +72,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: 'debian-grub'
-            args: '--debian --grub'
+          - name: 'debian-grub-minimal'
+            args: '--debian --grub --minimal'
             base: 'debian'
             bootloader: 'grub'
             use_docker: false
-          - name: 'debian-refind'
-            args: '--debian --refind'
+          - name: 'debian-refind-minimal'
+            args: '--debian --refind --minimal'
             base: 'debian'
             bootloader: 'refind'
             use_docker: false
-          - name: 'arch-grub'
-            args: '--arch --grub'
+          - name: 'arch-grub-minimal'
+            args: '--arch --grub --minimal'
             base: 'arch'
             bootloader: 'grub'
             use_docker: true
-          - name: 'arch-refind'
-            args: '--arch --refind'
+          - name: 'arch-refind-minimal'
+            args: '--arch --refind --minimal'
             base: 'arch'
             bootloader: 'refind'
             use_docker: true
@@ -279,10 +279,10 @@ jobs:
           Official release of **${{ github.event.inputs.release_title }}** (`${{ github.event.inputs.version }}`).
 
           ### Included Editions
-          - **Debian (GRUB)**: Debian-based stable edition with standard GRUB bootloader.
-          - **Debian (rEFInd)**: Debian-based edition featuring the graphical rEFInd boot menu.
-          - **Arch Linux (GRUB)**: Arch-based rolling edition with GRUB.
-          - **Arch Linux (rEFInd)**: Arch-based edition with the modern rEFInd bootloader.
+          - **Debian (GRUB) Minimal**: Debian-based minimal edition with standard GRUB bootloader.
+          - **Debian (rEFInd) Minimal**: Debian-based minimal edition featuring the graphical rEFInd boot menu.
+          - **Arch Linux (GRUB) Minimal**: Arch-based minimal rolling edition with GRUB.
+          - **Arch Linux (rEFInd) Minimal**: Arch-based minimal edition with the modern rEFInd bootloader.
 
           All ISO and Recovery SquashFS images are hosted on SourceForge for fast, unrestricted downloads.
 
