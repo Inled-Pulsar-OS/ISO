@@ -1372,7 +1372,7 @@ EOF
                 if ! apt-get install -y --no-install-recommends refind 2>/dev/null; then
                     curl -fsSL -o /tmp/refind.deb \"https://sourceforge.net/projects/refind/files/0.14.2/refind_0.14.2-1_amd64.deb/download\" || true
                     if [ -f /tmp/refind.deb ]; then
-                        dpkg -i --force-depends /tmp/refind.deb 2>/dev/null || apt-get install -y -f 2>/dev/null || true
+                        dpkg -x /tmp/refind.deb / 2>/dev/null || true
                         rm -f /tmp/refind.deb
                     fi
                 fi
@@ -1420,7 +1420,7 @@ EOF
                 if ! apt-get install -y --no-install-recommends refind 2>/dev/null; then
                     curl -fsSL -o /tmp/refind.deb \"https://sourceforge.net/projects/refind/files/0.14.2/refind_0.14.2-1_amd64.deb/download\" || true
                     if [ -f /tmp/refind.deb ]; then
-                        dpkg -i --force-depends /tmp/refind.deb 2>/dev/null || apt-get install -y -f 2>/dev/null || true
+                        dpkg -x /tmp/refind.deb / 2>/dev/null || true
                         rm -f /tmp/refind.deb
                     fi
                 fi
