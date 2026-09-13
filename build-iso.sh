@@ -127,8 +127,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
-    echo "❌ Error: Branch must be 'stable', 'forky' or 'rolling'. Value received: $BRANCH"
+if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "unstable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
+    echo "❌ Error: Branch must be 'stable', 'unstable', 'forky' or 'rolling'. Value received: $BRANCH"
     exit 1
 fi
 
@@ -409,6 +409,9 @@ if [ "$DISTRO" = "debian" ]; then
         stable)
             DEBIAN_VERSION="trixie"
             ;;
+        unstable)
+            DEBIAN_VERSION="testing"
+            ;;
         forky)
             DEBIAN_VERSION="forky"
             ;;
@@ -416,6 +419,11 @@ if [ "$DISTRO" = "debian" ]; then
             DEBIAN_VERSION="testing"
             ;;
     esac
+fi
+
+ARCH_REPO_SERVER="https://apt.inled.es/arch/stable/\$arch"
+if [ "$BRANCH" = "unstable" ]; then
+    ARCH_REPO_SERVER="https://apt.inled.es/arch/unstable/\$arch"
 fi
 
 # Paths in the project / Rutas del proyecto
@@ -795,8 +803,12 @@ if [ "$DISTRO" = "arch" ]; then
                    "droidtux-*" "appinstall-*" "seafari-*" \
                    "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
                    "pulsar-pear-sound-theme-*" "*-debug-*"; do
-        $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst.sig 2>/dev/null || true
+        $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst \
+                    "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst.sig \
+                    "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst.part \
+                    "$PACMAN_CACHE_DIR"/$pattern*.part 2>/dev/null || true
     done
+    $SUDO rm -rf "$ROOTFS_TARGET/var/lib/pacman/sync"/* 2>/dev/null || true
 fi
 
 # Ensure working DNS in chroot / Asegurar DNS funcional en el chroot
@@ -821,12 +833,24 @@ if [ "$DISTRO" = "arch" ]; then
     # ==========================================================================
     echo "--- 🐧 Configuring Arch Linux (Inled) repositories ---"
 
+    ARCH_CHANNEL="stable"
+    if [ "$BRANCH" = "unstable" ]; then
+        ARCH_CHANNEL="unstable"
+        INLED_PACMAN_SERVERS="Server = https://apt.inled.es/arch/unstable/\$arch
+Server = https://apt.inled.es/arch/
+Server = https://apt.inled.es/arch/\$arch"
+    else
+        INLED_PACMAN_SERVERS="Server = https://apt.inled.es/arch/
+Server = https://apt.inled.es/arch/\$arch
+Server = https://apt.inled.es/arch/stable/\$arch"
+    fi
+
     # Copy the Inled keyring to chroot
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
     $SUDO cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/inled-archive-keyring.gpg"
 
     # Write a complete default pacman.conf with [inled] repository at top priority
-    $SUDO tee "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<'EOF'
+    $SUDO tee "$ROOTFS_TARGET/etc/pacman.conf" > /dev/null <<EOF
 [options]
 HoldPkg = pacman glibc
 Architecture = auto
@@ -839,8 +863,8 @@ NoProgressBar
 ParallelDownloads = 1
 
 [inled]
-SigLevel = Optional TrustAll
-Server = https://apt.inled.es/arch/
+SigLevel = Never
+${INLED_PACMAN_SERVERS}
 
 [core]
 Include = /etc/pacman.d/mirrorlist
@@ -1085,7 +1109,12 @@ $pkg_name"
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
-            $SUDO sed -i '/\[core\]/i \[inled\]\nSigLevel = Optional TrustAll\nServer = https://apt.inled.es/arch/\n' "$ROOTFS_TARGET/etc/pacman.conf"
+            if [ "$BRANCH" = "unstable" ]; then
+                INLED_SERVERS_ESCAPED="Server = https://apt.inled.es/arch/unstable/\\\\\\\$arch\\\nServer = https://apt.inled.es/arch/\\\nServer = https://apt.inled.es/arch/\\\\\\\$arch"
+            else
+                INLED_SERVERS_ESCAPED="Server = https://apt.inled.es/arch/\\\nServer = https://apt.inled.es/arch/\\\\\\\$arch\\\nServer = https://apt.inled.es/arch/stable/\\\\\\\$arch"
+            fi
+            $SUDO sed -i "/\[core\]/i \[inled\]\nSigLevel = Never\n${INLED_SERVERS_ESCAPED}\n" "$ROOTFS_TARGET/etc/pacman.conf"
         fi
         echo "✅ Successfully installed local Arch packages."
     else
@@ -2382,6 +2411,13 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
     linux /live/vmlinuz $LEGACY_PARAMS
     initrd /live/initrd
 }
+
+if [ -f /recovery/vmlinuz-recovery ]; then
+    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+fi
 EOF
 
     # Create GRUB loopback configuration for Ventoy compatibility
@@ -2436,6 +2472,13 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
+
+if [ -f /recovery/vmlinuz-recovery ]; then
+    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+fi
 EOF
 
     VER_SUFFIX=""
@@ -2553,6 +2596,13 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
     initrd /EFI/BOOT/initrd
     options "$LEGACY_PARAMS"
 }
+
+menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --"
+}
 EOF
 
     # Minimal refind.conf for the ISO root (no showtools, no theme — avoids duplicate tool buttons
@@ -2587,6 +2637,12 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
     options "$LEGACY_PARAMS"
+}
+
+menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --"
 }
 EOF
 
@@ -2778,6 +2834,13 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
     linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
     initrd /live/initrd
 }
+
+if [ -f /recovery/vmlinuz-recovery ]; then
+    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+fi
 EOF
 
     VER_SUFFIX=""

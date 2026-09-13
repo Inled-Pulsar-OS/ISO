@@ -46,7 +46,7 @@ Opciones adicionales (se pasan a cada build):
   --full                Compilación estándar completa
   --clean-base          Elimina y reconstruye desde cero la caché base
   --nvidia              Incluye controladores propietarios NVIDIA y Broadcom
-  --branch, -b <rama>   Rama de compilación: stable, forky, rolling (def: stable)
+  --branch, -b <rama>   Rama de compilación: stable, unstable, forky, rolling (def: stable)
   --version, -v <ver>   Etiqueta de versión para las ISOs
   --incremental, -i     Recompilación incremental de paquetes locales
   --skip-pkg            Omite la fase de compilación de paquetes de /PKG
@@ -99,7 +99,7 @@ Opciones adicionales (se pasan a cada build):
   --full                Compilación estándar completa
   --clean-base          Elimina y reconstruye desde cero la caché base
   --nvidia              Incluye controladores propietarios NVIDIA y Broadcom
-  --branch, -b <rama>   Rama de compilación: stable, forky, rolling (def: stable)
+  --branch, -b <rama>   Rama de compilación: stable, unstable, forky, rolling (def: stable)
   --version, -v <ver>   Etiqueta de versión para las ISOs
   --incremental, -i     Recompilación incremental de paquetes locales
   --skip-pkg            Omite la fase de compilación de paquetes de /PKG

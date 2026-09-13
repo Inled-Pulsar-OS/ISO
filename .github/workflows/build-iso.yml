@@ -12,12 +12,13 @@ on:
         required: true
         default: 'Pulsar OS Bitten Fruit Latest'
       branch:
-        description: 'Branch to build'
+        description: 'Branch to build (stable or unstable)'
         required: true
         default: 'stable'
         type: choice
         options:
           - stable
+          - unstable
           - forky
           - rolling
 
@@ -223,19 +224,12 @@ jobs:
           merge-multiple: true
           path: artifacts/
 
-      # 4. Gather, rename, and generate checksums
+      # 4. Gather and generate checksums
       - name: Gather and Checksum Files
         run: |
           mkdir -p dist
           find artifacts/ \( -name "*.iso" -o -name "*.squashfs" \) -exec cp -v {} dist/ \;
           cd dist
-          for f in *; do
-            [ -f "$f" ] || continue
-            new_name="${f//${{ github.event.inputs.branch }}/${{ github.event.inputs.version }}}"
-            if [ "$f" != "$new_name" ]; then
-              mv -v "$f" "$new_name"
-            fi
-          done
           sha256sum *.iso *.squashfs > SHA256SUMS 2>/dev/null || sha256sum * > SHA256SUMS
           echo "Files ready in dist/:"
           ls -la

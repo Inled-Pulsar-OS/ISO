@@ -27,7 +27,7 @@ curl
 wget
 rsync
 
-# Recovery Filesystem Tools
+# Recovery Filesystem Tools & Bootloader Repair
 busybox
 btrfs-progs
 e2fsprogs
@@ -35,6 +35,9 @@ dosfstools
 squashfs-tools
 parted
 efibootmgr
+arch-install-scripts
+grub-efi-amd64-bin
+grub-pc-bin
 zstd
 udisks2
 ntfs-3g
