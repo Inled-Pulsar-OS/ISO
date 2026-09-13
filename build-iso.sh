@@ -1188,16 +1188,13 @@ $pkg_name"
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                droidtux \
-                appinstall \
                 pulsar-store \
-                seafari \
                 qt6-multimedia \
-                qt6-multimedia-gstreamer \
-                winboat-bin
+                qt6-multimedia-gstreamer
 
-            # Install pulsaros-circle-to-search if published in repo (or workspace sync handles it)
-            /usr/bin/pacman -S --noconfirm --overwrite '*' pulsaros-circle-to-search 2>/dev/null || true
+            # Install optional apps if published in repository
+            /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
+                droidtux appinstall seafari winboat-bin pulsaros-circle-to-search 2>/dev/null || true
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
@@ -1428,10 +1425,8 @@ EOF
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                droidtux \
-                appinstall \
-                pulsar-store \
-                seafari
+                pulsar-store
+            apt-get install -y --allow-downgrades droidtux appinstall seafari 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
