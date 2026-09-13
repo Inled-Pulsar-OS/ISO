@@ -5,7 +5,6 @@ apt
 iproute2
 netbase
 procps
-isc-dhcp-client
 bash-completion
 sudo
 passwd
@@ -17,7 +16,6 @@ dbus
 # GNOME Base
 gnome-shell
 gnome-session
-gnome-session-xsession
 gnome-control-center
 # SDDM Base
 sddm
@@ -125,7 +123,8 @@ pipewire-alsa
 wireplumber
 pavucontrol
 # Red y Sistemas de Archivos GVFS
-network-manager-gnome
+network-manager-applet
+nm-connection-editor
 wpasupplicant
 wireless-tools
 iw
@@ -189,10 +188,9 @@ xserver-xorg-video-intel
 mesa-va-drivers
 mesa-vulkan-drivers
 intel-media-va-driver-non-free
-# Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba)
+# Time Machine Backup & Recovery (Btrfs + Restic + Samba)
 btrfs-progs
 restic
-rclone
 cifs-utils
 smbclient
 

@@ -5,7 +5,6 @@ apt
 iproute2
 netbase
 procps
-isc-dhcp-client
 bash-completion
 sudo
 passwd

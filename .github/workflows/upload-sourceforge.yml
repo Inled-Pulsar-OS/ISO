@@ -101,19 +101,30 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           SF_URL="https://sourceforge.net/projects/${SF_PROJECT:-pulsaros}/files/"
           
-          file_list=""
-          for f in dist/*.iso dist/*.squashfs; do
+          iso_list=""
+          squashfs_list=""
+          for f in dist/*.iso; do
             [ -f "$f" ] || continue
             name=$(basename "$f")
             size=$(ls -lh "$f" | awk '{print $5}')
-            file_list="${file_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${name}) (${size})\n"
+            iso_list="${iso_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT:-pulsaros-inled}/${name}) (${size})\n"
           done
+          for f in dist/*.squashfs; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            size=$(ls -lh "$f" | awk '{print $5}')
+            squashfs_list="${squashfs_list}• [${name}](https://downloads.sourceforge.net/project/${SF_PROJECT:-pulsaros-inled}/${name}) (${size})\n"
+          done
+
+          iso_list_safe=$(printf "%b" "$iso_list" | head -c 1000)
+          squashfs_list_safe=$(printf "%b" "$squashfs_list" | head -c 1000)
 
           jq -n \
             --arg title "🎉 SourceForge ISO & SquashFS Upload Complete" \
             --arg desc "Files have been successfully uploaded to SourceForge." \
             --arg ver "${{ github.event.inputs.version }}" \
-            --arg files "$(printf "%b" "$file_list")" \
+            --arg iso_files "$iso_list_safe" \
+            --arg squashfs_files "$squashfs_list_safe" \
             --arg sf_url "$SF_URL" \
             --arg run_url "$RUN_URL" \
             '{
@@ -124,14 +135,15 @@ jobs:
                   color: 3066993,
                   fields: [
                     { name: "📦 Version", value: $ver, inline: true },
-                    { name: "📥 Uploaded Files", value: (if ($files | length) > 0 then $files else "Files uploaded" end), inline: false },
+                    { name: "💿 Published ISO Images", value: (if ($iso_files | length) > 0 then $iso_files else "ISOs uploaded" end), inline: false },
+                    { name: "📥 Recovery SquashFS", value: (if ($squashfs_files | length) > 0 then $squashfs_files else "SquashFS uploaded" end), inline: false },
                     { name: "🌐 Links", value: ("• [Downloads on SourceForge](" + $sf_url + ")\n• [View Run](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)
                 }
               ]
-            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || true
+            }' | curl -s -S -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @- || echo "⚠️ Discord webhook notification encountered an issue."
 
       - name: Notify Discord on Failure
         if: failure()

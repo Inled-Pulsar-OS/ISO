@@ -13,7 +13,6 @@ apt
 iproute2
 netbase
 procps
-isc-dhcp-client
 bash-completion
 sudo
 passwd
@@ -26,7 +25,6 @@ dbus
 # ── GNOME Desktop (core only) ────────────────────────────────────────────────
 gnome-shell
 gnome-session
-gnome-session-xsession
 gnome-control-center
 gnome-terminal
 xwayland
@@ -133,7 +131,8 @@ pavucontrol
 
 # ── Networking ───────────────────────────────────────────────────────────────
 network-manager
-network-manager-gnome
+network-manager-applet
+nm-connection-editor
 wpasupplicant
 wireless-tools
 iw
@@ -199,9 +198,8 @@ live-boot-initramfs-tools
 # ── Apple / Mac File System Support ──────────────────────────────────────────
 hfsprogs
 
-# ── Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba) ─────────
+# ── Time Machine Backup & Recovery (Btrfs + Restic + Samba) ───────────────────
 btrfs-progs
 restic
-rclone
 cifs-utils
 smbclient

@@ -1404,6 +1404,8 @@ EOF
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
+            apt-get install -y rclone 2>/dev/null || true
+            apt-get install -y network-manager-applet nm-connection-editor 2>/dev/null || true
             yes | apt-get install -y --allow-downgrades --no-install-recommends \
                 $BOOTLOADER_PKGS \
                 pulsaros-branding \
