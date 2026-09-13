@@ -817,11 +817,11 @@ if [ -f "$ROOTFS_TARGET/etc/resolv.conf" ]; then
 fi
 printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
 
-# English: Create Plymouth theme directory and symlink in advance to satisfy initramfs hooks
-# Español: Crear el directorio y el enlace simbólico del tema Plymouth con antelación para satisfacer los hooks de initramfs
+# English: Create Plymouth theme directory in advance to satisfy initramfs hooks
+# Español: Crear el directorio del tema Plymouth con antelación para satisfacer los hooks de initramfs
 theme_dir="$ROOTFS_TARGET/usr/share/plymouth/themes/pulsar-plymouth"
 $SUDO mkdir -p "$theme_dir"
-$SUDO ln -sf . "$theme_dir/images"
+$SUDO rm -rf "$theme_dir/images"
 
 # ==============================================================================
 # PHASE 5: Configure repositories and install Pulsar OS / FASE 5: Repositorios
@@ -1411,6 +1411,7 @@ EOF
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
+            apt-get install -y cpio 2>/dev/null || true
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
             apt-get install -y rclone 2>/dev/null || true
             apt-get install -y network-manager-applet nm-connection-editor 2>/dev/null || true

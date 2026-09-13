@@ -9,6 +9,7 @@ bash-completion
 sudo
 passwd
 initramfs-tools
+cpio
 libpam-modules
 util-linux
 fdisk
