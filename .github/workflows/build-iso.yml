@@ -295,8 +295,10 @@ jobs:
             } >> body.md
           fi
           {
-            printf '\n### 📡 Internet Recovery Endpoint\n\n'
-            printf 'Recovery Manifest: [https://pulsaros-releases.pages.dev/releases.json](https://pulsaros-releases.pages.dev/releases.json)\n\n'
+            printf '\n### 📡 Internet Recovery & Download Endpoints\n\n'
+            printf '- **Downloads & Web Portal**: [https://downloads-os.inled.es](https://downloads-os.inled.es)\n'
+            printf '- **Recovery Manifest**: [https://downloads-os.inled.es/releases.json](https://downloads-os.inled.es/releases.json)\n'
+            printf '- **ISO Catalog**: [https://downloads-os.inled.es/isos.json](https://downloads-os.inled.es/isos.json)\n\n'
             printf '\n### Verification (SHA-256)\n\n```\n'
             cat dist/SHA256SUMS
             printf '```\n'
@@ -313,6 +315,7 @@ jobs:
           files: |
             dist/SHA256SUMS
             public/releases.json
+            public/isos.json
           draft: false
           prerelease: false
         env:
@@ -368,7 +371,7 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           GH_RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/latest"
           SF_URL="https://sourceforge.net/projects/${SF_PROJECT}/files/"
-          CF_PAGES_URL="https://pulsaros-releases.pages.dev"
+          DOWNLOADS_PORTAL="https://downloads-os.inled.es"
           
           iso_list=""
           squashfs_list=""
@@ -391,14 +394,14 @@ jobs:
 
           jq -n \
             --arg title "🎉 Pulsar OS ISO & Recovery Images Published!" \
-            --arg desc "All ISO images and Recovery SquashFS images have been successfully built, uploaded to SourceForge, and deployed to Cloudflare Pages." \
+            --arg desc "All ISO images and Recovery SquashFS images have been successfully built, uploaded to SourceForge, and deployed to downloads-os.inled.es." \
             --arg ver "${{ github.event.inputs.version }}" \
             --arg release_title "${{ github.event.inputs.release_title }}" \
             --arg iso_files "$iso_list_safe" \
             --arg squashfs_files "$squashfs_list_safe" \
             --arg sf_url "$SF_URL" \
             --arg gh_release "$GH_RELEASE_URL" \
-            --arg cf_pages "$CF_PAGES_URL" \
+            --arg portal_url "$DOWNLOADS_PORTAL" \
             --arg run_url "$RUN_URL" \
             '{
               embeds: [
@@ -411,7 +414,7 @@ jobs:
                     { name: "🏷️ Release", value: $release_title, inline: true },
                     { name: "💿 Published ISO Images", value: (if ($iso_files | length) > 0 then $iso_files else "ISOs uploaded to SourceForge" end), inline: false },
                     { name: "📥 Recovery SquashFS", value: (if ($squashfs_files | length) > 0 then $squashfs_files else "SquashFS uploaded to SourceForge" end), inline: false },
-                    { name: "🌐 Links", value: ("• [SourceForge Downloads](" + $sf_url + ")\n• [Cloudflare Pages Recovery](" + $cf_pages + ")\n• [GitHub Release](" + $gh_release + ")\n• [View GitHub Actions Run](" + $run_url + ")"), inline: false }
+                    { name: "🌐 Links", value: ("• [Downloads Portal](" + $portal_url + ")\n• [Recovery Manifest (releases.json)](" + $portal_url + "/releases.json)\n• [ISO Catalog (isos.json)](" + $portal_url + "/isos.json)\n• [SourceForge Files](" + $sf_url + ")\n• [GitHub Release](" + $gh_release + ")\n• [View Workflow Run](" + $run_url + ")"), inline: false }
                   ],
                   footer: { text: "Pulsar OS Continuous Delivery" },
                   timestamp: (now | todate)

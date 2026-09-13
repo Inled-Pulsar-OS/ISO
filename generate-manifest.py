@@ -61,8 +61,9 @@ def format_size(bytes_val: int) -> str:
 
 def fetch_remote_manifest(filename: str = "releases.json") -> dict:
     urls = [
-        f"https://pulsaros-releases.pages.dev/{filename}",
+        f"https://downloads-os.inled.es/{filename}",
         f"https://releases.pulsaros.inled.es/{filename}",
+        f"https://pulsaros-releases.pages.dev/{filename}",
         f"https://raw.githubusercontent.com/Inled-Pulsar-OS/ISO/main/configs/{filename}"
     ]
     for u in urls:
