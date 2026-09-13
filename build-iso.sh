@@ -1343,7 +1343,7 @@ EOF
         if [ "$BOOTLOADER" = "grub" ]; then
             BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin os-prober"
+            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober"
         fi
 
         $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
@@ -1366,6 +1366,17 @@ EOF
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update || true
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
+
+            if [ \"$BOOTLOADER\" = \"refind\" ]; then
+                echo \"📥 Ensuring rEFInd binary is installed...\"
+                if ! apt-get install -y --no-install-recommends refind 2>/dev/null; then
+                    curl -fsSL -o /tmp/refind.deb \"https://sourceforge.net/projects/refind/files/0.14.2/refind_0.14.2-1_amd64.deb/download\" || true
+                    if [ -f /tmp/refind.deb ]; then
+                        dpkg -i --force-depends /tmp/refind.deb 2>/dev/null || apt-get install -y -f 2>/dev/null || true
+                        rm -f /tmp/refind.deb
+                    fi
+                fi
+            fi
             yes | apt-get install -y --allow-downgrades --no-install-recommends $BOOTLOADER_PKGS
             yes | apt-get install -y --allow-downgrades \
                 /tmp/packages/*.deb \
@@ -1388,7 +1399,7 @@ EOF
         if [ "$BOOTLOADER" = "grub" ]; then
             BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="refind efibootmgr grub-pc grub-efi-amd64-bin os-prober"
+            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober"
         fi
 
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -1403,6 +1414,18 @@ EOF
             apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
             apt-get install -y rclone 2>/dev/null || true
             apt-get install -y network-manager-applet nm-connection-editor 2>/dev/null || true
+
+            if [ \"$BOOTLOADER\" = \"refind\" ]; then
+                echo \"📥 Ensuring rEFInd binary is installed...\"
+                if ! apt-get install -y --no-install-recommends refind 2>/dev/null; then
+                    curl -fsSL -o /tmp/refind.deb \"https://sourceforge.net/projects/refind/files/0.14.2/refind_0.14.2-1_amd64.deb/download\" || true
+                    if [ -f /tmp/refind.deb ]; then
+                        dpkg -i --force-depends /tmp/refind.deb 2>/dev/null || apt-get install -y -f 2>/dev/null || true
+                        rm -f /tmp/refind.deb
+                    fi
+                fi
+            fi
+
             yes | apt-get install -y --allow-downgrades --no-install-recommends \
                 $BOOTLOADER_PKGS \
                 pulsaros-branding \
@@ -2673,10 +2696,15 @@ EOF
         fi
     fi
 
-    # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind, Arch directly under /usr/share/refind)
+    # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind or /usr/share/refind-*, Arch directly under /usr/share/refind)
     REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind"
     if [ -d "$ROOTFS_TARGET/usr/share/refind/refind" ]; then
         REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind/refind"
+    else
+        found_refind=$(find "$ROOTFS_TARGET/usr/share" -maxdepth 3 -type f -name "refind_x64.efi" 2>/dev/null | head -1)
+        if [ -n "$found_refind" ]; then
+            REFIND_SHARE_DIR="$(dirname "$found_refind")"
+        fi
     fi
 
     # 1. Populate the ISO root /EFI/BOOT folder for direct UEFI boot (resolves QEMU boot problems)
