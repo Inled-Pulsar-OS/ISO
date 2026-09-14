@@ -392,6 +392,11 @@ def get_common_styles() -> str:
     .edition-tab:hover { border-color: var(--text-secondary); color: var(--text); }
     .edition-tab.active-tab { background: var(--bg-secondary); border-color: var(--text-secondary); color: var(--text); }
     .edition-panel[hidden] { display: none; }
+    .version-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .version-tab { padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+    .version-tab:hover { border-color: var(--text-secondary); color: var(--text); }
+    .version-tab.active-tab { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .version-panel[hidden] { display: none; }
     #v-reset { background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
     @media (max-width: 640px) { .nav-links .nav-mono { display: none; } }
     """
@@ -411,42 +416,53 @@ def _edition_meta(editions_root: dict) -> list:
     return out
 
 
+def _version_order(editions_root: dict, eid: str) -> list:
+    """Ordered list of versions for an edition, latest first."""
+    ed = editions_root.get("editions", {}).get(eid, {})
+    versions = ed.get("versions", {})
+    latest = ed.get("latest_version", "")
+    keys = list(versions.keys())
+    return [k for k in keys if k == latest] + [k for k in keys if k != latest]
+
+
 def _render_verifier_options(editions_root: dict) -> str:
-    """Render all editions' ISOs as <option> carrying data-edition for filtering."""
+    """Render all editions' ISOs as <option> carrying data-edition + data-version for filtering."""
     opts = []
     for eid, name, ver in _edition_meta(editions_root):
-        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        for base, boots in node.items():
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                sha = info.get("sha256", "") or ""
-                if not sha:
-                    continue
-                iso = info.get("iso", "")
-                fname = Path(iso).name if iso else f"pulsaros-{ver}-{eid}-{base}-{boot}-{ver}-{eid}.iso"
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                opts.append(
-                    f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label}</option>'
-                )
+        for v in _version_order(editions_root, eid):
+            node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
+            for base, boots in node.items():
+                base_label = "Arch Linux" if base == "arch" else "Debian"
+                for boot, info in boots.items():
+                    sha = info.get("sha256", "") or ""
+                    if not sha:
+                        continue
+                    iso = info.get("iso", "")
+                    fname = Path(iso).name if iso else f"pulsaros-{v}-{eid}-{base}-{boot}-{v}-{eid}.iso"
+                    boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                    opts.append(
+                        f'<option value="{sha}" data-edition="{eid}" data-version="{v}" data-name="{fname}">{name} · {v} · {base_label} · {boot_label}</option>'
+                    )
     return "\n          ".join(opts)
 
 
-def _render_cards(editions_root: dict, latest_edition: str) -> str:
-    """Render one panel of ISO cards per edition."""
-    panels = []
-    for eid, name, ver in _edition_meta(editions_root):
-        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        cards = []
-        for base, boots in node.items():
-            chip_cls = "chip-arch" if base == "arch" else "chip-debian"
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                iso_url = info.get("iso", "#")
-                fname = Path(iso_url).name if iso_url else ""
-                size_fmt = format_size(info.get("size_bytes", 0))
-                hash_str = info.get("sha256", "—")
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                cards.append(f"""
+def _render_card_block(info: dict, base: str, boot: str, ver: str, eid: str, name: str, kind: str) -> str:
+    """Render a single ISO or Recovery download card."""
+    if kind == "iso":
+        dl_url = info.get("iso", "#")
+        btn_label = "Download ISO"
+    else:
+        dl_url = info.get("squashfs", "")
+        btn_label = "Download Recovery"
+    if not dl_url:
+        return ""
+    fname = Path(dl_url).name if dl_url else ""
+    size_fmt = format_size(info.get("size_bytes", 0))
+    hash_str = info.get("sha256", "—")
+    boot_label = "GRUB" if boot == "grub" else "rEFInd"
+    chip_cls = "chip-arch" if base == "arch" else "chip-debian"
+    base_label = "Arch Linux" if base == "arch" else "Debian"
+    return f"""
             <div class="card">
               <div class="edition-card">
                 <div>
@@ -458,7 +474,7 @@ def _render_cards(editions_root: dict, latest_edition: str) -> str:
                   <div class="meta">{base_label} &middot; {boot_label} boot &middot; {size_fmt}</div>
                 </div>
                 <div class="dl-group">
-                  <a class="btn" href="{iso_url}" target="_blank" rel="noopener">Download ISO</a>
+                  <a class="btn" href="{dl_url}" target="_blank" rel="noopener">{btn_label}</a>
                   <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
                 </div>
               </div>
@@ -466,55 +482,65 @@ def _render_cards(editions_root: dict, latest_edition: str) -> str:
                 <div class="fname">{fname}</div>
                 <div class="hash">SHA-256 &nbsp;{hash_str}</div>
               </div>
-            </div>""")
+            </div>"""
+
+
+def _render_cards(editions_root: dict, latest_edition: str) -> str:
+    """Render one panel of ISO cards per edition, with version tabs (latest first)."""
+    panels = []
+    for eid, name, ver in _edition_meta(editions_root):
+        versions = editions_root.get("editions", {}).get(eid, {}).get("versions", {})
+        vorder = _version_order(editions_root, eid)
+        vtabs = []
+        vpanels = []
+        for idx, v in enumerate(vorder):
+            node = versions.get(v, {})
+            cards = [card for card in [
+                _render_card_block(info, base, boot, v, eid, name, "iso")
+                for base, boots in node.items()
+                for boot, info in boots.items()
+            ] if card]
+            vtabs.append(
+                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{v}</button>'
+            )
+            vpanels.append(f"""
+        <div class="version-panel" data-edition="{eid}" data-version="{v}"{'' if idx == 0 else ' hidden'}>
+          {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No ISO images available for this version yet.</p>'}
+        </div>""")
         panels.append(f"""
       <div class="edition-panel" data-edition="{eid}"{'' if eid == latest_edition else ' hidden'}>
-        {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No ISO images available for this edition yet.</p>'}
+        <div class="version-switch">{''.join(vtabs)}</div>
+        {''.join(vpanels)}
       </div>""")
     return "\n".join(panels)
 
 
 def _render_recovery_cards(editions_root: dict, latest_edition: str) -> str:
-    """Render one panel of SquashFS recovery cards per edition."""
+    """Render one panel of SquashFS recovery cards per edition, with version tabs (latest first)."""
     panels = []
     for eid, name, ver in _edition_meta(editions_root):
-        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        cards = []
-        for base, boots in node.items():
-            chip_cls = "chip-arch" if base == "arch" else "chip-debian"
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                squashfs_url = info.get("squashfs", "")
-                if not squashfs_url:
-                    continue
-                fname = Path(squashfs_url).name if squashfs_url else ""
-                size_fmt = format_size(info.get("size_bytes", 0))
-                hash_str = info.get("sha256", "—")
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                cards.append(f"""
-            <div class="card">
-              <div class="edition-card">
-                <div>
-                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                    <span class="chip {chip_cls}">{base_label}</span>
-                    <span class="chip chip-ver">{boot_label}</span>
-                  </div>
-                  <h3>{name} · {ver}</h3>
-                  <div class="meta">{base_label} &middot; {boot_label} boot &middot; {size_fmt}</div>
-                </div>
-                <div class="dl-group">
-                  <a class="btn" href="{squashfs_url}" target="_blank" rel="noopener">Download Recovery</a>
-                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
-                </div>
-              </div>
-              <div class="file-block">
-                <div class="fname">{fname}</div>
-                <div class="hash">SHA-256 &nbsp;{hash_str}</div>
-              </div>
-            </div>""")
+        versions = editions_root.get("editions", {}).get(eid, {}).get("versions", {})
+        vorder = _version_order(editions_root, eid)
+        vtabs = []
+        vpanels = []
+        for idx, v in enumerate(vorder):
+            node = versions.get(v, {})
+            cards = [card for card in [
+                _render_card_block(info, base, boot, v, eid, name, "recovery")
+                for base, boots in node.items()
+                for boot, info in boots.items()
+            ] if card]
+            vtabs.append(
+                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{v}</button>'
+            )
+            vpanels.append(f"""
+        <div class="version-panel" data-edition="{eid}" data-version="{v}"{'' if idx == 0 else ' hidden'}>
+          {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No recovery images available for this version yet.</p>'}
+        </div>""")
         panels.append(f"""
       <div class="edition-panel" data-edition="{eid}"{'' if eid == latest_edition else ' hidden'}>
-        {''.join(cards) if cards else '<p class="verify-steps" style="margin:0;">No recovery images available for this edition yet.</p>'}
+        <div class="version-switch">{''.join(vtabs)}</div>
+        {''.join(vpanels)}
       </div>""")
     return "\n".join(panels)
 
@@ -528,10 +554,13 @@ def _edition_tabs(editions_root: dict, latest_edition: str) -> str:
 
 
 def _edition_json(editions_root: dict) -> str:
-    """Emit a tiny JSON with latest_edition + edition ids for JS."""
+    """Emit a tiny JSON with latest_edition + edition ids + version lists for JS."""
     data = {
         "latest": editions_root.get("latest_edition", ""),
-        "editions": [{"id": eid, "name": name, "version": ver} for eid, name, ver in _edition_meta(editions_root)],
+        "editions": [
+            {"id": eid, "name": name, "version": ver, "versions": _version_order(editions_root, eid)}
+            for eid, name, ver in _edition_meta(editions_root)
+        ],
     }
     return json.dumps(data, ensure_ascii=False)
 
@@ -540,19 +569,20 @@ def _render_recovery_verifier_options(editions_root: dict) -> str:
     """Render all editions' SquashFS images as <option> for the recovery verifier."""
     opts = []
     for eid, name, ver in _edition_meta(editions_root):
-        node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        for base, boots in node.items():
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                sha = info.get("sha256", "") or ""
-                squashfs = info.get("squashfs", "")
-                if not sha or not squashfs:
-                    continue
-                fname = Path(squashfs).name if squashfs else f"pulsaros-{ver}-{eid}-{base}-{boot}-{ver}-{eid}.squashfs"
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                opts.append(
-                    f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · Recovery</option>'
-                )
+        for v in _version_order(editions_root, eid):
+            node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
+            for base, boots in node.items():
+                base_label = "Arch Linux" if base == "arch" else "Debian"
+                for boot, info in boots.items():
+                    sha = info.get("sha256", "") or ""
+                    squashfs = info.get("squashfs", "")
+                    if not sha or not squashfs:
+                        continue
+                    fname = Path(squashfs).name if squashfs else f"pulsaros-{v}-{eid}-{base}-{boot}-{v}-{eid}.squashfs"
+                    boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                    opts.append(
+                        f'<option value="{sha}" data-edition="{eid}" data-version="{v}" data-name="{fname}">{name} · {v} · {base_label} · {boot_label} · Recovery</option>'
+                    )
     return "\n          ".join(opts)
 
 
@@ -562,39 +592,41 @@ def _render_merged_verifier_options(editions_root: dict, releases_root: dict) ->
     opts = []
     for eid, name, ver in _edition_meta(editions_root):
         # ISO options from isos_data
-        iso_node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        for base, boots in iso_node.items():
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                sha = info.get("sha256", "") or ""
-                iso = info.get("iso", "")
-                if not sha or not iso:
-                    continue
-                fname = Path(iso).name if iso else ""
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                key = f"{eid}-{base}-{boot}-iso"
-                if key not in seen:
-                    seen.add(key)
-                    opts.append(
-                        f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · ISO</option>'
-                    )
+        for v in _version_order(editions_root, eid):
+            iso_node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
+            for base, boots in iso_node.items():
+                base_label = "Arch Linux" if base == "arch" else "Debian"
+                for boot, info in boots.items():
+                    sha = info.get("sha256", "") or ""
+                    iso = info.get("iso", "")
+                    if not sha or not iso:
+                        continue
+                    fname = Path(iso).name if iso else ""
+                    boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                    key = f"{eid}-{v}-{base}-{boot}-iso"
+                    if key not in seen:
+                        seen.add(key)
+                        opts.append(
+                            f'<option value="{sha}" data-edition="{eid}" data-version="{v}" data-name="{fname}">{name} · {v} · {base_label} · {boot_label} · ISO</option>'
+                        )
         # SquashFS options from releases_data
-        rel_node = releases_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
-        for base, boots in rel_node.items():
-            base_label = "Arch Linux" if base == "arch" else "Debian"
-            for boot, info in boots.items():
-                sha = info.get("sha256", "") or ""
-                squashfs = info.get("squashfs", "")
-                if not sha or not squashfs:
-                    continue
-                fname = Path(squashfs).name if squashfs else ""
-                boot_label = "GRUB" if boot == "grub" else "rEFInd"
-                key = f"{eid}-{base}-{boot}-squashfs"
-                if key not in seen:
-                    seen.add(key)
-                    opts.append(
-                        f'<option value="{sha}" data-edition="{eid}" data-name="{fname}">{name} · {base_label} · {boot_label} · Recovery</option>'
-                    )
+        for v in _version_order(releases_root, eid):
+            rel_node = releases_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
+            for base, boots in rel_node.items():
+                base_label = "Arch Linux" if base == "arch" else "Debian"
+                for boot, info in boots.items():
+                    sha = info.get("sha256", "") or ""
+                    squashfs = info.get("squashfs", "")
+                    if not sha or not squashfs:
+                        continue
+                    fname = Path(squashfs).name if squashfs else ""
+                    boot_label = "GRUB" if boot == "grub" else "rEFInd"
+                    key = f"{eid}-{v}-{base}-{boot}-squashfs"
+                    if key not in seen:
+                        seen.add(key)
+                        opts.append(
+                            f'<option value="{sha}" data-edition="{eid}" data-version="{v}" data-name="{fname}">{name} · {v} · {base_label} · {boot_label} · Recovery</option>'
+                        )
     return "\n          ".join(opts)
 
 
@@ -659,14 +691,6 @@ def get_page_script() -> str:
       // Edition tabs (outside the verifier)
       var tabs = document.querySelectorAll('.edition-tab');
       var panels = document.querySelectorAll('.edition-panel');
-      function setEdition(eid, fromVerifier) {
-        tabs.forEach(function (t) { t.classList.toggle('active-tab', t.dataset.edition === eid); });
-        panels.forEach(function (p) { p.hidden = p.dataset.edition !== eid; });
-        if (fromVerifier !== true) syncVerifier(eid);
-      }
-      tabs.forEach(function (t) {
-        t.addEventListener('click', function () { setEdition(t.dataset.edition, false); });
-      });
 
       // Verifier
       var drop = document.getElementById('v-drop');
@@ -684,15 +708,61 @@ def get_page_script() -> str:
       var changeBtn = document.getElementById('v-change');
       var verifierTabs = document.getElementById('v-editions');
 
+      function editionMeta() {
+        return sel.dataset.editions ? (JSON.parse(sel.dataset.editions) || { latest: '', editions: [] }) : { latest: '', editions: [] };
+      }
       function activeEdition() {
         var activeTab = document.querySelector('.edition-tab.active-tab');
-        return activeTab ? activeTab.dataset.edition : (sel.dataset.editions ? JSON.parse(sel.dataset.editions).latest : '');
+        return activeTab ? activeTab.dataset.edition : (editionMeta().latest || '');
       }
+      function versionsFor(eid) {
+        var list = (editionMeta().editions || []).filter(function (e) { return e.id === eid; });
+        return list.length ? (list[0].versions || []) : [];
+      }
+      function defaultVersion(eid) {
+        var v = versionsFor(eid);
+        return v.length ? v[0] : '';
+      }
+      function panelFor(eid) {
+        var found = null;
+        panels.forEach(function (p) { if (p.dataset.edition === eid) found = p; });
+        return found;
+      }
+      function activeVersion() {
+        var panel = panelFor(activeEdition());
+        if (!panel) return '';
+        var vt = panel.querySelector('.version-tab.active-tab');
+        return vt ? vt.dataset.version : '';
+      }
+      function setVersion(eid, ver, fromVerifier) {
+        var panel = panelFor(eid);
+        if (!panel) return;
+        panel.querySelectorAll('.version-tab').forEach(function (vt) {
+          vt.classList.toggle('active-tab', vt.dataset.version === ver);
+        });
+        panel.querySelectorAll('.version-panel').forEach(function (vp) {
+          vp.hidden = vp.dataset.version !== ver;
+        });
+        if (fromVerifier !== true) syncVerifier(eid);
+      }
+      function setEdition(eid, fromVerifier) {
+        tabs.forEach(function (t) { t.classList.toggle('active-tab', t.dataset.edition === eid); });
+        panels.forEach(function (p) { p.hidden = p.dataset.edition !== eid; });
+        setVersion(eid, defaultVersion(eid), fromVerifier);
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { setEdition(t.dataset.edition, false); });
+      });
+      document.querySelectorAll('.version-tab').forEach(function (vt) {
+        vt.addEventListener('click', function () { setVersion(vt.dataset.edition, vt.dataset.version, false); });
+      });
+
       function syncVerifier(eid) {
+        var ver = activeVersion() || defaultVersion(eid);
         var opts = sel.querySelectorAll('option[data-edition]');
         var firstFor = null;
         opts.forEach(function (o) {
-          var match = o.dataset.edition === eid;
+          var match = o.dataset.edition === eid && o.dataset.version === ver;
           o.hidden = !match;
           if (match && !firstFor) firstFor = o;
         });

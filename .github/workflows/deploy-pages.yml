@@ -8,13 +8,13 @@ on:
         required: false
         default: 'main'
       edition:
-        description: 'Edition to treat as default (bittenfruit, tube-os, wintux)'
+        description: 'Edition to treat as default (unstable, bittenfruit, tube-os, wintux)'
         required: false
-        default: 'bittenfruit'
+        default: 'unstable'
       version:
         description: 'Version tag (short, without edition suffix)'
         required: false
-        default: '0.4-beta'
+        default: '1.1-beta'
   push:
     branches:
       - main
@@ -38,8 +38,8 @@ jobs:
       - name: Generate site from committed manifests
         run: |
           python3 generate-manifest.py \
-            --version "${{ github.event.inputs.version || '0.4-beta' }}" \
-            --edition "${{ github.event.inputs.edition || 'bittenfruit' }}" \
+            --version "${{ github.event.inputs.version || '1.1-beta' }}" \
+            --edition "${{ github.event.inputs.edition || 'unstable' }}" \
             --output-json public/releases.json \
             --html-dir public
           cp -f configs/SHA256SUMS public/SHA256SUMS

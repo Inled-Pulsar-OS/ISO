@@ -90,6 +90,11 @@
     .edition-tab:hover { border-color: var(--text-secondary); color: var(--text); }
     .edition-tab.active-tab { background: var(--bg-secondary); border-color: var(--text-secondary); color: var(--text); }
     .edition-panel[hidden] { display: none; }
+    .version-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .version-tab { padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+    .version-tab:hover { border-color: var(--text-secondary); color: var(--text); }
+    .version-tab.active-tab { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .version-panel[hidden] { display: none; }
     #v-reset { background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
     @media (max-width: 640px) { .nav-links .nav-mono { display: none; } }
     </style>
@@ -118,14 +123,189 @@
     <div class="section-header">
       <h2>Choose an edition</h2>
     </div>
-    <div class="edition-switch"><button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button></div>
+    <div class="edition-switch"><button type="button" class="edition-tab active-tab" data-edition="unstable">Unstable</button>
+          <button type="button" class="edition-tab" data-edition="bittenfruit">Bittenfruit</button></div>
 
     <div class="section-header" style="margin-top:28px;">
       <h2>Recovery images</h2>
     </div>
     
-      <div class="edition-panel" data-edition="bittenfruit">
+      <div class="edition-panel" data-edition="unstable">
+        <div class="version-switch"><button type="button" class="version-tab active-tab" data-edition="unstable" data-version="1.1-beta">1.1-beta</button></div>
         
+        <div class="version-panel" data-edition="unstable" data-version="1.1-beta">
+          
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Unstable · 1.1-beta</h3>
+                  <div class="meta">Arch Linux &middot; GRUB boot &middot; 3.80 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Unstable · 1.1-beta</h3>
+                  <div class="meta">Arch Linux &middot; rEFInd boot &middot; 3.70 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Unstable · 1.1-beta</h3>
+                  <div class="meta">Debian &middot; GRUB boot &middot; 3.00 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Unstable · 1.1-beta</h3>
+                  <div class="meta">Debian &middot; rEFInd boot &middot; 2.90 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf</div>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="edition-panel" data-edition="bittenfruit" hidden>
+        <div class="version-switch"><button type="button" class="version-tab active-tab" data-edition="bittenfruit" data-version="1.0">1.0</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.4-beta">0.4-beta</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.3-beta">0.3-beta</button></div>
+        
+        <div class="version-panel" data-edition="bittenfruit" data-version="1.0">
+          
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 1.0</h3>
+                  <div class="meta">Arch Linux &middot; GRUB boot &middot; 4.40 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-1.0-bittenfruit-arch-grub-1.0-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-1.0-bittenfruit-arch-grub-1.0-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 1.0</h3>
+                  <div class="meta">Arch Linux &middot; rEFInd boot &middot; 4.40 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-1.0-bittenfruit-arch-refind-1.0-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-1.0-bittenfruit-arch-refind-1.0-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 1.0</h3>
+                  <div class="meta">Debian &middot; GRUB boot &middot; 3.20 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-1.0-bittenfruit-debian-grub-1.0-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-1.0-bittenfruit-debian-grub-1.0-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 1.0</h3>
+                  <div class="meta">Debian &middot; rEFInd boot &middot; 3.20 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-1.0-bittenfruit-debian-refind-1.0-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-1.0-bittenfruit-debian-refind-1.0-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+        </div>
+        <div class="version-panel" data-edition="bittenfruit" data-version="0.4-beta" hidden>
+          
             <div class="card">
               <div class="edition-card">
                 <div>
@@ -206,6 +386,90 @@
                 <div class="hash">SHA-256 &nbsp;bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e</div>
               </div>
             </div>
+        </div>
+        <div class="version-panel" data-edition="bittenfruit" data-version="0.3-beta" hidden>
+          
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 0.3-beta</h3>
+                  <div class="meta">Arch Linux &middot; GRUB boot &middot; 4.20 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-arch">Arch Linux</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 0.3-beta</h3>
+                  <div class="meta">Arch Linux &middot; rEFInd boot &middot; 4.20 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">GRUB</span>
+                  </div>
+                  <h3>Bittenfruit · 0.3-beta</h3>
+                  <div class="meta">Debian &middot; GRUB boot &middot; 3.10 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="edition-card">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="chip chip-debian">Debian</span>
+                    <span class="chip chip-ver">rEFInd</span>
+                  </div>
+                  <h3>Bittenfruit · 0.3-beta</h3>
+                  <div class="meta">Debian &middot; rEFInd boot &middot; 3.10 GB</div>
+                </div>
+                <div class="dl-group">
+                  <a class="btn" href="https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs" target="_blank" rel="noopener">Download Recovery</a>
+                  <a class="instructions-link" href="/flash" target="_blank" rel="noopener">How to flash this &rarr;</a>
+                </div>
+              </div>
+              <div class="file-block">
+                <div class="fname">pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs</div>
+                <div class="hash">SHA-256 &nbsp;</div>
+              </div>
+            </div>
+        </div>
       </div>
 
     <div class="dino-wrap">
@@ -219,20 +483,29 @@
       <h2 style="font-size:22px; margin:0 0 4px;">Check that your file isn't corrupted</h2>
       <p class="verify-steps" style="margin:0 0 16px; color:var(--text-secondary);">This only takes a moment and it all happens in your browser — your file is never uploaded anywhere.</p>
       <div class="edition-switch" id="v-editions">
-        <button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button>
+        <button type="button" class="edition-tab active-tab" data-edition="unstable">Unstable</button>
+          <button type="button" class="edition-tab" data-edition="bittenfruit">Bittenfruit</button>
       </div>
       <div class="verifier">
         <div class="v-field">
           <label for="v-select"><span class="step-num">1</span> Choose the edition and image you downloaded</label>
-          <select id="v-select" data-editions='{"latest": "bittenfruit", "editions": [{"id": "bittenfruit", "name": "Bittenfruit", "version": "0.4-beta"}]}'>
-            <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · GRUB · ISO</option>
-          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Arch Linux · rEFInd · ISO</option>
-          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · GRUB · ISO</option>
-          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · Debian · rEFInd · ISO</option>
-          <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · Arch Linux · GRUB · Recovery</option>
-          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · Arch Linux · rEFInd · Recovery</option>
-          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · Debian · GRUB · Recovery</option>
-          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · Debian · rEFInd · Recovery</option>
+          <select id="v-select" data-editions='{"latest": "unstable", "editions": [{"id": "unstable", "name": "Unstable", "version": "1.1-beta", "versions": ["1.1-beta"]}, {"id": "bittenfruit", "name": "Bittenfruit", "version": "1.0", "versions": ["1.0", "0.4-beta", "0.3-beta"]}]}'>
+            <option value="702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.iso">Unstable · 1.1-beta · Arch Linux · GRUB · ISO</option>
+          <option value="7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.iso">Unstable · 1.1-beta · Arch Linux · rEFInd · ISO</option>
+          <option value="cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.iso">Unstable · 1.1-beta · Debian · GRUB · ISO</option>
+          <option value="a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.iso">Unstable · 1.1-beta · Debian · rEFInd · ISO</option>
+          <option value="702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Arch Linux · GRUB · Recovery</option>
+          <option value="7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Arch Linux · rEFInd · Recovery</option>
+          <option value="cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Debian · GRUB · Recovery</option>
+          <option value="a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Debian · rEFInd · Recovery</option>
+          <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Arch Linux · GRUB · ISO</option>
+          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Arch Linux · rEFInd · ISO</option>
+          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Debian · GRUB · ISO</option>
+          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Debian · rEFInd · ISO</option>
+          <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Arch Linux · GRUB · Recovery</option>
+          <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Arch Linux · rEFInd · Recovery</option>
+          <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Debian · GRUB · Recovery</option>
+          <option value="bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Debian · rEFInd · Recovery</option>
           </select>
         </div>
         <div>
@@ -269,14 +542,6 @@
       // Edition tabs (outside the verifier)
       var tabs = document.querySelectorAll('.edition-tab');
       var panels = document.querySelectorAll('.edition-panel');
-      function setEdition(eid, fromVerifier) {
-        tabs.forEach(function (t) { t.classList.toggle('active-tab', t.dataset.edition === eid); });
-        panels.forEach(function (p) { p.hidden = p.dataset.edition !== eid; });
-        if (fromVerifier !== true) syncVerifier(eid);
-      }
-      tabs.forEach(function (t) {
-        t.addEventListener('click', function () { setEdition(t.dataset.edition, false); });
-      });
 
       // Verifier
       var drop = document.getElementById('v-drop');
@@ -294,15 +559,61 @@
       var changeBtn = document.getElementById('v-change');
       var verifierTabs = document.getElementById('v-editions');
 
+      function editionMeta() {
+        return sel.dataset.editions ? (JSON.parse(sel.dataset.editions) || { latest: '', editions: [] }) : { latest: '', editions: [] };
+      }
       function activeEdition() {
         var activeTab = document.querySelector('.edition-tab.active-tab');
-        return activeTab ? activeTab.dataset.edition : (sel.dataset.editions ? JSON.parse(sel.dataset.editions).latest : '');
+        return activeTab ? activeTab.dataset.edition : (editionMeta().latest || '');
       }
+      function versionsFor(eid) {
+        var list = (editionMeta().editions || []).filter(function (e) { return e.id === eid; });
+        return list.length ? (list[0].versions || []) : [];
+      }
+      function defaultVersion(eid) {
+        var v = versionsFor(eid);
+        return v.length ? v[0] : '';
+      }
+      function panelFor(eid) {
+        var found = null;
+        panels.forEach(function (p) { if (p.dataset.edition === eid) found = p; });
+        return found;
+      }
+      function activeVersion() {
+        var panel = panelFor(activeEdition());
+        if (!panel) return '';
+        var vt = panel.querySelector('.version-tab.active-tab');
+        return vt ? vt.dataset.version : '';
+      }
+      function setVersion(eid, ver, fromVerifier) {
+        var panel = panelFor(eid);
+        if (!panel) return;
+        panel.querySelectorAll('.version-tab').forEach(function (vt) {
+          vt.classList.toggle('active-tab', vt.dataset.version === ver);
+        });
+        panel.querySelectorAll('.version-panel').forEach(function (vp) {
+          vp.hidden = vp.dataset.version !== ver;
+        });
+        if (fromVerifier !== true) syncVerifier(eid);
+      }
+      function setEdition(eid, fromVerifier) {
+        tabs.forEach(function (t) { t.classList.toggle('active-tab', t.dataset.edition === eid); });
+        panels.forEach(function (p) { p.hidden = p.dataset.edition !== eid; });
+        setVersion(eid, defaultVersion(eid), fromVerifier);
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { setEdition(t.dataset.edition, false); });
+      });
+      document.querySelectorAll('.version-tab').forEach(function (vt) {
+        vt.addEventListener('click', function () { setVersion(vt.dataset.edition, vt.dataset.version, false); });
+      });
+
       function syncVerifier(eid) {
+        var ver = activeVersion() || defaultVersion(eid);
         var opts = sel.querySelectorAll('option[data-edition]');
         var firstFor = null;
         opts.forEach(function (o) {
-          var match = o.dataset.edition === eid;
+          var match = o.dataset.edition === eid && o.dataset.version === ver;
           o.hidden = !match;
           if (match && !firstFor) firstFor = o;
         });

@@ -90,6 +90,11 @@
     .edition-tab:hover { border-color: var(--text-secondary); color: var(--text); }
     .edition-tab.active-tab { background: var(--bg-secondary); border-color: var(--text-secondary); color: var(--text); }
     .edition-panel[hidden] { display: none; }
+    .version-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .version-tab { padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-secondary); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+    .version-tab:hover { border-color: var(--text-secondary); color: var(--text); }
+    .version-tab.active-tab { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .version-panel[hidden] { display: none; }
     #v-reset { background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
     @media (max-width: 640px) { .nav-links .nav-mono { display: none; } }
     </style>
