@@ -262,6 +262,32 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy public --project-name=pulsaros-releases --branch=main --commit-dirty=true
 
+      # 6b. Update manifests with real hashes from built artifacts and commit
+      - name: Update manifests with built-artifact hashes
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="${{ github.event.inputs.branch }}"
+          # Infer edition: unstable builds → edition "unstable", else "bittenfruit"
+          if echo "$VERSION" | grep -q "unstable" || [ "$BRANCH" = "unstable" ]; then
+            EDITION="unstable"
+          else
+            EDITION="bittenfruit"
+          fi
+          python3 generate-manifest.py \
+            --version "$VERSION" \
+            --edition "$EDITION" \
+            --set-latest \
+            --dist-dir dist \
+            --output-json public/releases.json \
+            --html-dir public
+          cp -f configs/SHA256SUMS public/SHA256SUMS
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add configs/ ISO/configs/ public/
+          git diff --cached --quiet && echo "No manifest changes to commit" && exit 0
+          git commit -m "release($EDITION): update manifests for $VERSION"
+          git push origin main
+
       # 7. Generate release notes with SourceForge download links
       - name: Generate Release Notes Body
       # ...
