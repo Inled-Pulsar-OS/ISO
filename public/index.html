@@ -115,27 +115,26 @@
   <main>
 
     <div class="hero">
-      <div class="eyebrow">Pulsar OS · 1.1-beta</div>
+      <div class="eyebrow">Pulsar OS · 1.1-beta (unstable)</div>
       <h1>Pulsar OS, ready to download.</h1>
       <p>Pick an edition and the image that fits your computer, hit Download, and verify the file once it arrives.</p>
     </div>
 
     <div class="section-header">
       <h2>Choose an edition</h2>
-      <span class="sub">3 editions available</span>
+      <span class="sub">2 editions available</span>
     </div>
-    <div class="edition-switch"><button type="button" class="edition-tab active-tab" data-edition="unstable">Unstable</button>
-          <button type="button" class="edition-tab" data-edition="bittenfruit">Bittenfruit</button>
+    <div class="edition-switch"><button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button>
           <button type="button" class="edition-tab" data-edition="pear">Pear</button></div>
 
     <div class="section-header" style="margin-top:28px;">
       <h2>Choose and download</h2>
     </div>
     
-      <div class="edition-panel" data-edition="unstable">
-        <div class="version-switch"><button type="button" class="version-tab active-tab" data-edition="unstable" data-version="1.1-beta">1.1-beta</button></div>
+      <div class="edition-panel" data-edition="bittenfruit">
+        <div class="version-switch"><button type="button" class="version-tab active-tab" data-edition="bittenfruit" data-version="1.1-beta">1.1-beta (unstable)</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="1.0">1.0</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.4-beta">0.4-beta (unstable)</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.3-beta">0.3-beta (unstable)</button></div>
         
-        <div class="version-panel" data-edition="unstable" data-version="1.1-beta">
+        <div class="version-panel" data-edition="bittenfruit" data-version="1.1-beta">
           
             <div class="card">
               <div class="edition-card">
@@ -144,7 +143,7 @@
                     <span class="chip chip-arch">Arch Linux</span>
                     <span class="chip chip-ver">GRUB</span>
                   </div>
-                  <h3>Unstable · 1.1-beta</h3>
+                  <h3>Bittenfruit · 1.1-beta</h3>
                   <div class="meta">Arch Linux &middot; GRUB boot &middot; 4.60 GB</div>
                 </div>
                 <div class="dl-group">
@@ -164,7 +163,7 @@
                     <span class="chip chip-arch">Arch Linux</span>
                     <span class="chip chip-ver">rEFInd</span>
                   </div>
-                  <h3>Unstable · 1.1-beta</h3>
+                  <h3>Bittenfruit · 1.1-beta</h3>
                   <div class="meta">Arch Linux &middot; rEFInd boot &middot; 5.30 GB</div>
                 </div>
                 <div class="dl-group">
@@ -184,7 +183,7 @@
                     <span class="chip chip-debian">Debian</span>
                     <span class="chip chip-ver">GRUB</span>
                   </div>
-                  <h3>Unstable · 1.1-beta</h3>
+                  <h3>Bittenfruit · 1.1-beta</h3>
                   <div class="meta">Debian &middot; GRUB boot &middot; 3.70 GB</div>
                 </div>
                 <div class="dl-group">
@@ -204,7 +203,7 @@
                     <span class="chip chip-debian">Debian</span>
                     <span class="chip chip-ver">rEFInd</span>
                   </div>
-                  <h3>Unstable · 1.1-beta</h3>
+                  <h3>Bittenfruit · 1.1-beta</h3>
                   <div class="meta">Debian &middot; rEFInd boot &middot; 4.30 GB</div>
                 </div>
                 <div class="dl-group">
@@ -218,12 +217,7 @@
               </div>
             </div>
         </div>
-      </div>
-
-      <div class="edition-panel" data-edition="bittenfruit" hidden>
-        <div class="version-switch"><button type="button" class="version-tab active-tab" data-edition="bittenfruit" data-version="1.0">1.0</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.4-beta">0.4-beta</button><button type="button" class="version-tab" data-edition="bittenfruit" data-version="0.3-beta">0.3-beta</button></div>
-        
-        <div class="version-panel" data-edition="bittenfruit" data-version="1.0">
+        <div class="version-panel" data-edition="bittenfruit" data-version="1.0" hidden>
           
             <div class="card">
               <div class="edition-card">
@@ -576,26 +570,25 @@
       <h2 style="font-size:22px; margin:0 0 4px;">Check that your file isn't corrupted</h2>
       <p class="verify-steps" style="margin:0 0 16px; color:var(--text-secondary);">This only takes a moment and it all happens in your browser — your file is never uploaded anywhere.</p>
       <div class="edition-switch" id="v-editions">
-        <button type="button" class="edition-tab active-tab" data-edition="unstable">Unstable</button>
-          <button type="button" class="edition-tab" data-edition="bittenfruit">Bittenfruit</button>
+        <button type="button" class="edition-tab active-tab" data-edition="bittenfruit">Bittenfruit</button>
           <button type="button" class="edition-tab" data-edition="pear">Pear</button>
       </div>
       <div class="verifier">
         <div class="v-field">
           <label for="v-select"><span class="step-num">1</span> Choose the edition and image you downloaded</label>
-          <select id="v-select" data-editions='{"latest": "unstable", "editions": [{"id": "unstable", "name": "Unstable", "version": "1.1-beta", "versions": ["1.1-beta"]}, {"id": "bittenfruit", "name": "Bittenfruit", "version": "1.0", "versions": ["1.0", "0.4-beta", "0.3-beta"]}, {"id": "pear", "name": "Pear", "version": "0.2.1-beta", "versions": ["0.2.1-beta"]}]}'>
-            <option value="0d93af5aad1e6ec9664cc25c8d8523a9f7ab55b22b16b95ec9231bd79747994a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.iso">Unstable · 1.1-beta · Arch Linux · GRUB · ISO</option>
-          <option value="1319bdb5761f8dc9bfd303346c3048906b629c848f3b8a1902a9409d5b7efbe7" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.iso">Unstable · 1.1-beta · Arch Linux · rEFInd · ISO</option>
-          <option value="0d3e5bf65cd8cb537eae4f833655a8be06f9951e2b1260df099b578eb81948de" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.iso">Unstable · 1.1-beta · Debian · GRUB · ISO</option>
-          <option value="f487dd3e5cce1a3bde472d98bfb3e1e41406b15c58d46516566d6dc0366b71f4" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.iso">Unstable · 1.1-beta · Debian · rEFInd · ISO</option>
-          <option value="702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Arch Linux · GRUB · Recovery</option>
-          <option value="7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Arch Linux · rEFInd · Recovery</option>
-          <option value="cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Debian · GRUB · Recovery</option>
-          <option value="a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf" data-edition="unstable" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs">Unstable · 1.1-beta · Debian · rEFInd · Recovery</option>
+          <select id="v-select" data-editions='{"latest": "bittenfruit", "editions": [{"id": "bittenfruit", "name": "Bittenfruit", "version": "1.1-beta", "versions": ["1.1-beta", "1.0", "0.4-beta", "0.3-beta"]}, {"id": "pear", "name": "Pear", "version": "0.2.1-beta", "versions": ["0.2.1-beta"]}]}'>
+            <option value="0d93af5aad1e6ec9664cc25c8d8523a9f7ab55b22b16b95ec9231bd79747994a" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.iso">Bittenfruit · 1.1-beta · Arch Linux · GRUB · ISO</option>
+          <option value="1319bdb5761f8dc9bfd303346c3048906b629c848f3b8a1902a9409d5b7efbe7" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.iso">Bittenfruit · 1.1-beta · Arch Linux · rEFInd · ISO</option>
+          <option value="0d3e5bf65cd8cb537eae4f833655a8be06f9951e2b1260df099b578eb81948de" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.iso">Bittenfruit · 1.1-beta · Debian · GRUB · ISO</option>
+          <option value="f487dd3e5cce1a3bde472d98bfb3e1e41406b15c58d46516566d6dc0366b71f4" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.iso">Bittenfruit · 1.1-beta · Debian · rEFInd · ISO</option>
           <option value="56fccebffa96f6fcc8b791abd16fc64aa364f05903e5cb2de0c4cf900e78f32d" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Arch Linux · GRUB · ISO</option>
           <option value="a40eae934ab5b1120a322ebc8219b06cff94b8e513b3894815d6fdcb55694752" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Arch Linux · rEFInd · ISO</option>
           <option value="f515b1a543706f4923ce45160bf1c084e7059f2fdb3fcb37991b78fa7ffdae2b" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Debian · GRUB · ISO</option>
           <option value="a126dd3fa0797188e2f9be17c2deaae04ed7f0da89036e3b5dd2021569b80bbb" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-refind-0.4-beta-bittenfruit.iso">Bittenfruit · 0.4-beta · Debian · rEFInd · ISO</option>
+          <option value="702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs">Bittenfruit · 1.1-beta · Arch Linux · GRUB · Recovery</option>
+          <option value="7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs">Bittenfruit · 1.1-beta · Arch Linux · rEFInd · Recovery</option>
+          <option value="cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs">Bittenfruit · 1.1-beta · Debian · GRUB · Recovery</option>
+          <option value="a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf" data-edition="bittenfruit" data-version="1.1-beta" data-name="pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs">Bittenfruit · 1.1-beta · Debian · rEFInd · Recovery</option>
           <option value="df8855d3da9c6c2ff8b42e2f5a2e7f9ef94e075c0862cec360d5039c7d441e91" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Arch Linux · GRUB · Recovery</option>
           <option value="f4cd4483b57a7909c5615ac1eeb33685ced01a87e0eae8a85bb9cec193d32461" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-arch-refind-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Arch Linux · rEFInd · Recovery</option>
           <option value="7922150446c42d3b97ceffc4d1e219e08139b3bc4ff43f6e4aef57046112dbcb" data-edition="bittenfruit" data-version="0.4-beta" data-name="pulsaros-0.4-beta-bittenfruit-debian-grub-0.4-beta-bittenfruit.squashfs">Bittenfruit · 0.4-beta · Debian · GRUB · Recovery</option>

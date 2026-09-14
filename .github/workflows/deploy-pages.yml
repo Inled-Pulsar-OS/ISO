@@ -8,9 +8,9 @@ on:
         required: false
         default: 'main'
       edition:
-        description: 'Edition to treat as default (unstable, bittenfruit, tube-os, wintux)'
+        description: 'Edition to treat as default (bittenfruit, pear, tube-os, wintux)'
         required: false
-        default: 'unstable'
+        default: 'bittenfruit'
       version:
         description: 'Version tag (short, without edition suffix)'
         required: false
@@ -39,7 +39,7 @@ jobs:
         run: |
           python3 generate-manifest.py \
             --version "${{ github.event.inputs.version || '1.1-beta' }}" \
-            --edition "${{ github.event.inputs.edition || 'unstable' }}" \
+            --edition "${{ github.event.inputs.edition || 'bittenfruit' }}" \
             --output-json public/releases.json \
             --html-dir public
           cp -f configs/SHA256SUMS public/SHA256SUMS

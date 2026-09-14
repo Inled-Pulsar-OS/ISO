@@ -1,5 +1,5 @@
 {
-  "latest_edition": "unstable",
+  "latest_edition": "bittenfruit",
   "mirrors": [
     {
       "id": "auto",
@@ -7,47 +7,10 @@
     }
   ],
   "editions": {
-    "unstable": {
-      "id": "unstable",
-      "name": "Unstable",
-      "latest_version": "1.1-beta",
-      "versions": {
-        "1.1-beta": {
-          "arch": {
-            "grub": {
-              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs",
-              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.1-beta-unstable.iso",
-              "sha256": "702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a",
-              "size_bytes": 4080218931
-            },
-            "refind": {
-              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs",
-              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.1-beta-unstable.iso",
-              "sha256": "7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298",
-              "size_bytes": 3972844748
-            }
-          },
-          "debian": {
-            "grub": {
-              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs",
-              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.1-beta-unstable.iso",
-              "sha256": "cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a",
-              "size_bytes": 3221225472
-            },
-            "refind": {
-              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs",
-              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.1-beta-unstable.iso",
-              "sha256": "a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf",
-              "size_bytes": 3113851289
-            }
-          }
-        }
-      }
-    },
     "bittenfruit": {
       "id": "bittenfruit",
       "name": "Bittenfruit",
-      "latest_version": "1.0",
+      "latest_version": "1.1-beta",
       "versions": {
         "1.0": {
           "arch": {
@@ -77,7 +40,8 @@
               "sha256": "",
               "size_bytes": 3435973836
             }
-          }
+          },
+          "branch": "stable"
         },
         "0.4-beta": {
           "arch": {
@@ -107,7 +71,8 @@
               "sha256": "bf7390e747d5cbd3aac7a6477d3e6597ed7977ed56dcb6316e2fe2b638b3b02e",
               "size_bytes": 4500000000
             }
-          }
+          },
+          "branch": "unstable"
         },
         "0.3-beta": {
           "arch": {
@@ -137,7 +102,39 @@
               "sha256": "",
               "size_bytes": 3328599654
             }
-          }
+          },
+          "branch": "unstable"
+        },
+        "1.1-beta": {
+          "arch": {
+            "grub": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.1-beta-unstable.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.1-beta-unstable.iso",
+              "sha256": "702834f4485b3221cda9657233d24d35276f89d674b8de0ab36cba522e54e76a",
+              "size_bytes": 4080218931
+            },
+            "refind": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.1-beta-unstable.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.1-beta-unstable.iso",
+              "sha256": "7f9b9ce6c71e0f701e5d031093561dd6b5a14e3a96dc2914e23d83c131a90298",
+              "size_bytes": 3972844748
+            }
+          },
+          "debian": {
+            "grub": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.1-beta-unstable.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.1-beta-unstable.iso",
+              "sha256": "cb8d896dda4673965d0dd463bc5fe8f9633de2bd036a5b4fb3ea0ecd7c29990a",
+              "size_bytes": 3221225472
+            },
+            "refind": {
+              "squashfs": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.1-beta-unstable.squashfs",
+              "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.1-beta-unstable.iso",
+              "sha256": "a36dcf4f489103e881da68824a647cf12cea6ed4156105185031462e392ed2bf",
+              "size_bytes": 3113851289
+            }
+          },
+          "branch": "unstable"
         }
       }
     }

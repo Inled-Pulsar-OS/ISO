@@ -266,16 +266,19 @@ jobs:
       - name: Update manifests with built-artifact hashes
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          VER="${VERSION%-*}"          # strip edition suffix  e.g. 0.3-beta-bittenfruit -> 0.3-beta
+          EDITION="${VERSION##*-}"     # edition                e.g. 0.3-beta-bittenfruit -> bittenfruit
           BRANCH="${{ github.event.inputs.branch }}"
-          # Infer edition: unstable builds → edition "unstable", else "bittenfruit"
-          if echo "$VERSION" | grep -q "unstable" || [ "$BRANCH" = "unstable" ]; then
-            EDITION="unstable"
-          else
-            EDITION="bittenfruit"
-          fi
+          # Default manifest branch: betas and non-stable builds are unstable
+          case "$VER" in
+            *beta*|*rc*|*unstable*) MANIFEST_BRANCH="unstable" ;;
+            *) MANIFEST_BRANCH="stable" ;;
+          esac
+          [ "$BRANCH" = "stable" ] || MANIFEST_BRANCH="unstable"
           python3 generate-manifest.py \
-            --version "$VERSION" \
+            --version "$VER" \
             --edition "$EDITION" \
+            --branch "$MANIFEST_BRANCH" \
             --set-latest \
             --dist-dir dist \
             --output-json public/releases.json \

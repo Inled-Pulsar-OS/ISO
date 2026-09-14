@@ -129,13 +129,14 @@ def generate_manifest(args):
     # Edition we are building/updating
     edition = args.edition
     ver = args.version
+    branch = args.branch
     full_tag = f"{ver}-{edition}"  # e.g. 0.4-beta-bittenfruit (matches SourceForge filenames)
     project = args.project or DEFAULT_PROJECT
     base_url = f"{DEFAULT_BASE_URL}/{project}"
 
     # Build the node for the current (edition, version)
     def build_version_node():
-        node = {}
+        node = {"branch": branch}
         for base in ALL_BASES:
             node[base] = {}
             for boot in ALL_BOOTLOADERS:
@@ -165,6 +166,7 @@ def generate_manifest(args):
     })
     isos_ed.setdefault("versions", {})
     iso_node = isos_ed["versions"].setdefault(ver, {})
+    iso_node.setdefault("branch", branch)
     for base in ALL_BASES:
         iso_node.setdefault(base, {})
         for boot in ALL_BOOTLOADERS:
@@ -412,17 +414,69 @@ def _edition_meta(editions_root: dict) -> list:
     out = []
     for eid in order:
         ed = eds[eid]
-        out.append((eid, ed.get("name") or eid.title(), ed.get("latest_version", "")))
+        out.append((eid, ed.get("name") or eid.title(), _default_version(editions_root, eid)))
     return out
 
 
+def _is_stable(versions_root: dict, ver: str) -> bool:
+    """A version is stable unless its node declares branch 'unstable' or the tag is beta/RC-like."""
+    node = versions_root.get(ver, {})
+    branch = str(node.get("branch", "")).lower()
+    if branch:
+        return branch != "unstable"
+    return not any(tok in ver.lower() for tok in ("beta", "rc", "alpha", "pre", "dev"))
+
+
+def _version_sort_key(versions_root: dict, ver: str) -> tuple:
+    """Sort key: version number desc first; on numeric ties, stable before unstable."""
+    import re
+    m = re.match(r"(\d+)\.(\d+)(?:\.(\d+))?", ver)
+    if m:
+        nums = tuple(int(x or 0) for x in m.groups())
+    else:
+        nums = tuple(int(x) for x in re.findall(r"\d+", ver))
+    stable = 1 if _is_stable(versions_root, ver) else 0
+    return (nums, stable)
+
+
+def _default_version(editions_root: dict, eid: str) -> str:
+    """Latest version to show for an edition: highest version number; on ties,
+    prefer stable. An unstable version is shown by default when no stable
+    version has a higher number."""
+    versions = editions_root.get("editions", {}).get(eid, {}).get("versions", {})
+    if not versions:
+        return ""
+    keys = sorted(versions.keys(), key=lambda k: _version_sort_key(versions, k), reverse=True)
+    return keys[0]
+
+
 def _version_order(editions_root: dict, eid: str) -> list:
-    """Ordered list of versions for an edition, latest first."""
-    ed = editions_root.get("editions", {}).get(eid, {})
-    versions = ed.get("versions", {})
-    latest = ed.get("latest_version", "")
+    """Ordered list of versions for an edition: default version first, then the
+    rest sorted by version number desc (stable before unstable on ties)."""
+    versions = editions_root.get("editions", {}).get(eid, {}).get("versions", {})
+    default_v = _default_version(editions_root, eid)
     keys = list(versions.keys())
-    return [k for k in keys if k == latest] + [k for k in keys if k != latest]
+    keys.sort(key=lambda k: _version_sort_key(versions, k), reverse=True)
+    if default_v in keys:
+        keys.remove(default_v)
+        keys.insert(0, default_v)
+    return keys
+
+
+def _version_label(editions_root: dict, eid: str, ver: str) -> str:
+    """Tab label: version plus branch suffix when not the default stable channel."""
+    node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(ver, {})
+    branch = str(node.get("branch", "")).lower()
+    if branch and branch != "stable":
+        return f"{ver} ({branch})"
+    return ver
+
+
+def _iter_bases(node: dict):
+    """Yield (base, boots) build entries from a version node, skipping meta keys like 'branch'."""
+    for base, boots in node.items():
+        if isinstance(boots, dict):
+            yield base, boots
 
 
 def _render_verifier_options(editions_root: dict) -> str:
@@ -431,7 +485,7 @@ def _render_verifier_options(editions_root: dict) -> str:
     for eid, name, ver in _edition_meta(editions_root):
         for v in _version_order(editions_root, eid):
             node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
-            for base, boots in node.items():
+            for base, boots in _iter_bases(node):
                 base_label = "Arch Linux" if base == "arch" else "Debian"
                 for boot, info in boots.items():
                     sha = info.get("sha256", "") or ""
@@ -497,11 +551,11 @@ def _render_cards(editions_root: dict, latest_edition: str) -> str:
             node = versions.get(v, {})
             cards = [card for card in [
                 _render_card_block(info, base, boot, v, eid, name, "iso")
-                for base, boots in node.items()
+                for base, boots in _iter_bases(node)
                 for boot, info in boots.items()
             ] if card]
             vtabs.append(
-                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{v}</button>'
+                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{_version_label(editions_root, eid, v)}</button>'
             )
             vpanels.append(f"""
         <div class="version-panel" data-edition="{eid}" data-version="{v}"{'' if idx == 0 else ' hidden'}>
@@ -527,11 +581,11 @@ def _render_recovery_cards(editions_root: dict, latest_edition: str) -> str:
             node = versions.get(v, {})
             cards = [card for card in [
                 _render_card_block(info, base, boot, v, eid, name, "recovery")
-                for base, boots in node.items()
+                for base, boots in _iter_bases(node)
                 for boot, info in boots.items()
             ] if card]
             vtabs.append(
-                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{v}</button>'
+                f'<button type="button" class="version-tab{" active-tab" if idx == 0 else ""}" data-edition="{eid}" data-version="{v}">{_version_label(editions_root, eid, v)}</button>'
             )
             vpanels.append(f"""
         <div class="version-panel" data-edition="{eid}" data-version="{v}"{'' if idx == 0 else ' hidden'}>
@@ -571,7 +625,7 @@ def _render_recovery_verifier_options(editions_root: dict) -> str:
     for eid, name, ver in _edition_meta(editions_root):
         for v in _version_order(editions_root, eid):
             node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
-            for base, boots in node.items():
+            for base, boots in _iter_bases(node):
                 base_label = "Arch Linux" if base == "arch" else "Debian"
                 for boot, info in boots.items():
                     sha = info.get("sha256", "") or ""
@@ -594,7 +648,7 @@ def _render_merged_verifier_options(editions_root: dict, releases_root: dict) ->
         # ISO options from isos_data
         for v in _version_order(editions_root, eid):
             iso_node = editions_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
-            for base, boots in iso_node.items():
+            for base, boots in _iter_bases(iso_node):
                 base_label = "Arch Linux" if base == "arch" else "Debian"
                 for boot, info in boots.items():
                     sha = info.get("sha256", "") or ""
@@ -612,7 +666,7 @@ def _render_merged_verifier_options(editions_root: dict, releases_root: dict) ->
         # SquashFS options from releases_data
         for v in _version_order(releases_root, eid):
             rel_node = releases_root.get("editions", {}).get(eid, {}).get("versions", {}).get(v, {})
-            for base, boots in rel_node.items():
+            for base, boots in _iter_bases(rel_node):
                 base_label = "Arch Linux" if base == "arch" else "Debian"
                 for boot, info in boots.items():
                     sha = info.get("sha256", "") or ""
@@ -975,7 +1029,7 @@ def _page_head(title: str, active: str, editions_root: dict, latest_edition: str
 def generate_main_html(releases_data: dict, isos_data: dict, out_file: Path):
     latest_edition = isos_data.get("latest_edition", "")
     latest_isos = isos_data.get("editions", {}).get(latest_edition, {})
-    latest_ver = latest_isos.get("latest_version", "N/A")
+    latest_ver = _version_label(isos_data, latest_edition, _default_version(isos_data, latest_edition))
 
     cards_html = _render_cards(isos_data, latest_edition)
     tabs_html = _edition_tabs(isos_data, latest_edition)
@@ -1025,7 +1079,7 @@ def generate_main_html(releases_data: dict, isos_data: dict, out_file: Path):
 def generate_isos_html(releases_data: dict, isos_data: dict, out_file: Path):
     latest_edition = releases_data.get("latest_edition", "")
     latest_releases = releases_data.get("editions", {}).get(latest_edition, {})
-    latest_ver = latest_releases.get("latest_version", "N/A")
+    latest_ver = _version_label(releases_data, latest_edition, _default_version(releases_data, latest_edition))
 
     cards_html = _render_recovery_cards(releases_data, latest_edition)
     tabs_html = _edition_tabs(releases_data, latest_edition)
@@ -1294,6 +1348,7 @@ def main():
     parser.add_argument("--version", default="0.4-beta", help="Release version tag (short, without edition suffix)")
     parser.add_argument("--edition", default="bittenfruit", help="Edition id (e.g. bittenfruit, tube-os, wintux)")
     parser.add_argument("--edition-name", default="", help="Display name for the edition (defaults to title-cased id)")
+    parser.add_argument("--branch", default="stable", help="Release branch: 'stable' or 'unstable'")
     parser.add_argument("--dist-dir", help="Directory containing built ISO and SquashFS files to scan (e.g. dist/)")
     parser.add_argument("--project", default=DEFAULT_PROJECT, help="SourceForge project name")
     parser.add_argument("--output-json", default="ISO/configs/releases.json", help="Path to output releases.json")
