@@ -8,6 +8,11 @@ procps
 bash-completion
 sudo
 passwd
+login
+kbd
+coreutils
+less
+nano
 initramfs-tools
 live-boot
 live-boot-initramfs-tools
