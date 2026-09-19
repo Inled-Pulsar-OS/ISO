@@ -11,6 +11,10 @@ passwd
 initramfs-tools
 live-boot
 live-boot-initramfs-tools
+live-config
+live-config-systemd
+plymouth
+plymouth-themes
 libpam-modules
 libpam-systemd
 polkitd

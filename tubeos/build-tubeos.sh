@@ -838,6 +838,40 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     systemctl enable docker 2>/dev/null || true
     systemctl enable dockermigrate 2>/dev/null || true
     systemctl enable tubeos-installer 2>/dev/null || true
+
+    # Configure static TTY1 autologin for live root session
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'GETTYEOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin root %I \$TERM
+Type=idle
+GETTYEOF
+
+    # Configure console welcome banner on login
+    mkdir -p /etc/profile.d
+    cat > /etc/profile.d/tubeos-welcome.sh << 'WELCOMEOF'
+#!/bin/sh
+if [ -t 1 ] && [ \"\$SHLVL\" -le 2 ]; then
+    echo \"\"
+    echo -e \"\033[0;36m _____             _____ _____ \033[0m\"
+    echo -e \"\033[0;36m|     |___ ___ ___|     |   __|\033[0m\"
+    echo -e \"\033[0;36m|   --| .'|_ -| .'|  |  |__   |\033[0m\"
+    echo -e \"\033[0;36m|_____|__,|___|__,|_____|_____|\033[0m\"
+    echo -e \"       \033[1;32mTube OS Live Console\033[0m\"
+    echo \"\"
+    IP=\$(ip -4 addr show | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}' | grep -v '127.0.0.1' | head -n 1)
+    echo -e \"  \033[1;33mWeb Installer / UI:\033[0m http://\${IP:-tubeos.local} (or http://tubeos.local)\"
+    echo -e \"  \033[1;33mDockerMigrate:\033[0m      http://\${IP:-tubeos.local}:8070 (or http://tubeos.local:8070)\"
+    echo \"\"
+fi
+WELCOMEOF
+    chmod +x /etc/profile.d/tubeos-welcome.sh
+
+    # Allow blank password login in PAM
+    if [ -f /etc/pam.d/common-auth ]; then
+        sed -i 's/pam_unix.so/pam_unix.so nullok/' /etc/pam.d/common-auth 2>/dev/null || true
+    fi
 " || true
 
 # Install Plymouth theme
@@ -846,6 +880,14 @@ if [ -f "$ROOTFS_TARGET/usr/share/plymouth/themes/tubeos/tubeos.plymouth" ]; the
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         plymouth-set-default-theme tubeos 2>/dev/null || true
     " || true
+    if [ "$DISTRO" = "debian" ]; then
+        echo "  Updating Debian initramfs with TubeOS Plymouth theme..."
+        "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export DEBIAN_FRONTEND=noninteractive
+            update-initramfs -u 2>/dev/null || true
+        " || true
+    fi
 fi
 
 # Live Arch initramfs configuration (archiso hooks)
@@ -876,6 +918,7 @@ fi
 # Unlock root account without password for live session and emergency login
 "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     passwd -d root 2>/dev/null || true
+    passwd -u root 2>/dev/null || true
     usermod -p '' root 2>/dev/null || true
 " || true
 
@@ -956,19 +999,85 @@ else
     fi
 fi
 
+# Prepare clean GRUB theme for ISO staging
+echo "  Preparing modern graphical GRUB theme for ISO..."
+$SUDO rm -rf "$STAGING/boot/grub/themes/Particle-circle-window"
+$SUDO mkdir -p "$STAGING/boot/grub/themes/Particle-circle-window"
+
+TMP_GRUB_STAGE="/tmp/tubeos-grub-theme-stage-$$"
+$SUDO rm -rf "$TMP_GRUB_STAGE"
+mkdir -p "$TMP_GRUB_STAGE"
+git clone --depth=1 "https://github.com/Inled-Pulsar-OS/grub.theme" "$TMP_GRUB_STAGE/theme" >/dev/null 2>&1 || true
+
+if [ -f "$TMP_GRUB_STAGE/theme/generate.sh" ]; then
+    (cd "$TMP_GRUB_STAGE/theme" && ./generate.sh -d "$STAGING/boot/grub/themes" -t window -s 1080p >/dev/null 2>&1 || true)
+fi
+
+# Wallpaper background for GRUB
+if [ -f "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" ]; then
+    if command -v magick >/dev/null 2>&1; then
+        magick "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
+    elif command -v convert >/dev/null 2>&1; then
+        convert "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
+    fi
+fi
+
+$SUDO rm -rf "$STAGING/boot/grub/themes/Particle-circle-window/icons"
+$SUDO mkdir -p "$STAGING/boot/grub/themes/Particle-circle-window/icons"
+
+if [ -f "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt" ]; then
+    $SUDO sed -i '/\+ image {/,/}/d' "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+    $SUDO sed -i 's/icon_width = .*/icon_width = 0/' "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+    $SUDO sed -i 's/icon_height = .*/icon_height = 0/' "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+    $SUDO sed -i 's/item_icon_space = .*/item_icon_space = 0/' "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+    $SUDO sed -i 's/width = .*/width = 65%/' "$STAGING/boot/grub/themes/Particle-circle-window/theme.txt"
+fi
+
+if [ -d "$TMP_GRUB_STAGE/theme/common" ]; then
+    $SUDO cp -f "$TMP_GRUB_STAGE/theme/common"/*.pf2 "$STAGING/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
+fi
+$SUDO rm -rf "$TMP_GRUB_STAGE"
+
+$SUDO mkdir -p "$STAGING/boot/grub/fonts"
+if [ -f "/usr/share/grub/unicode.pf2" ]; then
+    $SUDO cp "/usr/share/grub/unicode.pf2" "$STAGING/boot/grub/fonts/" 2>/dev/null || true
+elif [ -f "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" ]; then
+    $SUDO cp "$ROOTFS_TARGET/usr/share/grub/unicode.pf2" "$STAGING/boot/grub/fonts/" 2>/dev/null || true
+fi
+
 # GRUB config
 $SUDO tee "$STAGING/boot/grub/grub.cfg" > /dev/null << GRUBCFG
 set default=0
 set timeout=5
-set menu_color_normal=cyan/blue
-set menu_color_highlight=white/blue
 
-menuentry "Tube OS Live" {
+insmod all_video
+insmod font
+insmod gfxterm
+insmod png
+insmod jpeg
+insmod gfxmenu
+
+if loadfont /boot/grub/fonts/unicode.pf2; then
+    set gfxmode=auto
+    keep_gfxmode=keep
+    terminal_output gfxterm
+fi
+
+if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
+
+menuentry "Tube OS Live" --class tubeos --class os {
     linux /live/vmlinuz $KERNEL_PARAMS
     initrd /live/initrd.img
 }
 
-menuentry "Tube OS Live (safe mode - nomodeset)" {
+menuentry "Tube OS Live (safe mode - nomodeset)" --class tubeos --class os {
     linux /live/vmlinuz $SAFE_PARAMS
     initrd /live/initrd.img
 }
