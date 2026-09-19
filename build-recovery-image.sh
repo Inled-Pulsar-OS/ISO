@@ -353,12 +353,11 @@ Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
-User=live
+User=root
 PAMName=login
-Environment=HOME=/home/live
-Environment=USER=live
+Environment=HOME=/root
+Environment=USER=root
 Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=GTK_THEME=MacTahoe-Dark
 Environment=XCURSOR_THEME=MacTahoe-dark
@@ -369,7 +368,7 @@ StandardOutput=journal
 StandardError=journal
 ExecStartPre=-/usr/bin/plymouth --quit
 ExecStartPre=-/usr/bin/pkill -9 plymouthd
-ExecStart=/usr/bin/xinit /home/live/.xinitrc -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
+ExecStart=/usr/bin/xinit /etc/X11/xinit/xinitrc.recovery -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
 Restart=always
 RestartSec=1
 
@@ -384,7 +383,7 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
 "
 
 # Configure X11 permissions for non-root / tty startup
-$SUDO mkdir -p "$ROOTFS_REC/etc/X11"
+$SUDO mkdir -p "$ROOTFS_REC/etc/X11/xinit"
 $SUDO bash -c "cat << 'XWRAP' > '$ROOTFS_REC/etc/X11/Xwrapper.config'
 allowed_users=anybody
 needs_root_rights=yes
@@ -392,21 +391,29 @@ XWRAP"
 $SUDO chmod 4755 "$ROOTFS_REC/usr/lib/xorg/Xorg.wrap" 2>/dev/null || true
 
 # Configure auto-start of X11 and Fluxbox with Rust recovery assistant
-$SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"
+$SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox" "$ROOTFS_REC/root/.fluxbox"
 
-$SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/home/live/.xinitrc'
+$SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery'
 #!/bin/sh
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 xsetroot -solid '#18181b'
 xset s off -dpms
+[ -f /root/.Xresources ] && xrdb -merge /root/.Xresources
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 export GTK_THEME=\"MacTahoe-Dark\"
 export XCURSOR_THEME=\"MacTahoe-dark\"
 export XCURSOR_SIZE=\"24\"
-/usr/bin/pulsar-recovery-assistant &
+if [ -f /usr/bin/pulsar-recovery-assistant ]; then
+    /usr/bin/pulsar-recovery-assistant &
+fi
 exec /usr/bin/fluxbox
 XINIT"
+
+$SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/home/live/.xinitrc"
+$SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/root/.xinitrc"
+$SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/etc/skel/.xinitrc"
+$SUDO chmod +x "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/root/.xinitrc" "$ROOTFS_REC/etc/skel/.xinitrc"
 
 $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
 #!/bin/sh
@@ -420,9 +427,9 @@ export XCURSOR_SIZE=\"24\"
 exec /usr/bin/fluxbox
 FLUX_STARTUP"
 
-$SUDO chmod +x "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/home/live/.fluxbox/startup"
-$SUDO cp -f "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/etc/skel/.xinitrc"
+$SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/startup"
 $SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
+$SUDO chmod +x "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
 
 # Configure passwordless sudo and X11 display preservation for live user
 $SUDO mkdir -p "$ROOTFS_REC/etc/sudoers.d"
@@ -536,7 +543,46 @@ if [ ! -d "$ROOTFS_REC/usr/share/icons/MacTahoe-blue-dark" ]; then
     fi
 fi
 
-# 3. Configure GTK-3.0, GTK-4.0, Xcursor and environment
+# 3. Ensure MacTahoe-dark and fallback cursor themes are valid with index.theme
+$SUDO bash -c "
+    for ctheme in MacTahoe-dark MacTahoe-light MacTahoe; do
+        if [ -d '$ROOTFS_REC/usr/share/icons/'\"\$ctheme\" ]; then
+            cat << 'IDXT' > '$ROOTFS_REC/usr/share/icons/'\"\$ctheme\"'/index.theme'
+[Icon Theme]
+Name=\$ctheme
+Comment=\$ctheme Cursor Theme
+Inherits=Adwaita
+IDXT
+        fi
+    done
+
+    mkdir -p '$ROOTFS_REC/usr/share/icons/default'
+    cat << 'DEFIDXT' > '$ROOTFS_REC/usr/share/icons/default/index.theme'
+[Icon Theme]
+Name=Default
+Comment=Default Cursor Theme
+Inherits=MacTahoe-dark,Adwaita
+DEFIDXT
+
+    for icondir in '$ROOTFS_REC'/usr/share/icons/MacTahoe-*; do
+        if [ -d \"\$icondir\" ]; then
+            if [ ! -f \"\$icondir/index.theme\" ]; then
+                bname=\$(basename \"\$icondir\")
+                cat << EOI > \"\$icondir/index.theme\"
+[Icon Theme]
+Name=\$bname
+Comment=\$bname Theme
+Inherits=MacTahoe-dark,Adwaita
+EOI
+            fi
+            if [ ! -e \"\$icondir/cursors\" ] && [ -d '$ROOTFS_REC/usr/share/icons/MacTahoe-dark/cursors' ]; then
+                ln -sfn ../MacTahoe-dark/cursors \"\$icondir/cursors\" 2>/dev/null || true
+            fi
+        fi
+    done
+"
+
+# 4. Configure GTK-3.0, GTK-4.0, Xcursor and environment
 $SUDO mkdir -p "$ROOTFS_REC/etc/gtk-3.0" "$ROOTFS_REC/home/live/.config/gtk-3.0" "$ROOTFS_REC/home/live/.config/gtk-4.0" "$ROOTFS_REC/root/.config/gtk-3.0" "$ROOTFS_REC/root/.config/gtk-4.0" "$ROOTFS_REC/etc/skel/.config/gtk-3.0" "$ROOTFS_REC/etc/skel/.config/gtk-4.0"
 
 $SUDO bash -c "cat << 'GTK3CONF' > '$ROOTFS_REC/etc/gtk-3.0/settings.ini'

@@ -696,11 +696,13 @@ Relogin=false
 Current=Particle-circle-window
 
 [Users]
-MinimumUid=0
+MinimumUid=1000
 MaximumUid=60000
-HideUsers=
+HideUsers=_apt,avahi,backup,bin,colord,daemon,games,geoclue,lp,mail,man,messagebus,news,nobody,polkitd,proxy,root,sddm,sshd,sync,sys,systemd-network,uucp,www-data
+HideShells=/bin/false,/usr/sbin/nologin,/sbin/nologin
 SDDMCONF
-$SUDO chmod 0644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
+$SUDO cp -f "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" "$ROOTFS_TARGET/etc/sddm.conf"
+$SUDO chmod 0644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" "$ROOTFS_TARGET/etc/sddm.conf"
 
 # Configure PAM for SDDM (allow passwordless root/live login)
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/pam.d"

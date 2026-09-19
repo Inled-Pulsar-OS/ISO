@@ -2174,14 +2174,50 @@ unmount_tree "$ROOTFS_TARGET"
     # Recompile glib schemas, update desktop database and dconf database
     echo "⚙️ Recompiling GLib schemas and updating desktop/dconf database..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        for ctheme in MacTahoe-dark MacTahoe-light MacTahoe; do
+            if [ -d \"/usr/share/icons/\$ctheme\" ]; then
+                cat << 'IDXT' > \"/usr/share/icons/\$ctheme/index.theme\"
+[Icon Theme]
+Name=\$ctheme
+Comment=\$ctheme Theme
+Inherits=Adwaita
+IDXT
+            fi
+        done
+
         mkdir -p /usr/share/icons/default
         cat << 'DEFCUR' > /usr/share/icons/default/index.theme
 [Icon Theme]
+Name=Default
+Comment=Default Cursor Theme
 Inherits=MacTahoe-dark,Adwaita
 DEFCUR
+
+        dark_cursors=/usr/share/icons/MacTahoe-dark/cursors
+        if [ -d \"\$dark_cursors\" ]; then
+            for alias_src in default pointer; do
+                if [ -e \"\$dark_cursors/\$alias_src\" ]; then
+                    [ ! -e \"\$dark_cursors/left_ptr\" ] && ln -sf \"\$alias_src\" \"\$dark_cursors/left_ptr\" 2>/dev/null || true
+                    [ ! -e \"\$dark_cursors/arrow\" ] && ln -sf \"\$alias_src\" \"\$dark_cursors/arrow\" 2>/dev/null || true
+                    [ ! -e \"\$dark_cursors/hand2\" ] && ln -sf \"\$alias_src\" \"\$dark_cursors/hand2\" 2>/dev/null || true
+                fi
+            done
+        fi
+
         for icondir in /usr/share/icons/MacTahoe-*; do
-            if [ -d \"\$icondir\" ] && [ ! -e \"\$icondir/cursors\" ] && [ -d /usr/share/icons/MacTahoe-dark/cursors ]; then
-                ln -sfn ../MacTahoe-dark/cursors \"\$icondir/cursors\" 2>/dev/null || true
+            if [ -d \"\$icondir\" ]; then
+                if [ ! -f \"\$icondir/index.theme\" ]; then
+                    bname=\$(basename \"\$icondir\")
+                    cat << EOI > \"\$icondir/index.theme\"
+[Icon Theme]
+Name=\$bname
+Comment=\$bname Theme
+Inherits=MacTahoe-dark,Adwaita
+EOI
+                fi
+                if [ ! -e \"\$icondir/cursors\" ] && [ -d /usr/share/icons/MacTahoe-dark/cursors ]; then
+                    ln -sfn ../MacTahoe-dark/cursors \"\$icondir/cursors\" 2>/dev/null || true
+                fi
             fi
         done
         glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
