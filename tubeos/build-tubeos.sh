@@ -646,7 +646,31 @@ $SUDO cp "$PKG_DIR/tubeos-installer/usr/share/tubeos-installer/static/"* "$ROOTF
 echo ""
 echo ">>> STEP 6: Configuring live system..."
 
-# Auto-login as root on tty1
+# Create and unlock live & root users
+$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    if ! id live >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -u 1000 live 2>/dev/null || useradd -m -s /bin/bash live 2>/dev/null || true
+    fi
+    for g in sudo audio video render tty plugdev disk users input docker adm systemd-journal; do
+        groupadd -f \"\$g\" 2>/dev/null || true
+        usermod -aG \"\$g\" live 2>/dev/null || true
+        usermod -aG \"\$g\" root 2>/dev/null || true
+    done
+    echo 'live:live' | chpasswd 2>/dev/null || true
+    passwd -d live 2>/dev/null || true
+    passwd -u live 2>/dev/null || true
+    passwd -d root 2>/dev/null || true
+    passwd -u root 2>/dev/null || true
+
+    mkdir -p /etc/sudoers.d
+    echo 'live ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-live-user
+    echo 'root ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers.d/99-live-user
+    echo 'ALL ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers.d/99-live-user
+    chmod 0440 /etc/sudoers.d/99-live-user
+" || true
+
+# Configure static TTY1 autologin
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d"
 $SUDO tee "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" > /dev/null << 'AUTOCONF'
 [Service]
@@ -656,11 +680,57 @@ Type=idle
 AUTOCONF
 $SUDO cp -f "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 
-# Unlock root account without password for live session
-$SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    passwd -d root 2>/dev/null || true
-    passwd -u root 2>/dev/null || true
-" || true
+# Configure SDDM Autologin and PAM
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/sddm.conf.d"
+DEFAULT_SESSION="openbox"
+if [ "$DISTRO" = "arch" ] && [ -f "$ROOTFS_TARGET/usr/share/wayland-sessions/plasma-bigscreen-wayland.desktop" ]; then
+    DEFAULT_SESSION="plasma-bigscreen-wayland"
+fi
+$SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null << SDDMCONF
+[Autologin]
+User=live
+Session=$DEFAULT_SESSION
+Relogin=false
+
+[Theme]
+Current=Particle-circle-window
+
+[Users]
+MinimumUid=0
+MaximumUid=60000
+HideUsers=
+SDDMCONF
+$SUDO chmod 0644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
+
+# Configure PAM for SDDM (allow passwordless root/live login)
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/pam.d"
+$SUDO tee "$ROOTFS_TARGET/etc/pam.d/sddm" > /dev/null << 'PAMSDDM'
+#%PAM-1.0
+auth       requisite     pam_nologin.so
+auth       sufficient    pam_permit.so
+@include common-auth
+@include common-account
+session    required      pam_limits.so
+session    required      pam_loginuid.so
+@include common-session
+@include common-password
+session    required      pam_env.so
+session    required      pam_env.so envfile=/etc/default/locale
+PAMSDDM
+
+$SUDO tee "$ROOTFS_TARGET/etc/pam.d/sddm-autologin" > /dev/null << 'PAMSDDMAUTO'
+#%PAM-1.0
+auth       required      pam_permit.so
+account    required      pam_permit.so
+password   required      pam_permit.so
+session    required      pam_permit.so
+session    required      pam_limits.so
+session    required      pam_loginuid.so
+@include common-session
+session    required      pam_env.so
+session    required      pam_env.so envfile=/etc/default/locale
+PAMSDDMAUTO
+
 
 # Clear static MOTD (dynamic banner is handled via /etc/profile.d/tubeos-banner.sh)
 $SUDO truncate -s 0 "$ROOTFS_TARGET/etc/motd"
