@@ -32,7 +32,7 @@ parted
 rsync
 grub-efi-amd64-bin
 grub-efi-amd64
-grub-pc
+grub-pc-bin
 os-prober
 efibootmgr
 dosfstools

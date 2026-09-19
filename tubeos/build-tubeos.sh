@@ -601,13 +601,13 @@ SRLIST
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export DEBIAN_FRONTEND=noninteractive
-            apt-get install -y -qq grub-pc grub-efi-amd64-bin grub-efi-amd64 os-prober efibootmgr
+            apt-get install -y -qq grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 os-prober efibootmgr
         "
     else
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export DEBIAN_FRONTEND=noninteractive
-            apt-get install -y -qq refind efibootmgr grub-pc grub-efi-amd64-bin grub-efi-amd64 os-prober
+            apt-get install -y -qq refind efibootmgr grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 os-prober
         "
     fi
 fi
