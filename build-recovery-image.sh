@@ -347,7 +347,8 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
 $SUDO bash -c "cat << 'GUISVC' > '$ROOTFS_REC/etc/systemd/system/pulsar-recovery-gui.service'
 [Unit]
 Description=Pulsar OS Recovery GUI Assistant
-After=systemd-user-sessions.service plymouth-quit-wait.service
+After=systemd-user-sessions.service
+Wants=systemd-user-sessions.service
 Conflicts=getty@tty1.service
 
 [Service]
@@ -366,6 +367,8 @@ TTYPath=/dev/tty1
 StandardInput=tty
 StandardOutput=journal
 StandardError=journal
+ExecStartPre=-/usr/bin/plymouth --quit
+ExecStartPre=-/usr/bin/pkill -9 plymouthd
 ExecStart=/usr/bin/xinit /home/live/.xinitrc -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
 Restart=always
 RestartSec=1
@@ -377,6 +380,7 @@ GUISVC"
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     systemctl enable pulsar-recovery-gui.service 2>/dev/null || true
     systemctl mask getty@tty1.service 2>/dev/null || true
+    systemctl mask plymouth-quit-wait.service 2>/dev/null || true
 "
 
 # Configure X11 permissions for non-root / tty startup

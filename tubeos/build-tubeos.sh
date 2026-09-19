@@ -647,15 +647,18 @@ echo ">>> STEP 6: Configuring live system..."
 
 # Auto-login as root on tty1
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d"
-$SUDO tee "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf" > /dev/null << 'AUTOCONF'
+$SUDO tee "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" > /dev/null << 'AUTOCONF'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+Type=idle
 AUTOCONF
+$SUDO cp -f "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 
 # Unlock root account without password for live session
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     passwd -d root 2>/dev/null || true
+    passwd -u root 2>/dev/null || true
 " || true
 
 # Clear static MOTD (dynamic banner is handled via /etc/profile.d/tubeos-banner.sh)
@@ -838,41 +841,44 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     systemctl enable docker 2>/dev/null || true
     systemctl enable dockermigrate 2>/dev/null || true
     systemctl enable tubeos-installer 2>/dev/null || true
+" || true
 
-    # Configure static TTY1 autologin for live root session
-    mkdir -p /etc/systemd/system/getty@tty1.service.d
-    cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'GETTYEOF'
+# Configure static TTY1 autologin for live root session
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d"
+$SUDO tee "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" > /dev/null << 'GETTYEOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin root %I \$TERM
+ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
 Type=idle
 GETTYEOF
+$SUDO cp -f "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 
-    # Configure console welcome banner on login
-    mkdir -p /etc/profile.d
-    cat > /etc/profile.d/tubeos-welcome.sh << 'WELCOMEOF'
+# Configure console welcome banner on login
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/profile.d"
+$SUDO tee "$ROOTFS_TARGET/etc/profile.d/tubeos-welcome.sh" > /dev/null << 'WELCOMEOF'
 #!/bin/sh
-if [ -t 1 ] && [ \"\$SHLVL\" -le 2 ]; then
-    echo \"\"
-    echo -e \"\033[0;36m _____             _____ _____ \033[0m\"
-    echo -e \"\033[0;36m|     |___ ___ ___|     |   __|\033[0m\"
-    echo -e \"\033[0;36m|   --| .'|_ -| .'|  |  |__   |\033[0m\"
-    echo -e \"\033[0;36m|_____|__,|___|__,|_____|_____|\033[0m\"
-    echo -e \"       \033[1;32mTube OS Live Console\033[0m\"
-    echo \"\"
-    IP=\$(ip -4 addr show | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}' | grep -v '127.0.0.1' | head -n 1)
-    echo -e \"  \033[1;33mWeb Installer / UI:\033[0m http://\${IP:-tubeos.local} (or http://tubeos.local)\"
-    echo -e \"  \033[1;33mDockerMigrate:\033[0m      http://\${IP:-tubeos.local}:8070 (or http://tubeos.local:8070)\"
-    echo \"\"
+if [ -t 1 ] && [ "$SHLVL" -le 2 ]; then
+    echo ""
+    echo -e "\033[0;36m _____             _____ _____ \033[0m"
+    echo -e "\033[0;36m|     |___ ___ ___|     |   __|\033[0m"
+    echo -e "\033[0;36m|   --| .'|_ -| .'|  |  |__   |\033[0m"
+    echo -e "\033[0;36m|_____|__,|___|__,|_____|_____|\033[0m"
+    echo -e "       \033[1;32mTube OS Live Console\033[0m"
+    echo ""
+    IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
+    echo -e "  \033[1;33mWeb Installer / UI:\033[0m http://${IP:-tubeos.local} (or http://tubeos.local)"
+    echo -e "  \033[1;33mDockerMigrate:\033[0m      http://${IP:-tubeos.local}:8070 (or http://tubeos.local:8070)"
+    echo ""
 fi
 WELCOMEOF
-    chmod +x /etc/profile.d/tubeos-welcome.sh
+$SUDO chmod +x "$ROOTFS_TARGET/etc/profile.d/tubeos-welcome.sh"
 
-    # Allow blank password login in PAM
-    if [ -f /etc/pam.d/common-auth ]; then
-        sed -i 's/pam_unix.so/pam_unix.so nullok/' /etc/pam.d/common-auth 2>/dev/null || true
+# Ensure PAM permits passwordless root login
+if [ -f "$ROOTFS_TARGET/etc/pam.d/common-auth" ]; then
+    if ! grep -q "nullok" "$ROOTFS_TARGET/etc/pam.d/common-auth"; then
+        $SUDO sed -i 's/pam_unix.so.*/pam_unix.so nullok/' "$ROOTFS_TARGET/etc/pam.d/common-auth" 2>/dev/null || true
     fi
-" || true
+fi
 
 # Install Plymouth theme
 if [ -f "$ROOTFS_TARGET/usr/share/plymouth/themes/tubeos/tubeos.plymouth" ]; then
@@ -957,8 +963,8 @@ else
     cp "$ROOTFS_TARGET/boot/vmlinuz-"* "$STAGING/live/vmlinuz" 2>/dev/null || true
     cp "$ROOTFS_TARGET/boot/initrd.img-"* "$STAGING/live/initrd.img" 2>/dev/null || \
     cp "$ROOTFS_TARGET/boot/initrd.img" "$STAGING/live/initrd.img" 2>/dev/null || true
-    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    SAFE_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    SAFE_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
 # ==============================================================================
