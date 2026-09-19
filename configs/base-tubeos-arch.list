@@ -2,7 +2,6 @@ linux
 linux-headers
 systemd
 systemd-sysvcompat
-udev
 iproute2
 procps-ng
 dhcpcd
@@ -14,14 +13,21 @@ pam
 util-linux
 dbus
 networkmanager
+archiso
+plymouth
+avahi
+nss-mdns
 # Tube OS packages
 python
 python-fastapi
 python-uvicorn
+uvicorn
+python-multipart
 python-qrcode
 parted
 rsync
 grub
+os-prober
 efibootmgr
 dosfstools
 e2fsprogs
@@ -30,8 +36,20 @@ tubeos-installer
 tubeos-branding
 tubeos-plymouth
 tube-os-dash
+tubeos-ui
 dockermigrate
 # Plasma Bigscreen (Arch only)
 plasma-bigscreen
-plasma-remotecontrollers
-kodi
+plasma-workspace
+plasma-desktop
+powerdevil
+plasma-pa
+plasma-nm
+polkit-kde-agent
+breeze
+breeze-icons
+qqc2-breeze-style
+kwin
+xdg-desktop-portal-kde
+sddm
+

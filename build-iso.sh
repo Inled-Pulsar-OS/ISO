@@ -796,11 +796,14 @@ $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
 # Bind mount pacman cache dir in home (not root partition) if on Arch
 if [ "$DISTRO" = "arch" ]; then
     $SUDO mount --bind "$PACMAN_CACHE_DIR" "$ROOTFS_TARGET/var/cache/pacman/pkg"
+    # Purge incomplete downloads (.part files) to prevent "could not find package in cache" errors
+    $SUDO rm -f "$PACMAN_CACHE_DIR"/*.part 2>/dev/null || true
     # Purge previously cached Inled-repo packages and obsolete packages (like calamares):
     # an interrupted download or obsolete package leaves stale/broken .pkg.tar.zst in the
     # bind-mounted cache that fails signature checks or reintroduces removed packages.
     for pattern in "pulsaros-*" "pulsar-store-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
-                   "droidtux-*" "appinstall-*" "seafari-*" \
+                   "droidtux-*" "appinstall-*" "seafari-*" "nautilus*" "gnome-control-center*" \
+                   "winboat*" "driverman*" \
                    "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
                    "pulsar-pear-sound-theme-*" "*-debug-*"; do
         $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst \
@@ -1086,23 +1089,22 @@ $pkg_name"
                 pacman -Rdd --noconfirm libnautilus-extension || true
             fi
 
+            # Pin our custom nautilus so pacman -Syu doesn't download/replace it with upstream
+            if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
+                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus' /etc/pacman.conf
+            fi
+
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
 
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
-            # Pin our custom nautilus so subsequent pacman runs don't replace it with upstream
-            if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
-                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus' /etc/pacman.conf
-            fi
-
             # Install remaining dependencies and packages.
-            # droidtux/appinstall/seafari come from the [inled] repo via pacman.
+            # droidtux and seafari come from the [inled] repo via pacman.
             pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
                 droidtux \
-                appinstall \
                 seafari \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
@@ -2225,6 +2227,42 @@ $SUDO rm -rf "$ROOTFS_TARGET/usr/lib/systemd/system-generators"/*.py 2>/dev/null
 $SUDO find "$ROOTFS_TARGET/usr/share/X11/locale" -mindepth 1 -maxdepth 1 \
     ! -name 'en_US.UTF-8' ! -name 'es_ES.UTF-8' -exec rm -rf {} + 2>/dev/null || true
 echo "✅ Rootfs cleaned."
+
+# ── Ensure correct system ownership and setuid permissions ─────────────────
+echo "🔒 Restoring system ownership (root:root) and setuid bits in rootfs..."
+$SUDO chown -R root:root "$ROOTFS_TARGET"
+if [ -d "$ROOTFS_TARGET/home/live" ]; then
+    $SUDO chown -R 1000:1000 "$ROOTFS_TARGET/home/live" 2>/dev/null || true
+fi
+
+SETUID_BINARIES=(
+    "/usr/bin/pkexec"
+    "/usr/bin/sudo"
+    "/usr/bin/su"
+    "/usr/bin/passwd"
+    "/usr/bin/gpasswd"
+    "/usr/bin/chfn"
+    "/usr/bin/chsh"
+    "/usr/bin/newgrp"
+    "/usr/bin/mount"
+    "/usr/bin/umount"
+    "/usr/bin/fusermount3"
+    "/usr/bin/fusermount"
+    "/usr/bin/chage"
+    "/usr/bin/expiry"
+    "/usr/lib/polkit-1/polkit-agent-helper-1"
+)
+
+for bin_path in "${SETUID_BINARIES[@]}"; do
+    if [ -f "$ROOTFS_TARGET$bin_path" ]; then
+        $SUDO chown root:root "$ROOTFS_TARGET$bin_path"
+        $SUDO chmod 4755 "$ROOTFS_TARGET$bin_path"
+    fi
+done
+
+if [ -f "$ROOTFS_TARGET/usr/lib/dbus-1.0/dbus-daemon-launch-helper" ]; then
+    $SUDO chmod 4750 "$ROOTFS_TARGET/usr/lib/dbus-1.0/dbus-daemon-launch-helper" 2>/dev/null || true
+fi
 
 # 1. Compress rootfs into SquashFS / Comprimir el rootfs en SquashFS
 echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."

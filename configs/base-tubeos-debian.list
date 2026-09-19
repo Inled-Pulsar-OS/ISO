@@ -31,7 +31,9 @@ python3-pil
 parted
 rsync
 grub-efi-amd64-bin
+grub-efi-amd64
 grub-pc
+os-prober
 efibootmgr
 dosfstools
 e2fsprogs
@@ -39,3 +41,9 @@ docker.io
 qrencode
 avahi-daemon
 libnss-mdns
+tubeos-installer
+tubeos-branding
+tubeos-plymouth
+tube-os-dash
+tubeos-ui
+dockermigrate
