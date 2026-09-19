@@ -563,22 +563,23 @@ deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-f
 deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
 SRLIST
 
+    # Ensure all base packages from list are installed
+    DEBIAN_BASE_DEPS=$(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$' | grep -vE 'tubeos-|tube-os-|dockermigrate' | tr '\n' ' ')
+
     if $USE_LOCAL; then
-        echo "  Installing local packages..."
+        echo "  Installing local packages and dependencies..."
         LOCAL_DEBS_DIR="$BUILD_DIR/local-debs-tubeos"
         if [ -d "$LOCAL_DEBS_DIR" ] && ls "$LOCAL_DEBS_DIR"/*.deb &>/dev/null; then
             $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
             $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
 
-            # Get tubeos-specific packages
-            TUBEOS_DEB_NAMES=$(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$' | grep -E 'tubeos-|tube-os-|dockermigrate' | tr '\n' ' ')
-
             $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
                 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
                 export DEBIAN_FRONTEND=noninteractive
                 apt-get update -qq
+                apt-get install -y --no-install-recommends $DEBIAN_BASE_DEPS
                 apt-get install -y --no-install-recommends /tmp/packages/*.deb 2>/dev/null || dpkg -i --force-depends /tmp/packages/*.deb 2>/dev/null || true
-                apt-get install -f -y --no-install-recommends 2>/dev/null || apt-get install -f -y 2>/dev/null || true
+                apt-get install -f -y --no-install-recommends 2>/dev/null || true
                 apt-get clean
             "
             $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
@@ -591,7 +592,7 @@ SRLIST
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y -qq $TUBEOS_DEB_NAMES
+            apt-get install -y -qq $DEBIAN_BASE_DEPS $TUBEOS_DEB_NAMES
             apt-get clean
         "
     fi
@@ -853,25 +854,6 @@ Type=idle
 GETTYEOF
 $SUDO cp -f "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.conf" "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 
-# Configure console welcome banner on login
-$SUDO mkdir -p "$ROOTFS_TARGET/etc/profile.d"
-$SUDO tee "$ROOTFS_TARGET/etc/profile.d/tubeos-welcome.sh" > /dev/null << 'WELCOMEOF'
-#!/bin/sh
-if [ -t 1 ] && [ "$SHLVL" -le 2 ]; then
-    echo ""
-    echo -e "\033[0;36m _____             _____ _____ \033[0m"
-    echo -e "\033[0;36m|     |___ ___ ___|     |   __|\033[0m"
-    echo -e "\033[0;36m|   --| .'|_ -| .'|  |  |__   |\033[0m"
-    echo -e "\033[0;36m|_____|__,|___|__,|_____|_____|\033[0m"
-    echo -e "       \033[1;32mTube OS Live Console\033[0m"
-    echo ""
-    IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
-    echo -e "  \033[1;33mWeb Installer / UI:\033[0m http://${IP:-tubeos.local} (or http://tubeos.local)"
-    echo -e "  \033[1;33mDockerMigrate:\033[0m      http://${IP:-tubeos.local}:8070 (or http://tubeos.local:8070)"
-    echo ""
-fi
-WELCOMEOF
-$SUDO chmod +x "$ROOTFS_TARGET/etc/profile.d/tubeos-welcome.sh"
 
 # Ensure PAM permits passwordless root login
 if [ -f "$ROOTFS_TARGET/etc/pam.d/common-auth" ]; then
@@ -993,16 +975,10 @@ if [ "$DISTRO" = "arch" ]; then
 else
     mkdir -p "$STAGING/live"
     SQUASHFS="$STAGING/live/filesystem.squashfs"
-    if $QUICK_MODE; then
-        mksquashfs "$ROOTFS_TARGET" "$SQUASHFS" \
-            -comp zstd -Xcompression-level "$COMPRESSION_LEVEL" \
-            -processors "$BUILD_PROCESSORS" -noappend \
-            -e proc/* -e sys/* -e dev/* -e run/* -e tmp/* -e var/tmp/* -e var/log/* -e root/.bash_history
-    else
-        mksquashfs "$ROOTFS_TARGET" "$SQUASHFS" \
-            -comp xz -b 1M -processors "$BUILD_PROCESSORS" -noappend \
-            -e proc/* -e sys/* -e dev/* -e run/* -e tmp/* -e var/tmp/* -e var/log/* -e root/.bash_history
-    fi
+    mksquashfs "$ROOTFS_TARGET" "$SQUASHFS" \
+        -comp zstd -Xcompression-level "${COMPRESSION_LEVEL:-10}" \
+        -processors "$BUILD_PROCESSORS" -noappend \
+        -e proc/* -e sys/* -e dev/* -e run/* -e tmp/* -e var/tmp/* -e var/log/* -e root/.bash_history
 fi
 
 # Prepare clean GRUB theme for ISO staging
