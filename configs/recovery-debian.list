@@ -60,6 +60,7 @@ xserver-xorg-legacy
 xserver-xorg-video-all
 xserver-xorg-video-fbdev
 xserver-xorg-video-vesa
+xserver-xorg-video-qxl
 xserver-xorg-input-all
 xinit
 x11-xserver-utils

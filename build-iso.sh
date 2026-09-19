@@ -2182,8 +2182,20 @@ Name=\$ctheme
 Comment=\$ctheme Theme
 Inherits=Adwaita
 IDXT
+                cat << 'CURT' > \"/usr/share/icons/\$ctheme/cursor.theme\"
+[Icon Theme]
+Name=\$ctheme
+Inherits=Adwaita
+CURT
             fi
         done
+
+        if [ -d \"/usr/share/icons/Adwaita\" ]; then
+            cat << 'ADWCUR' > /usr/share/icons/Adwaita/cursor.theme
+[Icon Theme]
+Inherits=Adwaita
+ADWCUR
+        fi
 
         mkdir -p /usr/share/icons/default
         cat << 'DEFCUR' > /usr/share/icons/default/index.theme
@@ -2192,6 +2204,10 @@ Name=Default
 Comment=Default Cursor Theme
 Inherits=MacTahoe-dark,Adwaita
 DEFCUR
+        cat << 'DEFCURT' > /usr/share/icons/default/cursor.theme
+[Icon Theme]
+Inherits=MacTahoe-dark,Adwaita
+DEFCURT
 
         dark_cursors=/usr/share/icons/MacTahoe-dark/cursors
         if [ -d \"\$dark_cursors\" ]; then

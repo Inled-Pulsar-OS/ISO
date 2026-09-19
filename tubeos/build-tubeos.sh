@@ -682,10 +682,23 @@ $SUDO cp -f "$ROOTFS_TARGET/etc/systemd/system/getty@tty1.service.d/override.con
 
 # Configure SDDM Autologin and PAM
 $SUDO mkdir -p "$ROOTFS_TARGET/etc/sddm.conf.d"
-DEFAULT_SESSION="openbox"
+DEFAULT_SESSION="tubeos"
 if [ "$DISTRO" = "arch" ] && [ -f "$ROOTFS_TARGET/usr/share/wayland-sessions/plasma-bigscreen-wayland.desktop" ]; then
     DEFAULT_SESSION="plasma-bigscreen-wayland"
 fi
+
+# Ensure Openbox autostarts tubeos-ui whether openbox or tubeos session is run
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/skel/.config/openbox" "$ROOTFS_TARGET/home/live/.config/openbox" "$ROOTFS_TARGET/root/.config/openbox" "$ROOTFS_TARGET/etc/xdg/openbox"
+$SUDO tee "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" > /dev/null << 'OBAUTO'
+#!/bin/sh
+/usr/bin/tubeos-ui &
+OBAUTO
+$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/home/live/.config/openbox/autostart"
+$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/root/.config/openbox/autostart"
+$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/etc/xdg/openbox/autostart"
+$SUDO chmod 0755 "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/home/live/.config/openbox/autostart" "$ROOTFS_TARGET/root/.config/openbox/autostart" "$ROOTFS_TARGET/etc/xdg/openbox/autostart" 2>/dev/null || true
+$SUDO chown -R 1000:1000 "$ROOTFS_TARGET/home/live/.config" 2>/dev/null || true
+
 $SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null << SDDMCONF
 [Autologin]
 User=live
@@ -1068,12 +1081,11 @@ if [ -f "$TMP_GRUB_STAGE/theme/generate.sh" ]; then
 fi
 
 # Wallpaper background for GRUB
-if [ -f "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" ]; then
-    if command -v magick >/dev/null 2>&1; then
-        magick "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
-    elif command -v convert >/dev/null 2>&1; then
-        convert "$PKG_DIR/pulsaros-sddm/Apple.Tahoe/pulsar-os-tahoe.png" -quality 95 "$STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
-    fi
+if [ -f "$PKG_DIR/tubeos-branding/usr/share/backgrounds/tubeos/wallpaper.jpg" ]; then
+    $SUDO cp -f "$PKG_DIR/tubeos-branding/usr/share/backgrounds/tubeos/wallpaper.jpg" "$STAGING/boot/grub/themes/Particle-circle-window/background.jpg" 2>/dev/null || true
+    $SUDO cp -f "$PKG_DIR/tubeos-branding/usr/share/backgrounds/tubeos/wallpaper.png" "$STAGING/boot/grub/themes/Particle-circle-window/background.png" 2>/dev/null || true
+    $SUDO mkdir -p "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window"
+    $SUDO cp -rf "$STAGING/boot/grub/themes/Particle-circle-window/"* "$ROOTFS_TARGET/boot/grub/themes/Particle-circle-window/" 2>/dev/null || true
 fi
 
 $SUDO rm -rf "$STAGING/boot/grub/themes/Particle-circle-window/icons"

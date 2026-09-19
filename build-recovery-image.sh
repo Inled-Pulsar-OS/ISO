@@ -343,46 +343,22 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     chmod 0440 /etc/sudoers.d/99-live-user
 "
 
-# Configure dedicated systemd graphical service for recovery (bypasses agetty/PAM login loop completely)
-$SUDO bash -c "cat << 'GUISVC' > '$ROOTFS_REC/etc/systemd/system/pulsar-recovery-gui.service'
-[Unit]
-Description=Pulsar OS Recovery GUI Assistant
-After=systemd-user-sessions.service
-Wants=systemd-user-sessions.service
-Conflicts=getty@tty1.service
-
+# Configure getty autologin on tty1 (clean, standard, guaranteed X11 VT management)
+$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d"
+$SUDO bash -c "cat << 'GETTYCONF' > '$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d/autologin.conf'
 [Service]
-Type=simple
-User=root
-PAMName=login
-Environment=HOME=/root
-Environment=USER=root
-Environment=DISPLAY=:0
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=GTK_THEME=MacTahoe-Dark
-Environment=XCURSOR_THEME=MacTahoe-dark
-Environment=XCURSOR_SIZE=24
-TTYPath=/dev/tty1
-StandardInput=tty
-StandardOutput=journal
-StandardError=journal
-ExecStartPre=-/usr/bin/plymouth --quit
-ExecStartPre=-/usr/bin/pkill -9 plymouthd
-ExecStart=/usr/bin/xinit /etc/X11/xinit/xinitrc.recovery -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
-Restart=always
-RestartSec=1
-
-[Install]
-WantedBy=graphical.target
-GUISVC"
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+GETTYCONF"
 
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    systemctl enable pulsar-recovery-gui.service 2>/dev/null || true
-    systemctl mask getty@tty1.service 2>/dev/null || true
+    systemctl unmask getty@tty1.service 2>/dev/null || true
+    systemctl enable getty@tty1.service 2>/dev/null || true
     systemctl mask plymouth-quit-wait.service 2>/dev/null || true
 "
 
-# Configure X11 permissions for non-root / tty startup
+# Configure X11 permissions
 $SUDO mkdir -p "$ROOTFS_REC/etc/X11/xinit"
 $SUDO bash -c "cat << 'XWRAP' > '$ROOTFS_REC/etc/X11/Xwrapper.config'
 allowed_users=anybody
@@ -390,7 +366,7 @@ needs_root_rights=yes
 XWRAP"
 $SUDO chmod 4755 "$ROOTFS_REC/usr/lib/xorg/Xorg.wrap" 2>/dev/null || true
 
-# Configure auto-start of X11 and Fluxbox with Rust recovery assistant
+# Configure xinitrc and fluxbox startup for Recovery Assistant
 $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox" "$ROOTFS_REC/root/.fluxbox"
 
 $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery'
@@ -440,16 +416,17 @@ Defaults:live env_keep += \"DISPLAY XAUTHORITY WAYLAND_DISPLAY\"
 SUDOERS"
 $SUDO chmod 0440 "$ROOTFS_REC/etc/sudoers.d/live"
 
-# Auto-start X on tty1 login without looping on failure
-$SUDO bash -c "cat << 'PROFILE' >> '$ROOTFS_REC/home/live/.bash_profile'
+# Auto-start X on tty1 login cleanly without nocursor
+$SUDO bash -c "cat << 'PROFILE' > '$ROOTFS_REC/root/.bash_profile'
 if [ -z \"\$DISPLAY\" ] && [ \"\$(tty)\" = \"/dev/tty1\" ]; then
-    startx -- -nocursor 2>/tmp/xorg.log || startx >>/tmp/xorg.log 2>&1 || {
-        echo \"⚠️ Error al iniciar servidor gráfico X11. Registro en /tmp/xorg.log\"
-        echo \"💡 Puedes intentar ejecutar manualmente: sudo /usr/bin/pulsar-recovery-assistant\"
-    }
+    /usr/bin/plymouth --quit 2>/dev/null || true
+    /usr/bin/pkill -9 plymouthd 2>/dev/null || true
+    exec /usr/bin/startx /etc/X11/xinit/xinitrc.recovery -- :0 vt1 -nolisten tcp
 fi
 PROFILE"
-$SUDO cp -f "$ROOTFS_REC/home/live/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_profile"
+
+$SUDO cp -f "$ROOTFS_REC/root/.bash_profile" "$ROOTFS_REC/home/live/.bash_profile"
+$SUDO cp -f "$ROOTFS_REC/root/.bash_profile" "$ROOTFS_REC/etc/skel/.bash_profile"
 
 # Ensure proper ownership of live user home directory
 $SUDO chown -R 1000:1000 "$ROOTFS_REC/home/live" 2>/dev/null || true

@@ -57,6 +57,8 @@ libnss-systemd
 zstd
 
 # ── MacTahoe Theme Dependencies ──────────────────────────────────────────────
+adwaita-icon-theme
+adwaita-icon-theme-legacy
 sassc
 libglib2.0-dev-bin
 libxml2-utils
