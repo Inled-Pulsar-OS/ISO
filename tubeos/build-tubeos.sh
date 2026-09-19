@@ -384,8 +384,26 @@ if $USE_LOCAL; then
                 fi
 
                 echo "  🔨 Building $pkg..."
-                dpkg-deb --build --root-owner-group "$PKG_SRC" "$DEB_FILE" >/dev/null 2>&1 || \
-                dpkg-deb --build "$PKG_SRC" "$DEB_FILE" >/dev/null 2>&1 || {
+                if [ -x "$PKG_SRC/prepare-assets.sh" ]; then
+                    echo "  📦 Preparing assets for $pkg..."
+                    (cd "$PKG_SRC" && ./prepare-assets.sh) 2>&1 || true
+                fi
+                # Stage only DEBIAN/ + standard filesystem dirs so dev sources
+                # living next to the package (src/, src-tauri/, package.json...)
+                # never leak into the root of the deb.
+                rm -rf "$BUILD_DIR/.pkg-staging-tubeos"
+                mkdir -p "$BUILD_DIR/.pkg-staging-tubeos"
+                cp -a "$PKG_SRC/." "$BUILD_DIR/.pkg-staging-tubeos/"
+                find "$BUILD_DIR/.pkg-staging-tubeos" -mindepth 1 -maxdepth 1 \
+                    ! -name 'DEBIAN' ! -name 'etc' ! -name 'usr' ! -name 'var' \
+                    ! -name 'opt' ! -name 'srv' ! -name 'lib*' ! -name 'bin' \
+                    ! -name 'sbin' ! -name 'boot' ! -name 'dev' ! -name 'proc' \
+                    ! -name 'sys' ! -name 'run' ! -name 'tmp' ! -name 'mnt' \
+                    ! -name 'media' ! -name 'home' ! -name 'root' \
+                    -exec rm -rf {} + 2>/dev/null || true
+                dpkg-deb -Zgzip --build --root-owner-group "$BUILD_DIR/.pkg-staging-tubeos" "$DEB_FILE" >/dev/null 2>&1 || \
+                dpkg-deb --build --root-owner-group "$BUILD_DIR/.pkg-staging-tubeos" "$DEB_FILE" >/dev/null 2>&1 || \
+                dpkg-deb --build "$BUILD_DIR/.pkg-staging-tubeos" "$DEB_FILE" >/dev/null 2>&1 || {
                     echo "  WARN: $pkg build failed"
                 }
             done
@@ -577,8 +595,8 @@ SRLIST
                 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
                 export DEBIAN_FRONTEND=noninteractive
                 apt-get update -qq
-                apt-get install -y --no-install-recommends $DEBIAN_BASE_DEPS
-                apt-get install -y --no-install-recommends /tmp/packages/*.deb 2>/dev/null || dpkg -i --force-depends /tmp/packages/*.deb 2>/dev/null || true
+                apt-get install -y --no-install-recommends $DEBIAN_BASE_DEPS 2>/dev/null || true
+                dpkg -i --force-overwrite --force-confnew --force-depends /tmp/packages/*.deb 2>/dev/null || true
                 apt-get install -f -y --no-install-recommends 2>/dev/null || true
                 apt-get clean
             "
@@ -687,17 +705,10 @@ if [ "$DISTRO" = "arch" ] && [ -f "$ROOTFS_TARGET/usr/share/wayland-sessions/pla
     DEFAULT_SESSION="plasma-bigscreen-wayland"
 fi
 
-# Ensure Openbox autostarts tubeos-ui whether openbox or tubeos session is run
-$SUDO mkdir -p "$ROOTFS_TARGET/etc/skel/.config/openbox" "$ROOTFS_TARGET/home/live/.config/openbox" "$ROOTFS_TARGET/root/.config/openbox" "$ROOTFS_TARGET/etc/xdg/openbox"
-$SUDO tee "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" > /dev/null << 'OBAUTO'
-#!/bin/sh
-/usr/bin/tubeos-ui &
-OBAUTO
-$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/home/live/.config/openbox/autostart"
-$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/root/.config/openbox/autostart"
-$SUDO cp -f "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/etc/xdg/openbox/autostart"
-$SUDO chmod 0755 "$ROOTFS_TARGET/etc/skel/.config/openbox/autostart" "$ROOTFS_TARGET/home/live/.config/openbox/autostart" "$ROOTFS_TARGET/root/.config/openbox/autostart" "$ROOTFS_TARGET/etc/xdg/openbox/autostart" 2>/dev/null || true
-$SUDO chown -R 1000:1000 "$ROOTFS_TARGET/home/live/.config" 2>/dev/null || true
+# Live: terminal-only (TTY1 autologin + banner/QR). No X, no UI.
+# The web installer re-creates the Openbox autostart on the target disk
+# after installation, so the live system must not ship it.
+# (openbox autostart removed from live - see tubeos-installer server.py)
 
 $SUDO tee "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf" > /dev/null << SDDMCONF
 [Autologin]
@@ -1030,8 +1041,8 @@ else
     cp "$ROOTFS_TARGET/boot/vmlinuz-"* "$STAGING/live/vmlinuz" 2>/dev/null || true
     cp "$ROOTFS_TARGET/boot/initrd.img-"* "$STAGING/live/initrd.img" 2>/dev/null || \
     cp "$ROOTFS_TARGET/boot/initrd.img" "$STAGING/live/initrd.img" 2>/dev/null || true
-    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    SAFE_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin live-config.nox11autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
+    SAFE_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin live-config.nox11autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
 # ==============================================================================

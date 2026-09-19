@@ -603,6 +603,51 @@ run_as_user() {
         sudo -u "$ORIGINAL_USER" -- "$@"
     fi
 }
+
+# ==============================================================================
+# cloudflare-warp-bin (AUR) — bundling for the ISO
+#
+# Builds the Cloudflare WARP client directly from the AUR with git clone +
+# makepkg. Unlike the AUR_DEPS loop below, this does NOT require yay or paru on
+# the build host, so the recovery/installer "Enable WARP" button works in BOTH
+# local and production builds. The package is a pure bin package (it downloads
+# Cloudflare's own .deb and repackages it), so it only needs git + base-devel +
+# patchelf + network at build time. Failures are non-fatal so the ISO can still
+# be built offline.
+# ==============================================================================
+build_cloudflare_warp() {
+    local dest_dir="$1"
+    local warp_tmp="/tmp/pulsaros-warp-bin-$$"
+    local warp_log
+    mkdir -p "$dest_dir"
+
+    if ls "$dest_dir"/cloudflare-warp-bin-*.pkg.tar.zst >/dev/null 2>&1; then
+        echo "✅ cloudflare-warp-bin already built in $dest_dir"
+        return 0
+    fi
+    if ! command -v makepkg >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+        echo "⚠️ makepkg/git not available — cannot build cloudflare-warp-bin (install base-devel)."
+        return 0
+    fi
+
+    warp_log="$dest_dir/cloudflare-warp-bin-build.log"
+    $SUDO rm -rf "$warp_tmp"
+    mkdir -p "$warp_tmp"
+    $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$warp_tmp"
+    echo "🔨 Compiling cloudflare-warp-bin from AUR into $dest_dir ..."
+    if ! run_as_user bash -c "git clone --depth=1 https://aur.archlinux.org/cloudflare-warp-bin.git '$warp_tmp/repo' 2>&1 | tail -n 5 > '$warp_log'"; then
+        echo "⚠️ Could not clone cloudflare-warp-bin from the AUR — WARP will not be bundled (see $warp_log)."
+        $SUDO rm -rf "$warp_tmp"
+        return 0
+    fi
+    if ! run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign 2>&1 | tail -n 15 >> '$warp_log'"; then
+        echo "⚠️ cloudflare-warp-bin build failed — WARP will not be bundled (see $warp_log)."
+        $SUDO rm -rf "$warp_tmp"
+        return 0
+    fi
+    $SUDO rm -rf "$warp_tmp"
+    echo "✅ cloudflare-warp-bin compiled into $dest_dir"
+}
 trap cleanup EXIT INT TERM
 preflight_cleanup
 
@@ -674,6 +719,9 @@ SigLevel = Required DatabaseOptional
 LocalFileSigLevel = Optional
 NoProgressBar
 ParallelDownloads = 5
+# Do not abort the whole bootstrap when a mirror briefly stalls
+# (avoids "Operation too slow. Less than 1 bytes/sec" build failures).
+DisableDownloadTimeout
 
 [core]
 Server = $MIRROR
@@ -959,6 +1007,11 @@ $pkg_name"
         done
         unset seen_pkg_names
 
+        # Bundling cloudflare-warp-bin is mandatory for the recovery/installer's WARP
+        # button, so build it unconditionally (no yay/paru required) into the local
+        # package dir. The AUR_DEPS loop below will then skip it ("already compiled").
+        build_cloudflare_warp "$LOCAL_PKGS_DIR"
+
         # cloudflare-warp-bin is bundled in the (minimal) ISO so the recovery/installer can
         # offer the user a VPN to reach the Inled repo in regions where Cloudflare is censored.
         # localsend-bin is an extra package offered post-install. Both must be compiled from AUR
@@ -1199,6 +1252,27 @@ $pkg_name"
                 droidtux appinstall seafari winboat-bin pulsaros-circle-to-search 2>/dev/null || true
         "
         echo "✅ Arch packages installed from the Inled repository."
+    fi
+
+    # Bundle Cloudflare WARP (cloudflare-warp-bin from the AUR) so the
+    # recovery/installer can enable the VPN ("warp-cli connect") even when the
+    # Inled repo is censored/blocked. It is built unconditionally — without
+    # yay/paru — and installed locally with pacman -U into the target.
+    WARP_PKG_DIR="$BUILD_DIR/warp-pkg"
+    build_cloudflare_warp "$WARP_PKG_DIR"
+    if ls "$WARP_PKG_DIR"/cloudflare-warp-bin-*.pkg.tar.zst >/dev/null 2>&1; then
+        $SUDO mkdir -p "$ROOTFS_TARGET/tmp/warp"
+        $SUDO cp "$WARP_PKG_DIR"/cloudflare-warp-bin-*.pkg.tar.zst "$ROOTFS_TARGET/tmp/warp/"
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            /usr/bin/pacman -U --noconfirm --overwrite '*' /tmp/warp/cloudflare-warp-bin-*.pkg.tar.zst
+            /usr/bin/systemctl enable warp-svc 2>/dev/null || true
+        "
+        $SUDO rm -rf "$ROOTFS_TARGET/tmp/warp"
+        echo "✅ Cloudflare WARP bundlado e instalado (warp-cli / warp-svc)."
+    else
+        echo "⚠️ cloudflare-warp-bin no compilado — la ISO seguirá sin WARP."
     fi
 
     # The archlinux:latest Docker image ships a /etc/pacman.conf with
@@ -2387,6 +2461,18 @@ else
     LEGACY_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
 
+# ==============================================================================
+# Recovery kernel (Debian live-boot) boot parameters.
+#
+# fsck.mode=skip evita que fsck bloquee/cielgue el arranque sobre discos
+# virtio (QEMU/GNOME Boxes). Las variantes ACPI trabajan sobre los cuelgues
+# "ACPI BIOS Error (bug)"/"ACPI Error" que se ven bajo firmware OVMF/QEMU y
+# tablas ACPI problemáticas del hardware real.
+# ==============================================================================
+RECOVERY_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+RECOVERY_COMPAT_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+RECOVERY_MINIMAL_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
+
 resolve_boot_icons() {
     if [ -d "$ROOTFS_TARGET/usr/share/pulsar-boot-icons" ]; then
         echo "$ROOTFS_TARGET/usr/share/pulsar-boot-icons"
@@ -2525,7 +2611,15 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
 
 if [ -f /recovery/vmlinuz-recovery ]; then
     menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        linux /recovery/vmlinuz-recovery $RECOVERY_PARAMS
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery $RECOVERY_COMPAT_PARAMS
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery $RECOVERY_MINIMAL_PARAMS
         initrd /recovery/initramfs-recovery.img
     }
 fi
@@ -2586,7 +2680,15 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
 
 if [ -f /recovery/vmlinuz-recovery ]; then
     menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
         initrd /recovery/initramfs-recovery.img
     }
 fi
@@ -2712,7 +2814,21 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
     loader /EFI/BOOT/vmlinuz-recovery
     initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --"
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+}
+
+menuentry "Pulsar OS Recovery (ACPI Compat)" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+}
+
+menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" {
+    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
 }
 EOF
 
@@ -2753,7 +2869,19 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
 menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
     loader /EFI/BOOT/vmlinuz-recovery
     initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --"
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+}
+
+menuentry "Pulsar OS Recovery (ACPI Compat)" {
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+}
+
+menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" {
+    loader /EFI/BOOT/vmlinuz-recovery
+    initrd /EFI/BOOT/initramfs-recovery.img
+    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
 }
 EOF
 
@@ -2953,7 +3081,15 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
 
 if [ -f /recovery/vmlinuz-recovery ]; then
     menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+        initrd /recovery/initramfs-recovery.img
+    }
+    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
+        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
         initrd /recovery/initramfs-recovery.img
     }
 fi

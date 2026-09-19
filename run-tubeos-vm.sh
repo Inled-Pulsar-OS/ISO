@@ -7,7 +7,13 @@
 set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="${BASE_DIR}/ISO/build"
+if [[ -d "${BASE_DIR}/build" ]]; then
+    BUILD_DIR="${BASE_DIR}/build"
+elif [[ -d "${BASE_DIR}/ISO/build" ]]; then
+    BUILD_DIR="${BASE_DIR}/ISO/build"
+else
+    BUILD_DIR="${BASE_DIR}/build"
+fi
 DISK_IMAGE="${BUILD_DIR}/tubeos-disk.qcow2"
 VARS_IMAGE="${BUILD_DIR}/OVMF_VARS.fd"
 

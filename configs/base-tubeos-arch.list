@@ -31,6 +31,8 @@ os-prober
 efibootmgr
 dosfstools
 e2fsprogs
+btrfs-progs
+xfsprogs
 docker
 tubeos-installer
 tubeos-branding
