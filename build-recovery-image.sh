@@ -343,18 +343,45 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     chmod 0440 /etc/sudoers.d/99-live-user
 "
 
-# Configure getty autologin on tty1 (clean, standard, guaranteed X11 VT management)
-$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d"
-$SUDO bash -c "cat << 'GETTYCONF' > '$ROOTFS_REC/etc/systemd/system/getty@tty1.service.d/autologin.conf'
+# Configure dedicated systemd graphical service for recovery (bypasses agetty/PAM login loop completely)
+$SUDO bash -c "cat << 'GUISVC' > '$ROOTFS_REC/etc/systemd/system/pulsar-recovery-gui.service'
+[Unit]
+Description=Pulsar OS Recovery GUI Assistant
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Wants=systemd-user-sessions.service
+Conflicts=getty@tty1.service
+
 [Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
-Type=idle
-GETTYCONF"
+Type=simple
+User=root
+WorkingDirectory=/root
+Environment=HOME=/root
+Environment=USER=root
+Environment=LOGNAME=root
+Environment=DISPLAY=:0
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=GTK_THEME=MacTahoe-Dark
+Environment=XCURSOR_THEME=MacTahoe-dark
+Environment=XCURSOR_SIZE=24
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal+console
+StandardError=journal+console
+ExecStartPre=-/usr/bin/plymouth --quit
+ExecStartPre=-/usr/bin/pkill -9 plymouthd
+ExecStart=/usr/bin/xinit /etc/X11/xinit/xinitrc.recovery -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+GUISVC"
 
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    systemctl unmask getty@tty1.service 2>/dev/null || true
-    systemctl enable getty@tty1.service 2>/dev/null || true
+    systemctl enable pulsar-recovery-gui.service 2>/dev/null || true
+    systemctl mask getty@tty1.service 2>/dev/null || true
     systemctl mask plymouth-quit-wait.service 2>/dev/null || true
 "
 
@@ -372,14 +399,15 @@ $SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox" 
 $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery'
 #!/bin/sh
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-xsetroot -solid '#18181b'
-xset s off -dpms
-[ -f /root/.Xresources ] && xrdb -merge /root/.Xresources
-[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
-xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
+export DISPLAY=:0
 export GTK_THEME=\"MacTahoe-Dark\"
 export XCURSOR_THEME=\"MacTahoe-dark\"
 export XCURSOR_SIZE=\"24\"
+xsetroot -solid '#18181b'
+xset s off -dpms
+[ -f /root/.Xresources ] && xrdb -merge /root/.Xresources 2>/dev/null || true
+[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources 2>/dev/null || true
+xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 if [ -f /usr/bin/pulsar-recovery-assistant ]; then
     /usr/bin/pulsar-recovery-assistant &
 fi
@@ -395,7 +423,7 @@ $SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
 #!/bin/sh
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 xsetroot -solid '#18181b'
-[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
+[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources 2>/dev/null || true
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
 export GTK_THEME=\"MacTahoe-Dark\"
 export XCURSOR_THEME=\"MacTahoe-dark\"
@@ -407,6 +435,28 @@ $SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/
 $SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
 $SUDO chmod +x "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
 
+# Configure clean Fluxbox menu
+$SUDO bash -c "cat << 'FLUX_MENU' > '$ROOTFS_REC/etc/X11/fluxbox/fluxbox-menu'
+[begin] (Pulsar OS Recovery)
+  [exec] (Recovery Assistant) {/usr/bin/pulsar-recovery-assistant}
+  [exec] (GParted) {/usr/sbin/gparted}
+  [exec] (Terminal) {/usr/bin/xterm}
+  [separator]
+  [restart] (Restart GUI)
+  [reboot] (Reboot System)
+  [exit] (Shutdown) {/sbin/poweroff}
+[end]
+FLUX_MENU"
+
+for fdir in "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/root/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"; do
+    $SUDO cp -f "$ROOTFS_REC/etc/X11/fluxbox/fluxbox-menu" "$fdir/menu"
+    $SUDO bash -c "cat << 'FLUX_INIT' > '$fdir/init'
+session.screen0.toolbar.visible: false
+session.menuFile: $fdir/menu
+session.styleFile: /usr/share/fluxbox/styles/Clean
+FLUX_INIT"
+done
+
 # Configure passwordless sudo and X11 display preservation for live user
 $SUDO mkdir -p "$ROOTFS_REC/etc/sudoers.d"
 $SUDO bash -c "cat << 'SUDOERS' > '$ROOTFS_REC/etc/sudoers.d/live'
@@ -416,13 +466,9 @@ Defaults:live env_keep += \"DISPLAY XAUTHORITY WAYLAND_DISPLAY\"
 SUDOERS"
 $SUDO chmod 0440 "$ROOTFS_REC/etc/sudoers.d/live"
 
-# Auto-start X on tty1 login cleanly without nocursor
+# Clean bash_profile without auto-exec startx to avoid subshell exit loops
 $SUDO bash -c "cat << 'PROFILE' > '$ROOTFS_REC/root/.bash_profile'
-if [ -z \"\$DISPLAY\" ] && [ \"\$(tty)\" = \"/dev/tty1\" ]; then
-    /usr/bin/plymouth --quit 2>/dev/null || true
-    /usr/bin/pkill -9 plymouthd 2>/dev/null || true
-    exec /usr/bin/startx /etc/X11/xinit/xinitrc.recovery -- :0 vt1 -nolisten tcp
-fi
+# Pulsar OS Recovery Environment
 PROFILE"
 
 $SUDO cp -f "$ROOTFS_REC/root/.bash_profile" "$ROOTFS_REC/home/live/.bash_profile"
