@@ -15,6 +15,7 @@ PULSAR_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$SCRIPT_DIR/configs"
 BUILD_DIR="${SCRIPT_DIR}/build/recovery"
 OUTPUT_DIR="${SCRIPT_DIR}/build/recovery-out"
+SQUASHFS_REC="$OUTPUT_DIR/filesystem.squashfs"
 
 DEBIAN_VERSION="trixie"
 ARCH="amd64"
@@ -752,6 +753,18 @@ LIVECONF"
 # PHASE 4: Generate initramfs, kernel, and SquashFS
 # ==============================================================================
 
+# Write /etc/fstab del rootfs de recovery ANTES de update-initramfs para que
+# mkinitramfs lo incruste en el initramfs. Inocuidad + seguro para live-boot:
+# en el arranque real check_dev usa mountpoint explícito (no lee fstab), pero en
+# rutas degradadas (mount por etiqueta sin mountpoint) /etc/fstab permite montar
+# el medio de recovery por LABEL en vez de fallar con "can't find in /etc/fstab".
+$SUDO bash -c "cat << 'FSTAB' > '$ROOTFS_REC/etc/fstab'
+# fstab for PULSAR recovery initramfs/live (escrito por build-recovery-image.sh)
+LABEL=PULSAR_RECOVERY  /media/pulsar-recovery  ext4    ro,noatime,nofail  0 0
+LABEL=PULSAR_OS        /media/pulsar-os        btrfs   ro,noatime,nofail  0 0
+LABEL=PULSAR_ISO       /media/pulsar-iso       iso9660 ro,noatime,nofail  0 0
+FSTAB"
+
 # Mount virtual filesystems and generate robust live-boot initramfs
 $SUDO mount -t proc proc "$ROOTFS_REC/proc" 2>/dev/null || true
 $SUDO mount -t sysfs sys "$ROOTFS_REC/sys" 2>/dev/null || true
@@ -772,8 +785,10 @@ unmount_tree "$ROOTFS_REC"
 
 # Extract recovery kernel and initramfs
 echo "📦 Extracting recovery kernel and initramfs..."
-REC_VMLINUZ=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "vmlinuz*" | head -n 1)
-REC_INITRD=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "initrd.img*" | head -n 1)
+# Selección determinista por versión (sort -V): find|head -n 1 era inestable y
+# podía tomar el kernel/initrd equivocados.
+REC_VMLINUZ=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "vmlinuz-*" | sort -V | tail -n 1)
+REC_INITRD=$($SUDO find "$ROOTFS_REC/boot" -maxdepth 1 -name "initrd.img-*" | sort -V | tail -n 1)
 
 if [ -z "$REC_VMLINUZ" ] || [ -z "$REC_INITRD" ]; then
     echo "❌ Error: Could not locate vmlinuz or initrd.img in $ROOTFS_REC/boot"
@@ -822,7 +837,7 @@ rec_hash_inputs > "$REC_STAMP_FILE" 2>/dev/null || true
 echo "💾 Entradas de recovery registradas (stamp: $REC_STAMP_FILE)."
 echo ""
 echo "📋 Boot params expected by live-boot:"
-echo "   boot=live live-media=any live-media-path=live"
+echo "   boot=live live-media-path=live   # sin live-media=any: live-boot escanea los bloques"
 echo "   → SquashFS must be at: <partition>/live/filesystem.squashfs"
 echo ""
 
