@@ -57,6 +57,7 @@ BRANCH="stable"
 WITH_NVIDIA=false
 DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
 MINIMAL=false       # Minimal ISO: trimmed package list for ~2-3GB target
+SQUASHFS_LEVEL="${SQUASHFS_LEVEL:-15}"  # Nivel zstd para squashfs (15=release, 12=test rápido)
 PULSAR_VERSION=""
 
 while [[ $# -gt 0 ]]; do
@@ -470,9 +471,8 @@ fi
 # CPU & Resource Optimization for Parallel and Safe Builds
 TOTAL_CORES=$(nproc 2>/dev/null || echo 4)
 if [ -z "$BUILD_PROCESSORS" ]; then
-    if [ "$TOTAL_CORES" -ge 8 ]; then
-        BUILD_PROCESSORS=$(( TOTAL_CORES / 2 ))
-    elif [ "$TOTAL_CORES" -ge 4 ]; then
+    # Dejar siempre 1 núcleo libre para que el escritorio responda (política del usuario)
+    if [ "$TOTAL_CORES" -ge 2 ]; then
         BUILD_PROCESSORS=$(( TOTAL_CORES - 1 ))
     else
         BUILD_PROCESSORS=$TOTAL_CORES
@@ -2144,7 +2144,7 @@ unmount_tree "$ROOTFS_TARGET"
             (
                 flock -x 200
                 echo "📦 Building / Updating dedicated Debian Recovery environment..."
-                $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" $([ "$USE_LOCAL_PKGS" = "true" ] && echo "--local-pkgs") || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+                $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" SQUASHFS_LEVEL="$SQUASHFS_LEVEL" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" $([ "$USE_LOCAL_PKGS" = "true" ] && echo "--local-pkgs") || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
             ) 200>"$BUILD_DIR/.recovery.lock"
         fi
     fi
@@ -2402,7 +2402,8 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     fi
     $SUDO env "PATH=/usr/bin:/usr/sbin:/sbin:/bin:$PATH" mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
-        -comp zstd -Xcompression-level 19 \
+        -comp zstd -Xcompression-level "$SQUASHFS_LEVEL" \
+        -b 1048576 \
         -processors "$BUILD_PROCESSORS" \
         -e proc/* \
         -e sys/* \

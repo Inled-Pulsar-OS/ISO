@@ -21,6 +21,7 @@ ARCH="amd64"
 MIRROR="http://deb.debian.org/debian"
 BRANCH="${BRANCH:-stable}"
 USE_LOCAL_PKGS="${USE_LOCAL_PKGS:-false}"
+SQUASHFS_LEVEL="${SQUASHFS_LEVEL:-15}"   # Nivel zstd para el squashfs de recovery (15=release, 12=test rápido)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -85,6 +86,42 @@ PACKAGE_LIST_FILE="$CONFIG_DIR/recovery-debian.list"
 if [ ! -f "$PACKAGE_LIST_FILE" ]; then
     echo "❌ Error: $PACKAGE_LIST_FILE not found!"
     exit 1
+fi
+
+# ==============================================================================
+# STAMP / REBUILD-SKIP: reutilizar el squashfs de recovery si ninguna de las
+# entradas que determinan su contenido ha cambiado (ahorra ~20 min por rebuild).
+# ==============================================================================
+REC_STAMP_FILE="$BUILD_DIR/.recovery-inputs.stamp"
+
+# Resumen del estado de todas las entradas que afectan al squashfs resultante
+rec_hash_inputs() {
+    {
+        echo "branch=$BRANCH local=$USE_LOCAL_PKGS deb=$DEBIAN_VERSION"
+        echo "sqs=zstd:$SQUASHFS_LEVEL:block1048576"
+        sha256sum "$SCRIPT_DIR/build-recovery-image.sh" 2>/dev/null || true
+        sha256sum "$PACKAGE_LIST_FILE" 2>/dev/null || true
+        [ -f "$BASE_DIR/etc/pulsaros-recovery-base.list" ] && sha256sum "$BASE_DIR/etc/pulsaros-recovery-base.list" 2>/dev/null || true
+        for p in \
+            "$PULSAR_ROOT/PKG/pulsaros-recovery/usr" \
+            "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery" \
+            "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr" \
+            "$PULSAR_ROOT/PKG/pulsar-boot-icons"; do
+            if [ -f "$p" ]; then
+                sha256sum "$p" 2>/dev/null || true
+            elif [ -d "$p" ]; then
+                find "$p" -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum 2>/dev/null || true
+            fi
+        done
+    } | sha256sum | cut -d' ' -f1
+}
+
+if [ -f "$SQUASHFS_REC" ] && [ -d "$BASE_DIR" ] && [ -f "$REC_STAMP_FILE" ]; then
+    if [ "$(cat "$REC_STAMP_FILE" 2>/dev/null)" = "$(rec_hash_inputs)" ]; then
+        echo "⏭️  Recovery inputs sin cambios — reutilizando SquashFS existente: $SQUASHFS_REC"
+        echo "    (recovery.py, paquetes y script sin cambios; stamp: $REC_STAMP_FILE)"
+        exit 0
+    fi
 fi
 
 # Optional: compile local Rust recovery assistant binary if in local development mode
@@ -753,11 +790,14 @@ $SUDO rm -rf "$ROOTFS_REC"/tmp/* "$ROOTFS_REC"/var/tmp/* 2>/dev/null || true
 echo "📦 Generating Debian Recovery SquashFS..."
 SQUASHFS_REC="$OUTPUT_DIR/filesystem.squashfs"
 $SUDO rm -f "$SQUASHFS_REC"
+# Dejar siempre 1 núcleo libre para que el escritorio responda
+REC_PROC=$(nproc 2>/dev/null || echo 1)
+[ "$REC_PROC" -gt 1 ] && REC_PROC=$((REC_PROC - 1))
 $SUDO mksquashfs "$ROOTFS_REC" "$SQUASHFS_REC" \
-    -comp xz \
+    -comp zstd \
     -b 1048576 \
-    -Xdict-size 100% \
-    -processors $(nproc) \
+    -Xcompression-level "$SQUASHFS_LEVEL" \
+    -processors "$REC_PROC" \
     -noappend \
     -e proc/* \
     -e sys/* \
@@ -776,6 +816,10 @@ if [ ! -f "$SQUASHFS_REC" ] || [ ! -s "$SQUASHFS_REC" ]; then
 fi
 SQUASHFS_SIZE=$(du -h "$SQUASHFS_REC" | cut -f1)
 echo "✅ Recovery SquashFS verified: $SQUASHFS_REC ($SQUASHFS_SIZE)"
+
+# Guardar stamp de entradas actuales para saltar este paso en el próximo build
+rec_hash_inputs > "$REC_STAMP_FILE" 2>/dev/null || true
+echo "💾 Entradas de recovery registradas (stamp: $REC_STAMP_FILE)."
 echo ""
 echo "📋 Boot params expected by live-boot:"
 echo "   boot=live live-media=any live-media-path=live"
