@@ -1527,7 +1527,8 @@ EOF
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsar-store \
-                pulsaros-hblock
+                pulsaros-hblock \
+                hblock
             apt-get install -y --allow-downgrades droidtux appinstall seafari 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
