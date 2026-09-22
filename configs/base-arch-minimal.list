@@ -51,6 +51,8 @@ wpa_supplicant
 wireless_tools
 iw
 wireless-regdb
+# Avahi/mDNS: descubrimiento de dispositivos en red local (GSConnect/KDE Connect)
+avahi
 bluez
 bluez-utils
 rfkill
@@ -90,6 +92,12 @@ pipewire-alsa
 wireplumber
 pavucontrol
 alsa-utils
+# Firmware de sonido — crítico en portátiles modernos con audio Intel SOF
+# (muchos HP con procesadores Tiger Lake/Alder Lake se quedan sin sonido en el
+# sistema instalado si falta). El bootsound (aplay en bruto) funciona porque
+# no pasa por PipeWire; el audio de sesión lo necesita.
+sof-firmware
+alsa-firmware
 
 # ── Text Editors ─────────────────────────────────────────────────────────────
 nano
@@ -129,13 +137,16 @@ intel-media-driver
 intel-ucode
 amd-ucode
 
-# ── Firmware & Broadcom Wi-Fi Drivers (MacBook & PC) ─────────────────────────
+# ── Firmware & Broadcom/Realtek Wi-Fi Drivers (MacBook, HP & PC) ─────────────
 # NOTE: linux-firmware meta-package is ~1GB. Use targeted sub-packages.
 # GPU firmware is loaded from initramfs via the kms hook.
 linux-firmware-amdgpu
 linux-firmware-intel
 linux-firmware-nvidia
 linux-firmware-broadcom
+# Realtek WiFi (rtw88/rtw89/rtlwifi) — chips muy comunes en portátiles HP.
+# Los drivers están en el kernel stock; solo falta el firmware.
+linux-firmware-realtek
 broadcom-wl-dkms
 dkms
 linux-headers
@@ -168,6 +179,8 @@ tesseract
 # ── GNOME Apps (essential only) ──────────────────────────────────────────────
 gnome-calculator
 gnome-calendar
+# Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
+python-nautilus
 
 # ── Arch ISO live support ────────────────────────────────────────────────────
 # CRÍTICO: archiso + mkinitcpio-archiso proveen los hooks de arranque live

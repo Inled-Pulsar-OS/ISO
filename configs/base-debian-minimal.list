@@ -81,6 +81,8 @@ flatpak
 gnome-shell-extensions
 gnome-shell-extension-appindicator
 gnome-shell-extension-gsconnect
+# Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
+python3-nautilus
 gir1.2-ayatanaappindicator3-0.1
 libayatana-appindicator3-1
 
@@ -140,6 +142,8 @@ wpasupplicant
 wireless-tools
 iw
 wireless-regdb
+# Avahi/mDNS: descubrimiento de dispositivos en red local (GSConnect/KDE Connect)
+avahi-daemon
 gvfs
 gvfs-backends
 bluez
@@ -187,6 +191,9 @@ firmware-linux-free
 firmware-misc-nonfree
 firmware-amd-graphics
 firmware-intel-sound
+# Audio SOF para portátiles modernos (Tiger Lake/Alder Lake — muchos HP se
+# quedan sin sonido en el sistema instalado si falta este firmware)
+firmware-sof-signed
 firmware-iwlwifi
 firmware-realtek
 firmware-atheros

@@ -32,6 +32,8 @@ qml6-module-org-kde-kquickcontrolsaddons
 qml6-module-org-kde-iconthemes
 libqt6svg6
 qt6-svg-plugins
+# Avahi/mDNS: descubrimiento de dispositivos en red local (GSConnect/KDE Connect)
+avahi-daemon
 network-manager
 gnome-terminal
 xwayland
@@ -69,6 +71,8 @@ flatpak
 gnome-shell-extensions
 gnome-shell-extension-appindicator
 gnome-shell-extension-gsconnect
+# Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
+python3-nautilus
 # Dependencias Fildem HUD
 python3-gi
 python3-dbus
@@ -180,6 +184,9 @@ firmware-realtek
 firmware-atheros
 firmware-brcm80211
 firmware-amd-graphics
+# Audio SOF para portátiles modernos (Tiger Lake/Alder Lake — muchos HP se
+# quedan sin sonido en el sistema instalado si falta este firmware)
+firmware-sof-signed
 # Controladores X.Org para AMD, ATI e Intel (NVIDIA vía nvidia-driver con --nvidia;
 # nouveau lo cubre modesetting, y evita conflictos con nvidia-driver en build --nvidia)
 xserver-xorg-video-amdgpu
