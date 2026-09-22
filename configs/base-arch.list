@@ -191,3 +191,5 @@ restic
 rclone
 cifs-utils
 smbclient
+# HBlock (bloqueo de anuncios/rastreadores vía /etc/hosts)
+hblock
