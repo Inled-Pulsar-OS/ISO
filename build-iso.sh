@@ -2469,13 +2469,9 @@ fi
 # Recovery kernel (Debian live-boot) boot parameters.
 #
 # fsck.mode=skip evita que fsck bloquee/cielgue el arranque sobre discos
-# virtio (QEMU/GNOME Boxes). Las variantes ACPI trabajan sobre los cuelgues
-# "ACPI BIOS Error (bug)"/"ACPI Error" que se ven bajo firmware OVMF/QEMU y
-# tablas ACPI problemáticas del hardware real.
+# virtio (QEMU/GNOME Boxes).
 # ==============================================================================
 RECOVERY_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
-RECOVERY_COMPAT_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
-RECOVERY_MINIMAL_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
 
 resolve_boot_icons() {
     if [ -d "$ROOTFS_TARGET/usr/share/pulsar-boot-icons" ]; then
@@ -2618,14 +2614,6 @@ if [ -f /recovery/vmlinuz-recovery ]; then
         linux /recovery/vmlinuz-recovery $RECOVERY_PARAMS
         initrd /recovery/initramfs-recovery.img
     }
-    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery $RECOVERY_COMPAT_PARAMS
-        initrd /recovery/initramfs-recovery.img
-    }
-    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery $RECOVERY_MINIMAL_PARAMS
-        initrd /recovery/initramfs-recovery.img
-    }
 fi
 EOF
 
@@ -2685,14 +2673,6 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
 if [ -f /recovery/vmlinuz-recovery ]; then
     menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
         linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
         initrd /recovery/initramfs-recovery.img
     }
 fi
@@ -2820,20 +2800,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
     initrd /EFI/BOOT/initramfs-recovery.img
     options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
 }
-
-menuentry "Pulsar OS Recovery (ACPI Compat)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
-    loader /EFI/BOOT/vmlinuz-recovery
-    initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
-}
-
-menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" {
-    icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_recovery.png
-    loader /EFI/BOOT/vmlinuz-recovery
-    initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
-}
 EOF
 
     # Minimal refind.conf for the ISO root (no showtools, no theme — avoids duplicate tool buttons
@@ -2874,18 +2840,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
     loader /EFI/BOOT/vmlinuz-recovery
     initrd /EFI/BOOT/initramfs-recovery.img
     options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
-}
-
-menuentry "Pulsar OS Recovery (ACPI Compat)" {
-    loader /EFI/BOOT/vmlinuz-recovery
-    initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
-}
-
-menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" {
-    loader /EFI/BOOT/vmlinuz-recovery
-    initrd /EFI/BOOT/initramfs-recovery.img
-    options "boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --"
 }
 EOF
 
@@ -3086,14 +3040,6 @@ menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-le
 if [ -f /recovery/vmlinuz-recovery ]; then
     menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
         linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-    menuentry "Pulsar OS Recovery (ACPI Compat)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-    menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
         initrd /recovery/initramfs-recovery.img
     }
 fi
