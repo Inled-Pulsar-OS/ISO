@@ -319,16 +319,16 @@ jobs:
               for f in dist/*.iso dist/*.squashfs; do
                 [ -f "$f" ] || continue
                 name=$(basename "$f")
-                printf -- '- [%s](https://downloads.sourceforge.net/project/%s/%s)\n' "$name" "$SF_PROJECT" "$name"
+                printf '%s\n' "- [$name](https://downloads.sourceforge.net/project/$SF_PROJECT/$name)"
               done
             } >> body.md
           fi
           {
             printf '\n### 📡 Internet Recovery & Download Endpoints\n\n'
-            printf '- **Downloads & Web Portal**: [https://downloads-os.inled.es](https://downloads-os.inled.es)\n'
-            printf '- **Recovery Manifest**: [https://downloads-os.inled.es/releases.json](https://downloads-os.inled.es/releases.json)\n'
-            printf '- **ISO Catalog**: [https://downloads-os.inled.es/isos.json](https://downloads-os.inled.es/isos.json)\n\n'
-            printf '\n### Verification (SHA-256)\n\n```\n'
+            printf '%s\n' "- **Downloads & Web Portal**: [https://downloads-os.inled.es](https://downloads-os.inled.es)"
+            printf '%s\n' "- **Recovery Manifest**: [https://downloads-os.inled.es/releases.json](https://downloads-os.inled.es/releases.json)"
+            printf '%s\n' "- **ISO Catalog**: [https://downloads-os.inled.es/isos.json](https://downloads-os.inled.es/isos.json)"
+            printf '\n\n### Verification (SHA-256)\n\n```\n'
             cat dist/SHA256SUMS
             printf '```\n'
           } >> body.md
