@@ -96,6 +96,9 @@ python3-cairo
 # Bootloader y Disco
 grub-pc
 grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed
+mokutil
 efibootmgr
 os-prober
 # Aplicaciones Estándar

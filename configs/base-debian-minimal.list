@@ -110,6 +110,9 @@ python3-cairo
 # ── Bootloader ───────────────────────────────────────────────────────────────
 grub-pc
 grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed
+mokutil
 efibootmgr
 os-prober
 

@@ -619,7 +619,10 @@ build_cloudflare_warp() {
     local dest_dir="$1"
     local warp_tmp="/tmp/pulsaros-warp-bin-$$"
     local warp_log
-    mkdir -p "$dest_dir"
+    $SUDO mkdir -p "$dest_dir"
+    if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
+        $SUDO chown -R "$ORIGINAL_USER":"$ORIGINAL_USER" "$dest_dir" 2>/dev/null || true
+    fi
 
     if ls "$dest_dir"/cloudflare-warp-bin-*.pkg.tar.zst >/dev/null 2>&1; then
         echo "✅ cloudflare-warp-bin already built in $dest_dir"
@@ -631,6 +634,7 @@ build_cloudflare_warp() {
     fi
 
     warp_log="$dest_dir/cloudflare-warp-bin-build.log"
+    $SUDO rm -f "$warp_log"
     $SUDO rm -rf "$warp_tmp"
     mkdir -p "$warp_tmp"
     $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$warp_tmp"
@@ -1379,7 +1383,7 @@ EOF
             else
                 echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
             fi
-            (cd "$pkg_dir_source" && eval "$pkg_cmd")
+            (cd "$pkg_dir_source" && DEBIAN_CHROOT="$ROOTFS_TARGET" ROOTFS_TARGET="$ROOTFS_TARGET" ROOTFS_BASE="$ROOTFS_BASE" eval "$pkg_cmd")
         else
             echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing debs."
         fi
@@ -2454,15 +2458,15 @@ else
 fi
 
 if [ "$DISTRO" = "arch" ]; then
-    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
-    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
-    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --"
-    LEGACY_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --"
+    KERNEL_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3"
+    RAM_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3"
+    DEBUG_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug"
+    LEGACY_PARAMS="archisobasedir=live archisolabel=PULSAR_ISO cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3"
 else
-    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    RAM_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
-    DEBUG_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --"
-    LEGACY_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
+    KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt"
+    RAM_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt"
+    DEBUG_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt"
+    LEGACY_PARAMS="boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt"
 fi
 
 # ==============================================================================
@@ -2471,7 +2475,7 @@ fi
 # fsck.mode=skip evita que fsck bloquee/cielgue el arranque sobre discos
 # virtio (QEMU/GNOME Boxes).
 # ==============================================================================
-RECOVERY_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --"
+RECOVERY_PARAMS="boot=live live-media-path=/recovery components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt"
 
 resolve_boot_icons() {
     if [ -d "$ROOTFS_TARGET/usr/share/pulsar-boot-icons" ]; then
@@ -2497,6 +2501,116 @@ resolve_boot_icons() {
     fi
     $SUDO rm -rf "$icons_tmp_repo"
     echo "$icons_tmp_dest"
+}
+
+# Helper to generate loopback.cfg with full Ventoy & ISO loopback support
+generate_loopback_cfg() {
+    local target_cfg="$1"
+    $SUDO mkdir -p "$(dirname "$target_cfg")"
+
+    cat <<'EOF_LOOPBACK_HEAD' | $SUDO tee "$target_cfg" > /dev/null
+# Standard FreeDesktop loopback.cfg for Ventoy and direct ISO loop booting
+if [ -z "$iso_path" ]; then
+    if [ -n "$vtoy_iso" ]; then
+        set iso_path="$vtoy_iso"
+    elif [ -n "$vtoy_path" ]; then
+        set iso_path="$vtoy_path"
+    elif [ -n "$isofile" ]; then
+        set iso_path="$isofile"
+    fi
+fi
+
+if [ -n "$iso_path" ]; then
+    search --no-floppy --set=imgdev --file "$iso_path"
+    probe -u $imgdev --set=imgdevuuid
+fi
+
+set default="0"
+set timeout=10
+
+insmod linux
+insmod linux16
+insmod test
+insmod search
+insmod search_fs_file
+insmod search_label
+insmod all_video
+insmod font
+insmod gfxterm
+insmod png
+insmod jpeg
+insmod gfxmenu
+
+if loadfont /boot/grub/fonts/unicode.pf2; then
+    set gfxmode=auto
+    keep_gfxmode=keep
+    terminal_output gfxterm
+fi
+
+if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
+    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
+    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
+fi
+EOF_LOOPBACK_HEAD
+
+    if [ "$DISTRO" = "arch" ]; then
+        cat <<'EOF_ARCH' | $SUDO tee -a "$target_cfg" > /dev/null
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$iso_path cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$iso_path cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$iso_path cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$iso_path cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
+    initrd /live/initrd
+}
+EOF_ARCH
+    else
+        cat <<'EOF_DEBIAN' | $SUDO tee -a "$target_cfg" > /dev/null
+menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz boot=live findiso=$iso_path live-media-path=/live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz boot=live findiso=$iso_path live-media-path=/live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz boot=live findiso=$iso_path live-media-path=/live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes toram plymouth.ignore-serial-consoles loglevel=7 rd.debug noprompt --
+    initrd /live/initrd
+}
+
+menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
+    linux /live/vmlinuz boot=live findiso=$iso_path live-media-path=/live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --
+    initrd /live/initrd
+}
+EOF_DEBIAN
+    fi
+
+    if [ -f "$ISO_STAGING/recovery/vmlinuz-recovery" ]; then
+        cat <<'EOF_RECOVERY' | $SUDO tee -a "$target_cfg" > /dev/null
+menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
+    linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$iso_path components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+    initrd /recovery/initramfs-recovery.img
+}
+EOF_RECOVERY
+    fi
 }
 
 if [ "$BOOTLOADER" = "grub" ]; then
@@ -2564,9 +2678,39 @@ if [ "$BOOTLOADER" = "grub" ]; then
     echo "⚙️ Configurando el menú de arranque GRUB de la ISO... / Configuring GRUB boot menu..."
 
     cat <<EOF | $SUDO tee "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
+# Ventoy and ISO loopback auto-detection
+if [ -z "\${iso_path}" ] && [ -n "\${vtoy_iso}" ]; then
+    set iso_path="\${vtoy_iso}"
+fi
+if [ -z "\${iso_path}" ] && [ -n "\${vtoy_path}" ]; then
+    set iso_path="\${vtoy_path}"
+fi
+if [ -z "\${iso_path}" ] && [ -n "\${isofile}" ]; then
+    set iso_path="\${isofile}"
+fi
+
+set vtoy_loop_param=""
+if [ -n "\${iso_path}" ]; then
+    if [ "$DISTRO" = "arch" ]; then
+        if [ -z "\${imgdevuuid}" ]; then
+            search --no-floppy --set=imgdev --file "\${iso_path}"
+            probe -u \$imgdev --set=imgdevuuid
+        fi
+        set vtoy_loop_param="img_dev=UUID=\${imgdevuuid} img_loop=\${iso_path}"
+    else
+        set vtoy_loop_param="findiso=\${iso_path}"
+    fi
+fi
+
 set default="0"
 set timeout=10
 
+insmod linux
+insmod linux16
+insmod test
+insmod search
+insmod search_fs_file
+insmod search_label
 insmod all_video
 insmod font
 insmod gfxterm
@@ -2590,93 +2734,38 @@ if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
 fi
 
 menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz $RAM_PARAMS
+    linux /live/vmlinuz $RAM_PARAMS \${vtoy_loop_param} --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz $KERNEL_PARAMS
+    linux /live/vmlinuz $KERNEL_PARAMS \${vtoy_loop_param} --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz $DEBUG_PARAMS
+    linux /live/vmlinuz $DEBUG_PARAMS \${vtoy_loop_param} --
     initrd /live/initrd
 }
 
 menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz $LEGACY_PARAMS
+    linux /live/vmlinuz $LEGACY_PARAMS \${vtoy_loop_param} --
     initrd /live/initrd
 }
-
-if [ -f /recovery/vmlinuz-recovery ]; then
-    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery $RECOVERY_PARAMS
-        initrd /recovery/initramfs-recovery.img
-    }
-fi
 EOF
+
+    if [ -f "$ISO_STAGING/recovery/vmlinuz-recovery" ]; then
+        cat <<EOF | $SUDO tee -a "$ISO_STAGING/boot/grub/grub.cfg" > /dev/null
+menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
+    linux /recovery/vmlinuz-recovery $RECOVERY_PARAMS \${vtoy_loop_param} --
+    initrd /recovery/initramfs-recovery.img
+}
+EOF
+    fi
 
     # Create GRUB loopback configuration for Ventoy compatibility
     echo "⚙️ Creando el menú de arranque loopback.cfg para Ventoy... / Creating loopback.cfg for Ventoy..."
-    $SUDO mkdir -p "$ISO_STAGING/boot/grub"
-    cat <<'EOF' | $SUDO tee "$ISO_STAGING/boot/grub/loopback.cfg" > /dev/null
-# Search for the device containing the ISO file
-search --no-floppy --set=imgdev --file $isofile
-probe -u $imgdev --set=imgdevuuid
-
-set default="0"
-set timeout=10
-
-insmod all_video
-insmod font
-insmod gfxterm
-insmod png
-insmod jpeg
-insmod gfxmenu
-
-if loadfont /boot/grub/fonts/unicode.pf2; then
-    set gfxmode=auto
-    keep_gfxmode=keep
-    terminal_output gfxterm
-fi
-
-if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
-    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
-fi
-
-menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
-    initrd /live/initrd
-}
-
-if [ -f /recovery/vmlinuz-recovery ]; then
-    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-fi
-EOF
+    generate_loopback_cfg "$ISO_STAGING/boot/grub/loopback.cfg"
 
     VER_SUFFIX=""
     if [ -n "$PULSAR_VERSION" ]; then
@@ -2688,12 +2777,166 @@ EOF
     else
         ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}.iso"
     fi
-    # Create a temporary xorriso wrapper to force -iso-level 3
-    # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
-    # We also set the volume label to PULSAR_ISO so the archiso hook can locate it,
-    # and strip out Apple/HFS+/APM arguments to prevent label collision on physical USB drives.
-    WRAPPER_PATH="/tmp/xorriso-wrapper-${VARIANT_NAME}-${BOOTLOADER}-$$"
-    cat <<'EOF' > "$WRAPPER_PATH"
+    # Check for Microsoft/Vendor signed Secure Boot binaries (shim, signed grub, mokmanager)
+    SHIM_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/shim/shimx64.efi.signed" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/shimx64.efi.signed" \
+        "$ISO_DIR/assets/secureboot/shimx64.efi" \
+        "/usr/lib/shim/shimx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            SHIM_SIGNED="$p"
+            break
+        fi
+    done
+
+    GRUB_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
+        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
+        "$ISO_DIR/assets/secureboot/grubx64.efi" \
+        "/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            GRUB_SIGNED="$p"
+            break
+        fi
+    done
+
+    MM_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi.signed" \
+        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/mmx64.efi" \
+        "$ISO_DIR/assets/secureboot/mmx64.efi" \
+        "/usr/lib/shim/mmx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            MM_SIGNED="$p"
+            break
+        fi
+    done
+
+    if [ -n "$SHIM_SIGNED" ] && [ -n "$GRUB_SIGNED" ]; then
+        echo "🔒 Secure Boot con claves de Microsoft detectado y habilitado / Microsoft-signed Secure Boot enabled."
+        echo "   -> Shim: $SHIM_SIGNED"
+        echo "   -> GRUB: $GRUB_SIGNED"
+        [ -n "$MM_SIGNED" ] && echo "   -> MokManager: $MM_SIGNED"
+
+        # Staging EFI files
+        $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT"
+        $SUDO cp -f "$SHIM_SIGNED" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
+        $SUDO cp -f "$SHIM_SIGNED" "$ISO_STAGING/EFI/BOOT/BOOTX64.EFI"
+        $SUDO cp -f "$GRUB_SIGNED" "$ISO_STAGING/EFI/BOOT/grubx64.efi"
+        if [ -n "$MM_SIGNED" ]; then
+            $SUDO cp -f "$MM_SIGNED" "$ISO_STAGING/EFI/BOOT/mmx64.efi"
+        fi
+
+        # Forwarding grub.cfg in EFI/BOOT for EFI firmware
+        cat <<'EOF_EFICFG' | $SUDO tee "$ISO_STAGING/EFI/BOOT/grub.cfg" > /dev/null
+if [ -e ($root)/boot/grub/grub.cfg ]; then
+    set prefix=($root)/boot/grub
+    source $prefix/grub.cfg
+elif [ -e /boot/grub/grub.cfg ]; then
+    set prefix=/boot/grub
+    source /boot/grub/grub.cfg
+else
+    search --no-floppy --set=root --label PULSAR_ISO
+    if [ ! -f ($root)/boot/grub/grub.cfg ]; then
+        search --no-floppy --set=root --file /live/vmlinuz
+    fi
+    set prefix=($root)/boot/grub
+    source $prefix/grub.cfg
+fi
+EOF_EFICFG
+
+        # Create boot/efi.img (FAT ESP image) containing the EFI bootloader
+        $SUDO mkdir -p "$ISO_STAGING/boot"
+        EFI_IMG="$ISO_STAGING/boot/efi.img"
+        $SUDO rm -f "$EFI_IMG"
+        $SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=16 2>/dev/null
+        $SUDO mkfs.vfat -F 12 -n "PULSAR_EFI" "$EFI_IMG" >/dev/null
+        $SUDO mmd -i "$EFI_IMG" ::/EFI ::/EFI/BOOT
+        $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT"/bootx64.efi ::/EFI/BOOT/bootx64.efi
+        $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT"/grubx64.efi ::/EFI/BOOT/grubx64.efi
+        if [ -f "$ISO_STAGING/EFI/BOOT/mmx64.efi" ]; then
+            $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT"/mmx64.efi ::/EFI/BOOT/mmx64.efi
+        fi
+        $SUDO mcopy -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT"/grub.cfg ::/EFI/BOOT/grub.cfg
+
+        # Prepare BIOS El Torito boot image and copy i386-pc GRUB modules
+        $SUDO mkdir -p "$ISO_STAGING/boot/grub/i386-pc"
+        if [ -d "$ROOTFS_TARGET/usr/lib/grub/i386-pc" ]; then
+            $SUDO cp -r "$ROOTFS_TARGET/usr/lib/grub/i386-pc"/* "$ISO_STAGING/boot/grub/i386-pc/" 2>/dev/null || true
+        elif [ -d "/usr/lib/grub/i386-pc" ]; then
+            $SUDO cp -r /usr/lib/grub/i386-pc/* "$ISO_STAGING/boot/grub/i386-pc/" 2>/dev/null || true
+        fi
+        if [ -d "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi" ]; then
+            $SUDO mkdir -p "$ISO_STAGING/boot/grub/x86_64-efi"
+            $SUDO cp -r "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi"/* "$ISO_STAGING/boot/grub/x86_64-efi/" 2>/dev/null || true
+        elif [ -d "/usr/lib/grub/x86_64-efi" ]; then
+            $SUDO mkdir -p "$ISO_STAGING/boot/grub/x86_64-efi"
+            $SUDO cp -r /usr/lib/grub/x86_64-efi/* "$ISO_STAGING/boot/grub/x86_64-efi/" 2>/dev/null || true
+        fi
+
+        ELTORITO_IMG="$ISO_STAGING/boot/grub/i386-pc/eltorito.img"
+        if command -v grub-mkimage >/dev/null 2>&1 && [ -d "/usr/lib/grub/i386-pc" ]; then
+            $SUDO grub-mkimage -O i386-pc-eltorito -o "$ELTORITO_IMG" -p /boot/grub \
+                biosdisk iso9660 part_msdos part_gpt search search_fs_file search_fs_uuid search_label test fat ext2 normal linux linux16 all_video gfxterm font png gfxmenu gettext video echo test 2>/dev/null || true
+        fi
+
+        HYBRID_MBR=""
+        for mbr in \
+            "/usr/lib/grub/i386-pc/boot_hybrid.img" \
+            "/usr/lib/ISOLINUX/isohdpfx.bin" \
+            "/usr/lib/syslinux/mbr/isohdpfx.bin"; do
+            if [ -f "$mbr" ]; then
+                HYBRID_MBR="$mbr"
+                break
+            fi
+        done
+
+        XORRISO_ARGS=(
+            -as mkisofs
+            -iso-level 3
+            -o "$ISO_OUTPUT"
+            -J -R -V "PULSAR_ISO"
+        )
+
+        if [ -n "$HYBRID_MBR" ]; then
+            XORRISO_ARGS+=(-isohybrid-mbr "$HYBRID_MBR")
+        fi
+
+        if [ -f "$ELTORITO_IMG" ]; then
+            XORRISO_ARGS+=(
+                -b "boot/grub/i386-pc/eltorito.img"
+                -c "boot/grub/boot.cat"
+                -boot-load-size 4
+                -boot-info-table
+                --grub2-boot-info
+                -no-emul-boot
+            )
+        fi
+
+        XORRISO_ARGS+=(
+            -eltorito-alt-boot
+            -e "boot/efi.img"
+            -no-emul-boot
+            -isohybrid-gpt-basdat
+            "$ISO_STAGING"
+        )
+
+        $SUDO rm -f "$ISO_OUTPUT"
+        echo "💿 Generando archivo ISO GRUB con Secure Boot en / Generating GRUB ISO with Secure Boot at: $ISO_OUTPUT..."
+        $SUDO xorriso "${XORRISO_ARGS[@]}"
+
+    else
+        echo "⚠️ Binarios firmados de Secure Boot no encontrados; usando fallback grub-mkrescue..."
+        # Create a temporary xorriso wrapper to force -iso-level 3
+        # which allows files larger than 4GB (ISO 9660 Level 3 multi-extents)
+        # We also set the volume label to PULSAR_ISO so the archiso hook can locate it,
+        # and strip out Apple/HFS+/APM arguments to prevent label collision on physical USB drives.
+        WRAPPER_PATH="/tmp/xorriso-wrapper-${VARIANT_NAME}-${BOOTLOADER}-$$"
+        cat <<'EOF' > "$WRAPPER_PATH"
 #!/bin/bash
 args=()
 i=1
@@ -2728,12 +2971,13 @@ done
 
 exec xorriso "${args[@]}" -iso-level 3 -volid PULSAR_ISO
 EOF
-    chmod +x "$WRAPPER_PATH"
+        chmod +x "$WRAPPER_PATH"
 
-    $SUDO rm -f "$ISO_OUTPUT"
-    echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
-    $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
-    rm -f "$WRAPPER_PATH"
+        $SUDO rm -f "$ISO_OUTPUT"
+        echo "💿 Generando archivo ISO GRUB en / Generating GRUB ISO file at: $ISO_OUTPUT..."
+        $SUDO grub-mkrescue --xorriso="$WRAPPER_PATH" -o "$ISO_OUTPUT" "$ISO_STAGING"
+        rm -f "$WRAPPER_PATH"
+    fi
 
 else
     # --------------------------------------------------------------------------
@@ -2770,28 +3014,28 @@ menuentry "Pulsar OS Live (RAM)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_toram.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$RAM_PARAMS"
+    options "$RAM_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (Normal)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$KERNEL_PARAMS"
+    options "$KERNEL_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_debug.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$DEBUG_PARAMS"
+    options "$DEBUG_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
     icon /EFI/BOOT/themes/rEFInd-Regular-Dark/icons/os_pulsaros_old.png
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$LEGACY_PARAMS"
+    options "$LEGACY_PARAMS --"
 }
 
 menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
@@ -2815,25 +3059,25 @@ default_selection "+,pulsaros,Pulsar OS Live (RAM)"
 menuentry "Pulsar OS Live (RAM)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$RAM_PARAMS"
+    options "$RAM_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (Normal)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$KERNEL_PARAMS"
+    options "$KERNEL_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (No Plymouth / Debug)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$DEBUG_PARAMS"
+    options "$DEBUG_PARAMS --"
 }
 
 menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" {
     loader /EFI/BOOT/vmlinuz
     initrd /EFI/BOOT/initrd
-    options "$LEGACY_PARAMS"
+    options "$LEGACY_PARAMS --"
 }
 
 menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" {
@@ -2986,64 +3230,8 @@ EOF
 
     # Create GRUB loopback configuration for Ventoy compatibility
     echo "⚙️ Creando el menú de arranque loopback.cfg para Ventoy... / Creating loopback.cfg for Ventoy..."
-    $SUDO mkdir -p "$ISO_STAGING/boot/grub"
-    cat <<'EOF' | $SUDO tee "$ISO_STAGING/boot/grub/loopback.cfg" > /dev/null
-# Search for the device containing the ISO file
-search --no-floppy --set=imgdev --file $isofile
-probe -u $imgdev --set=imgdevuuid
+    generate_loopback_cfg "$ISO_STAGING/boot/grub/loopback.cfg"
 
-set default="0"
-set timeout=10
-
-insmod all_video
-insmod font
-insmod gfxterm
-insmod png
-insmod jpeg
-insmod gfxmenu
-
-if loadfont /boot/grub/fonts/unicode.pf2; then
-    set gfxmode=auto
-    keep_gfxmode=keep
-    terminal_output gfxterm
-fi
-
-if [ -f /boot/grub/themes/Particle-circle-window/theme.txt ]; then
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-12.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-14.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-16.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/terminus-18.pf2
-    loadfont /boot/grub/themes/Particle-circle-window/unifont-16.pf2
-    set theme=/boot/grub/themes/Particle-circle-window/theme.txt
-fi
-
-menuentry "Pulsar OS Live (RAM)" --class pulsaros-ram --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.use-simpledrm=0 quiet splash loglevel=3 --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (Normal)" --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (No Plymouth / Debug)" --class pulsaros-debug --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 radeon.modeset=1 nvme_load=yes copytoram=y plymouth.ignore-serial-consoles loglevel=7 rd.debug --
-    initrd /live/initrd
-}
-
-menuentry "Pulsar OS Live (Legacy Hardware / GPU nomodeset)" --class pulsaros-legacy --class pulsaros --class gnu-linux --class os {
-    linux /live/vmlinuz archisobasedir=live archisolabel=PULSAR_ISO img_dev=UUID=$imgdevuuid img_loop=$isofile cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --
-    initrd /live/initrd
-}
-
-if [ -f /recovery/vmlinuz-recovery ]; then
-    menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class pulsaros-recovery --class recovery --class os {
-        linux /recovery/vmlinuz-recovery boot=live live-media-path=/recovery findiso=$isofile components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-        initrd /recovery/initramfs-recovery.img
-    }
-fi
-EOF
 
     VER_SUFFIX=""
     if [ -n "$PULSAR_VERSION" ]; then
