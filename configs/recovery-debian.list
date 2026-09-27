@@ -54,7 +54,7 @@ smbclient
 # Time Machine (Btrfs + Restic) Backup & Recovery
 restic
 
-# Minimal X11 & Fluxbox
+# Minimal X11 & Openbox (Pulsar OS RecoveryAssistant desktop shell)
 xserver-xorg-core
 xserver-xorg-legacy
 xserver-xorg-video-all
@@ -63,8 +63,9 @@ xserver-xorg-video-vesa
 xserver-xorg-video-qxl
 xserver-xorg-input-all
 xinit
+dbus-x11
 x11-xserver-utils
-fluxbox
+openbox
 xterm
 feh
 

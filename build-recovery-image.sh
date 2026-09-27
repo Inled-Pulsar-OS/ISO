@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: build-recovery-image.sh
-# Purpose: Builds a dedicated, lightweight Debian + Fluxbox Recovery Environment
+# Purpose: Builds a dedicated, lightweight Debian + Openbox Recovery Environment
 #          featuring the Rust-based Pulsar OS Recovery Assistant.
+#
+#          The recovery desktop is ALWAYS Openbox + pulsar-recovery-assistant.
+#          No GNOME/display-manager may ever start in this environment.
 #
 #          Uses a cached clean Debian base (base-recovery) and clones it fresh
 #          every build, so configuration changes always take effect.
@@ -50,7 +53,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "======================================================================="
-echo "🛠️  BUILDING DEDICATED PULSAR OS RECOVERY ENVIRONMENT (DEBIAN + FLUXBOX)"
+echo "🛠️  BUILDING DEDICATED PULSAR OS RECOVERY ENVIRONMENT (DEBIAN + OPENBOX)"
 echo "======================================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -279,7 +282,7 @@ echo "✅ Fresh clone ready at $ROOTFS_REC"
 # PHASE 3: Configure Recovery OS inside the fresh clone
 # ==============================================================================
 
-echo "⚙️ Configuring Recovery Environment (live user, autologin, Fluxbox, Rust assistant)..."
+echo "⚙️ Configuring Recovery Environment (live user, autologin, Openbox, Rust assistant)..."
 
 # Mount virtual filesystems and configure DNS for package installation
 $SUDO mount -t proc proc "$ROOTFS_REC/proc" 2>/dev/null || true
@@ -381,10 +384,35 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
     chmod 0440 /etc/sudoers.d/99-live-user
 "
 
+# ==============================================================================
+# Recovery desktop MUST be Openbox + pulsar-recovery-assistant (never GNOME)
+# ==============================================================================
+# Defensive purge: if a cached base ever carries a desktop stack, remove it so the
+# recovery environment can only ever boot as Openbox + Recovery Assistant.
+echo "🧹 Purging any leftover desktop stack (GNOME/display managers) from recovery rootfs..."
+$SUDO chroot "$ROOTFS_REC" /bin/bash -c "
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get purge -y gdm3 gdm gnome-shell gnome-core gnome-session \
+        lightdm sddm x-display-manager metacity mutter fluxbox 2>/dev/null || true
+    apt-get autoremove -y 2>/dev/null || true
+    apt-get clean
+" || true
+$SUDO rm -f "$ROOTFS_REC/usr/bin/gnome-session" "$ROOTFS_REC/usr/bin/startfluxbox" 2>/dev/null || true
+
+if [ ! -x "$ROOTFS_REC/usr/bin/openbox" ]; then
+    echo "❌ Error: /usr/bin/openbox missing in recovery rootfs."
+    echo "    'openbox' must be present in configs/recovery-debian.list"
+    exit 1
+fi
+if [ ! -x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant" ]; then
+    echo "❌ Error: /usr/bin/pulsar-recovery-assistant missing in recovery rootfs."
+    exit 1
+fi
+
 # Configure dedicated systemd graphical service for recovery (bypasses agetty/PAM login loop completely)
 $SUDO bash -c "cat << 'GUISVC' > '$ROOTFS_REC/etc/systemd/system/pulsar-recovery-gui.service'
 [Unit]
-Description=Pulsar OS Recovery GUI Assistant
+Description=Pulsar OS Recovery GUI (Openbox + Pulsar Recovery Assistant)
 After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=systemd-user-sessions.service
 Conflicts=getty@tty1.service
@@ -399,6 +427,8 @@ Environment=LOGNAME=root
 Environment=DISPLAY=:0
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=GTK_THEME=MacTahoe-Dark
+Environment=GDK_BACKEND=x11
+Environment=NO_AT_BRIDGE=1
 Environment=XCURSOR_THEME=MacTahoe-dark
 Environment=XCURSOR_SIZE=24
 TTYPath=/dev/tty1
@@ -417,11 +447,37 @@ RestartSec=2
 WantedBy=graphical.target
 GUISVC"
 
+# Enable the GUI service DETERMINISTICALLY.
+# `systemctl enable` inside the chroot silently fails (no running systemd/dbus),
+# which used to ship an image with NO X at all (black screen). Creating the
+# wants symlinks by hand guarantees the desktop really starts.
+$SUDO mkdir -p "$ROOTFS_REC/etc/systemd/system/graphical.target.wants" \
+             "$ROOTFS_REC/etc/systemd/system/multi-user.target.wants"
+$SUDO ln -sf /etc/systemd/system/pulsar-recovery-gui.service \
+    "$ROOTFS_REC/etc/systemd/system/graphical.target.wants/pulsar-recovery-gui.service"
+$SUDO ln -sf /etc/systemd/system/pulsar-recovery-gui.service \
+    "$ROOTFS_REC/etc/systemd/system/multi-user.target.wants/pulsar-recovery-gui.service"
+
+# Mask anything that could hijack the console with a GNOME/other session.
+# Even if a future apt pull sneaks a display manager in, the recovery
+# environment can only ever come up as Openbox + Recovery Assistant.
+for _svc in getty@tty1.service gdm3.service gdm.service lightdm.service \
+            sddm.service display-manager.service x-display-manager.service \
+            plymouth-quit-wait.service; do
+    $SUDO ln -sf /dev/null "$ROOTFS_REC/etc/systemd/system/$_svc"
+done
+
 $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
-    systemctl enable pulsar-recovery-gui.service 2>/dev/null || true
-    systemctl mask getty@tty1.service 2>/dev/null || true
-    systemctl mask plymouth-quit-wait.service 2>/dev/null || true
-"
+    systemctl --root=/ enable pulsar-recovery-gui.service 2>/dev/null || true
+    systemctl set-default graphical.target 2>/dev/null || true
+" || true
+
+# Fail loudly instead of shipping a headless (black screen) recovery image.
+if [ ! -L "$ROOTFS_REC/etc/systemd/system/graphical.target.wants/pulsar-recovery-gui.service" ]; then
+    echo "❌ Error: pulsar-recovery-gui.service is not enabled (recovery would boot headless)."
+    exit 1
+fi
+echo "✅ pulsar-recovery-gui.service enabled (Openbox + Recovery Assistant on tty1)"
 
 # Configure X11 permissions
 $SUDO mkdir -p "$ROOTFS_REC/etc/X11/xinit"
@@ -431,13 +487,18 @@ needs_root_rights=yes
 XWRAP"
 $SUDO chmod 4755 "$ROOTFS_REC/usr/lib/xorg/Xorg.wrap" 2>/dev/null || true
 
-# Configure xinitrc and fluxbox startup for Recovery Assistant
-$SUDO mkdir -p "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox" "$ROOTFS_REC/root/.fluxbox"
+# Configure xinitrc + Openbox session for the Recovery Assistant
+for _h in "$ROOTFS_REC/home/live" "$ROOTFS_REC/root" "$ROOTFS_REC/etc/skel"; do
+    $SUDO mkdir -p "$_h/.config/openbox"
+done
 
 $SUDO bash -c "cat << 'XINIT' > '$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery'
 #!/bin/sh
+# Pulsar OS Recovery session: Openbox + Pulsar Recovery Assistant
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DISPLAY=:0
+export GDK_BACKEND=x11
+export NO_AT_BRIDGE=1
 export GTK_THEME=\"MacTahoe-Dark\"
 export XCURSOR_THEME=\"MacTahoe-dark\"
 export XCURSOR_SIZE=\"24\"
@@ -446,10 +507,16 @@ xset s off -dpms
 [ -f /root/.Xresources ] && xrdb -merge /root/.Xresources 2>/dev/null || true
 [ -f ~/.Xresources ] && xrdb -merge ~/.Xresources 2>/dev/null || true
 xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
+# Session bus for GTK4/libadwaita widgets
+if command -v dbus-launch >/dev/null 2>&1; then
+    eval \$(dbus-launch --sh-syntax)
+fi
+# Autostart the Pulsar OS Recovery Assistant (Openbox autostart does this too,
+# kept here so a broken user config can never leave the recovery without it).
 if [ -f /usr/bin/pulsar-recovery-assistant ]; then
     /usr/bin/pulsar-recovery-assistant &
 fi
-exec /usr/bin/fluxbox
+exec /usr/bin/openbox --config-file /etc/xdg/openbox/rc.xml
 XINIT"
 
 $SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/home/live/.xinitrc"
@@ -457,42 +524,77 @@ $SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/root/.xini
 $SUDO cp -f "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/etc/skel/.xinitrc"
 $SUDO chmod +x "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/home/live/.xinitrc" "$ROOTFS_REC/root/.xinitrc" "$ROOTFS_REC/etc/skel/.xinitrc"
 
-$SUDO bash -c "cat << 'FLUX_STARTUP' > '$ROOTFS_REC/home/live/.fluxbox/startup'
-#!/bin/sh
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-xsetroot -solid '#18181b'
-[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources 2>/dev/null || true
-xhost +local: 2>/dev/null || xhost + 2>/dev/null || true
-export GTK_THEME=\"MacTahoe-Dark\"
-export XCURSOR_THEME=\"MacTahoe-dark\"
-export XCURSOR_SIZE=\"24\"
-exec /usr/bin/fluxbox
-FLUX_STARTUP"
+# Openbox autostart: launch the Recovery Assistant as soon as Openbox is up
+$SUDO bash -c "cat << 'OB_AUTOSTART' > '$ROOTFS_REC/etc/xdg/openbox/autostart'
+# Pulsar OS Recovery — start the assistant automatically
+/usr/bin/pulsar-recovery-assistant
+OB_AUTOSTART"
 
-$SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/startup"
-$SUDO cp -f "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
-$SUDO chmod +x "$ROOTFS_REC/home/live/.fluxbox/startup" "$ROOTFS_REC/root/.fluxbox/startup" "$ROOTFS_REC/etc/skel/.fluxbox/startup"
+# Configure clean Openbox right-click menu
+$SUDO bash -c "cat << 'OB_MENU' > '$ROOTFS_REC/etc/xdg/openbox/menu.xml'
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<openbox_menu xmlns=\"http://openbox.org/3.4/menu\">
+  <menu id=\"root-menu\" label=\"Pulsar OS Recovery\">
+    <item label=\"Recovery Assistant\">
+      <action name=\"Execute\"><command>/usr/bin/pulsar-recovery-assistant</command></action>
+    </item>
+    <item label=\"GParted\">
+      <action name=\"Execute\"><command>/usr/sbin/gparted</command></action>
+    </item>
+    <item label=\"Terminal\">
+      <action name=\"Execute\"><command>/usr/bin/xterm</command></action>
+    </item>
+    <separator/>
+    <item label=\"Restart Desktop\">
+      <action name=\"Reconfigure\"/>
+    </item>
+    <item label=\"Reboot\">
+      <action name=\"Exit\"><command>/sbin/reboot</command></action>
+    </item>
+    <item label=\"Shutdown\">
+      <action name=\"Exit\"><command>/sbin/poweroff</command></action>
+    </item>
+  </menu>
+</openbox_menu>
+OB_MENU"
 
-# Configure clean Fluxbox menu
-$SUDO bash -c "cat << 'FLUX_MENU' > '$ROOTFS_REC/etc/X11/fluxbox/fluxbox-menu'
-[begin] (Pulsar OS Recovery)
-  [exec] (Recovery Assistant) {/usr/bin/pulsar-recovery-assistant}
-  [exec] (GParted) {/usr/sbin/gparted}
-  [exec] (Terminal) {/usr/bin/xterm}
-  [separator]
-  [restart] (Restart GUI)
-  [reboot] (Reboot System)
-  [exit] (Shutdown) {/sbin/poweroff}
-[end]
-FLUX_MENU"
+$SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<openbox_config xmlns=\"http://openbox.org/3.4/rc\">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+  </focus>
+  <theme>
+    <name>Clearlooks</name>
+    <titleLayout>NLIMC</titleLayout>
+    <font place=\"ActiveWindow\"><name>sans</name><size>9</size></font>
+    <font place=\"InactiveWindow\"><name>sans</name><size>9</size></font>
+  </theme>
+  <desktops><number>1</number></desktops>
+  <resize><drawContents>yes</drawContents></resize>
+  <applications/>
+  <keyboard/>
+  <mouse>
+    <dragThreshold>8</dragThreshold>
+    <doubleClickTime>200</doubleClickTime>
+    <screenEdgeWarpTime>0</screenEdgeWarpTime>
+    <context name=\"Desktop\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Right\" action=\"Press\">
+        <action name=\"ShowMenu\"><menu>root-menu</menu></action>
+      </mousebind>
+    </context>
+  </mouse>
+</openbox_config>
+OB_RC"
 
-for fdir in "$ROOTFS_REC/home/live/.fluxbox" "$ROOTFS_REC/root/.fluxbox" "$ROOTFS_REC/etc/skel/.fluxbox"; do
-    $SUDO cp -f "$ROOTFS_REC/etc/X11/fluxbox/fluxbox-menu" "$fdir/menu"
-    $SUDO bash -c "cat << 'FLUX_INIT' > '$fdir/init'
-session.screen0.toolbar.visible: false
-session.menuFile: $fdir/menu
-session.styleFile: /usr/share/fluxbox/styles/Clean
-FLUX_INIT"
+for _h in "$ROOTFS_REC/home/live" "$ROOTFS_REC/root" "$ROOTFS_REC/etc/skel"; do
+    $SUDO cp -f "$ROOTFS_REC/etc/xdg/openbox/menu.xml" "$_h/.config/openbox/menu.xml"
+    $SUDO cp -f "$ROOTFS_REC/etc/xdg/openbox/rc.xml" "$_h/.config/openbox/rc.xml"
+    $SUDO cp -f "$ROOTFS_REC/etc/xdg/openbox/autostart" "$_h/.config/openbox/autostart"
 done
 
 # Configure passwordless sudo and X11 display preservation for live user
@@ -752,6 +854,32 @@ LIVECONF"
 # ==============================================================================
 # PHASE 4: Generate initramfs, kernel, and SquashFS
 # ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Final gate: the recovery image MUST boot Openbox + Pulsar Recovery Assistant.
+# Shipping without these guarantees is what produced a black-screen recovery,
+# so fail the build instead.
+# ------------------------------------------------------------------------------
+echo "🔎 Verifying recovery desktop contract (Openbox + Recovery Assistant)..."
+VERIFY_FAIL=""
+[ -x "$ROOTFS_REC/usr/bin/openbox" ]                 || VERIFY_FAIL="$VERIFY_FAIL openbox-binary"
+[ -x "$ROOTFS_REC/usr/bin/xinit" ]                    || VERIFY_FAIL="$VERIFY_FAIL xinit"
+[ -x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant" ] || VERIFY_FAIL="$VERIFY_FAIL recovery-assistant"
+grep -q "exec /usr/bin/openbox" "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" 2>/dev/null \
+    || VERIFY_FAIL="$VERIFY_FAIL xinitrc-runs-openbox"
+[ -L "$ROOTFS_REC/etc/systemd/system/graphical.target.wants/pulsar-recovery-gui.service" ] \
+    || VERIFY_FAIL="$VERIFY_FAIL gui-service-not-enabled"
+[ -e "$ROOTFS_REC/etc/systemd/system/gdm3.service" ] && [ -L "$ROOTFS_REC/etc/systemd/system/gdm3.service" ] \
+    && [ "$(readlink "$ROOTFS_REC/etc/systemd/system/gdm3.service")" = "/dev/null" ] \
+    || VERIFY_FAIL="$VERIFY_FAIL gdm-not-masked"
+[ -e "$ROOTFS_REC/usr/bin/gnome-session" ]           && VERIFY_FAIL="$VERIFY_FAIL gnome-session-present"
+[ -e "$ROOTFS_REC/usr/bin/fluxbox" ]                 && VERIFY_FAIL="$VERIFY_FAIL fluxbox-present"
+
+if [ -n "$VERIFY_FAIL" ]; then
+    echo "❌ Error: recovery image would NOT boot Openbox + Recovery Assistant:$VERIFY_FAIL"
+    exit 1
+fi
+echo "✅ Recovery desktop contract OK (Openbox + pulsar-recovery-assistant, GDM masked)"
 
 # Write /etc/fstab del rootfs de recovery ANTES de update-initramfs para que
 # mkinitramfs lo incruste en el initramfs. Inocuidad + seguro para live-boot:
