@@ -125,25 +125,25 @@
           "arch": {
             "grub": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "6f376e1ddb362e9ce56ec8d2dfdf232c6177bde9bdb750c085c9d91386212de0",
-              "size_bytes": 4835948544
+              "sha256": "8bf96e77b60b3d4780d6baad97fe15e194876c0f37bf2e6bffa328ab9076766a",
+              "size_bytes": 4831174656
             },
             "refind": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "15225fab29039978a8b98a6cb3042cdf661a838b9b8d3f94207bcd10a248504e",
-              "size_bytes": 5553580032
+              "sha256": "b51266cbf87c37488a6f190986ed8a2f38ab1d3bd46f15d0c237a0c858b97da0",
+              "size_bytes": 5549064192
             }
           },
           "debian": {
             "grub": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "b8d3a4746609cd9d87de6536a6b06f74cbb4eee8971455b3951ad27f9f7939c2",
-              "size_bytes": 3838230528
+              "sha256": "c603767e66b29eae7b08ea187e33a86cf3c520dd65140d4d1f3d1ca854d9a5a5",
+              "size_bytes": 3834478592
             },
             "refind": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "2474b0c1f3f9bbf54aea9089994b73e0fa3e31424f8ffb5ca66940fd78bd4ee7",
-              "size_bytes": 4435070976
+              "sha256": "23bda133391aa2bbd24ca8ee97271b74b0699f2a7145d6bc1051c2f54706d0ed",
+              "size_bytes": 4430684160
             }
           }
         },
@@ -152,25 +152,25 @@
           "arch": {
             "grub": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-grub-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "6f376e1ddb362e9ce56ec8d2dfdf232c6177bde9bdb750c085c9d91386212de0",
-              "size_bytes": 4835948544
+              "sha256": "8bf96e77b60b3d4780d6baad97fe15e194876c0f37bf2e6bffa328ab9076766a",
+              "size_bytes": 4831174656
             },
             "refind": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-arch-refind-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "15225fab29039978a8b98a6cb3042cdf661a838b9b8d3f94207bcd10a248504e",
-              "size_bytes": 5553580032
+              "sha256": "b51266cbf87c37488a6f190986ed8a2f38ab1d3bd46f15d0c237a0c858b97da0",
+              "size_bytes": 5549064192
             }
           },
           "debian": {
             "grub": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-grub-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "b8d3a4746609cd9d87de6536a6b06f74cbb4eee8971455b3951ad27f9f7939c2",
-              "size_bytes": 3838230528
+              "sha256": "c603767e66b29eae7b08ea187e33a86cf3c520dd65140d4d1f3d1ca854d9a5a5",
+              "size_bytes": 3834478592
             },
             "refind": {
               "iso": "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-unstable-debian-refind-1.2-beta-unstable-bittenfruit.iso",
-              "sha256": "2474b0c1f3f9bbf54aea9089994b73e0fa3e31424f8ffb5ca66940fd78bd4ee7",
-              "size_bytes": 4435070976
+              "sha256": "23bda133391aa2bbd24ca8ee97271b74b0699f2a7145d6bc1051c2f54706d0ed",
+              "size_bytes": 4430684160
             }
           }
         }
