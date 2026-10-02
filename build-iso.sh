@@ -2237,12 +2237,20 @@ unmount_tree "$ROOTFS_TARGET"
         fi
     fi
 
-    # 6. pulsaros-essential (install-macos app, desktop entry, and icons)
+    # 6. pulsaros-essential (install-macos app, desktop entry, icons, wallpapers & gnome-background-properties)
     if [ -d "$PULSAR_ROOT/PKG/pulsaros-essential" ]; then
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/bin/install-macos" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/applications/install-macos.desktop" "$ROOTFS_TARGET/usr/share/applications/" 2>/dev/null || true
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/icons/." "$ROOTFS_TARGET/usr/share/icons/" 2>/dev/null || true
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/pixmaps/." "$ROOTFS_TARGET/usr/share/pixmaps/" 2>/dev/null || true
+        $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/gnome-background-properties" "$ROOTFS_TARGET/usr/share/backgrounds/macos"
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/gnome-background-properties/." "$ROOTFS_TARGET/usr/share/gnome-background-properties/" 2>/dev/null || true
+        if [ -d "/usr/share/gnome-background-properties" ]; then
+            $SUDO cp -rf "/usr/share/gnome-background-properties/." "$ROOTFS_TARGET/usr/share/gnome-background-properties/" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/backgrounds" ]; then
+            $SUDO cp -rf "/usr/share/backgrounds/." "$ROOTFS_TARGET/usr/share/backgrounds/" 2>/dev/null || true
+        fi
         $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
     fi
 
