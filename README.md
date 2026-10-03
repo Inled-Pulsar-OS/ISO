@@ -136,6 +136,77 @@ Without `--iso`, the script boots the compiled rootfs (`build/rootfs-target-<bra
 ## Building from GH Actions  
 The ISO version, release name, and branch must be specified.  
 
+## Tube OS (Smart TV & Home Server Edition)
+
+Tube OS provides a cinematic 10-foot TV user interface (Openbox + Tube OS UI / Plasma Bigscreen) and background CasaOS/Docker server capabilities.
+
+### Building Tube OS ISO
+
+Use `tubeos/build-tubeos.sh` (or `build-tubeos-iso.sh`):
+
+```bash
+# Build Arch Linux edition (Plasma Bigscreen + Tube OS UI + CasaOS) [Fast/Quick Mode]
+sudo ./tubeos/build-tubeos.sh --arch --quick
+
+# Build Debian edition (Openbox + Tube OS UI + CasaOS) [Fast/Quick Mode]
+sudo ./tubeos/build-tubeos.sh --debian --quick
+
+# Rebuild only modified packages incrementally
+sudo ./tubeos/build-tubeos.sh --arch --incremental
+```
+
+### Running and Testing with `run-tubeos-vm.sh`
+
+The `run-tubeos-vm.sh` script automates QEMU virtual machine creation, UEFI/OVMF firmware configuration, port forwarding, and disk persistence.
+
+#### How `run-tubeos-vm.sh` works:
+
+1. **Boot from Live ISO (Installation Mode)**:
+   ```bash
+   ./run-tubeos-vm.sh --iso --arch
+   # or for Debian:
+   ./run-tubeos-vm.sh --iso --debian
+   ```
+   - Automatically attaches a virtual disk (`build/tubeos-disk.qcow2`, 25GB) and boots the ISO with KVM hardware acceleration.
+   - Forwards ports to your host machine:
+     - **Host `http://localhost:8088`** -> Guest port `80` (Tube OS Web Installer / CasaOS Dashboard)
+     - **Host `http://localhost:8070`** -> Guest port `8070` (DockerMigrate)
+     - **Host `localhost:2222`** -> Guest port `22` (SSH)
+
+2. **Boot from Installed Virtual Disk (Installed Mode)**:
+   Once installed via the Web Installer at `http://localhost:8088`, boot directly into your installed system:
+   ```bash
+   ./run-tubeos-vm.sh --disk
+   ```
+
+3. **Reset Virtual Disk (Fresh Start)**:
+   Wipes the existing virtual disk and boots a clean ISO:
+   ```bash
+   ./run-tubeos-vm.sh --reset-disk --iso
+   ```
+
+4. **LAN Bridge & mDNS Mode**:
+   Bridges directly to `virbr0` for direct network access (`http://tubeos.local`):
+   ```bash
+   ./run-tubeos-vm.sh --iso --passthrough
+   ```
+
+### Options Reference for `run-tubeos-vm.sh`
+
+| Option | Description |
+| :--- | :--- |
+| `--iso` | Boots from the Live ISO image with the virtual disk attached (default). |
+| `--disk` | Boots directly from the installed virtual disk (`tubeos-disk.qcow2`). |
+| `--arch` | Selects the Arch Linux ISO (`tubeos-stable-arch-grub.iso`). |
+| `--debian` | Selects the Debian ISO (`tubeos-stable-debian-grub.iso`). |
+| `--reset-disk` | Re-creates an empty virtual disk before booting. |
+| `--disk-size <size>` | Sets the virtual disk size (default: `25G`). |
+| `--mem <size>` | Sets VM RAM allocation (default: `4G`). |
+| `--smp <cores>` | Sets VM CPU core count (default: `4`). |
+| `--port <port>` | Sets host port for Web UI access (default: `8088`). |
+| `--passthrough` | Enables bridge networking on `virbr0` for mDNS LAN access (`tubeos.local`). |
+| `--headless` | Runs without graphical window (terminal only). |
+
 ## Packages  
 PulsarOS is fully declarative; packages are built and obtained from [repo PKG](https://github.com/Inled-Pulsar-OS/PKG)
 

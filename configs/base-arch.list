@@ -10,6 +10,8 @@ bash-completion
 sudo
 shadow
 mkinitcpio
+cryptsetup
+device-mapper
 pam
 util-linux
 dbus

@@ -20,7 +20,7 @@ VARS_IMAGE="${BUILD_DIR}/OVMF_VARS.fd"
 # Defaults
 BOOT_MODE="iso" # "iso" or "disk"
 DISTRO="arch"   # "arch" or "debian"
-MEM="4G"
+MEM=""          # Auto-set: 1024M for debian (RPi3 spec), 4G for arch
 SMP="4"
 DISK_SIZE="25G"
 RESET_DISK=false
@@ -140,6 +140,15 @@ done
 
 mkdir -p "${BUILD_DIR}"
 
+# Set default RAM and CPU matching target hardware
+if [[ -z "${MEM}" ]]; then
+    if [[ "${DISTRO}" == "debian" ]]; then
+        MEM="1024M" # Match Raspberry Pi 3 spec (1GB RAM) for lightweight testing
+    else
+        MEM="4G"
+    fi
+fi
+
 # Determine ISO File
 if [[ -n "${CUSTOM_ISO_PATH}" ]]; then
     ISO_FILE="${CUSTOM_ISO_PATH}"
@@ -223,9 +232,18 @@ if [[ "${NET_MODE}" == "bridge" ]]; then
 
     # Check bridge helper configuration
     if [[ -f "/usr/lib/qemu/qemu-bridge-helper" ]] && ip link show virbr0 >/dev/null 2>&1; then
-        echo -e "${GREEN}>>> Network: Bridge Passthrough ACTIVE on virbr0${NC}"
-        echo -e "    mDNS & Direct LAN active: ${CYAN}http://tubeos.local${NC}"
-        echo -e "    DockerMigrate on LAN:     ${CYAN}http://tubeos.local:8070${NC}"
+        # Ensure IP forwarding & NAT Masquerading so guest has full internet access
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+        iptables -t nat -C POSTROUTING -s 192.168.122.0/24 ! -d 192.168.122.0/24 -j MASQUERADE 2>/dev/null || \
+            sudo iptables -t nat -I POSTROUTING 1 -s 192.168.122.0/24 ! -d 192.168.122.0/24 -j MASQUERADE 2>/dev/null || true
+        iptables -C FORWARD -i virbr0 -j ACCEPT 2>/dev/null || \
+            sudo iptables -I FORWARD 1 -i virbr0 -j ACCEPT 2>/dev/null || true
+        iptables -C FORWARD -o virbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+            sudo iptables -I FORWARD 2 -o virbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+
+        echo -e "${GREEN}>>> Network: Bridge Passthrough ACTIVE on virbr0 (NAT enabled)${NC}"
+        echo -e "    mDNS & Direct LAN:    ${CYAN}http://tubeos.local${NC} or ${CYAN}http://<vm-ip>${NC}"
+        echo -e "    DockerMigrate on LAN: ${CYAN}http://tubeos.local:8070${NC}"
         # Single bridged NIC directly on virbr0 (avoids asymmetric routing collision)
         QEMU_CMD+=(
             -device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56
@@ -273,8 +291,8 @@ if [[ "${BOOT_MODE}" == "iso" ]]; then
 
     QEMU_CMD+=(
         -drive "file=${DISK_IMAGE},format=qcow2,if=virtio"
-        -cdrom "${ISO_FILE}"
-        -boot d
+        -drive "file=${ISO_FILE},media=cdrom,readonly=on"
+        -boot order=d,menu=on
     )
 else
     echo -e "${GREEN}=============================================${NC}"

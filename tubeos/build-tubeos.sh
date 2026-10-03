@@ -654,9 +654,15 @@ if [ ! -f "$ROOTFS_TARGET/usr/share/tubeos/logo.png" ]; then
     $SUDO cp "$PKG_DIR/tubeos-branding/usr/share/tubeos/logo.svg" "$ROOTFS_TARGET/usr/share/tubeos/" 2>/dev/null || true
 fi
 
-# Copy installer static assets
+# Copy installer static assets & latest binaries directly to target rootfs
 $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/tubeos-installer/static"
-$SUDO cp "$PKG_DIR/tubeos-installer/usr/share/tubeos-installer/static/"* "$ROOTFS_TARGET/usr/share/tubeos-installer/static/" 2>/dev/null || true
+$SUDO cp -r "$PKG_DIR/tubeos-installer/usr/share/tubeos-installer/"* "$ROOTFS_TARGET/usr/share/tubeos-installer/" 2>/dev/null || true
+$SUDO cp "$PKG_DIR/tubeos-installer/usr/bin/"* "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+$SUDO cp -r "$PKG_DIR/tubeos-ui/usr/"* "$ROOTFS_TARGET/usr/" 2>/dev/null || true
+$SUDO cp -r "$PKG_DIR/tubeos-ui/etc/"* "$ROOTFS_TARGET/etc/" 2>/dev/null || true
+$SUDO cp -r "$PKG_DIR/tube-os-dash/usr/"* "$ROOTFS_TARGET/usr/" 2>/dev/null || true
+$SUDO cp -r "$PKG_DIR/tube-os-dash/etc/"* "$ROOTFS_TARGET/etc/" 2>/dev/null || true
+$SUDO chmod 755 "$ROOTFS_TARGET/usr/bin/tubeos"* "$ROOTFS_TARGET/usr/bin/openboard" "$ROOTFS_TARGET/usr/bin/onboard" 2>/dev/null || true
 
 # ==============================================================================
 # STEP 6: Configure live system
@@ -896,17 +902,26 @@ if [ -f "$PKG_DIR/dockermigrate/usr/lib/systemd/system/dockermigrate.service" ];
     $SUDO ln -sf dockermigrate.service "$ROOTFS_TARGET/usr/lib/systemd/system/dockmigrate.service" 2>/dev/null || true
 fi
 
+# Copy UI binary if available
+if [ -f "$PKG_DIR/tubeos-ui/usr/bin/tubeos-ui" ]; then
+    $SUDO cp -f "$PKG_DIR/tubeos-ui/usr/bin/tubeos-ui" "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+    $SUDO chmod 755 "$ROOTFS_TARGET/usr/bin/tubeos-ui" 2>/dev/null || true
+fi
+
 # Copy dashboard binaries, data, and configs
 if [ -d "$PKG_DIR/tube-os-dash/usr/bin" ]; then
     $SUDO cp -f "$PKG_DIR/tube-os-dash/usr/bin/"* "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
     $SUDO chmod 755 "$ROOTFS_TARGET/usr/bin/tubeos"* 2>/dev/null || true
 fi
 if [ -d "$PKG_DIR/tube-os-dash/etc/tubeos" ]; then
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/tubeos" "$ROOTFS_TARGET/etc/casaos"
     $SUDO cp -rf "$PKG_DIR/tube-os-dash/etc/tubeos/"* "$ROOTFS_TARGET/etc/tubeos/" 2>/dev/null || true
+    $SUDO cp -rf "$PKG_DIR/tube-os-dash/etc/tubeos/"* "$ROOTFS_TARGET/etc/casaos/" 2>/dev/null || true
 fi
 if [ -d "$PKG_DIR/tube-os-dash/var/lib/tubeos" ]; then
-    $SUDO mkdir -p "$ROOTFS_TARGET/var/lib/tubeos"
+    $SUDO mkdir -p "$ROOTFS_TARGET/var/lib/tubeos" "$ROOTFS_TARGET/var/lib/casaos"
     $SUDO cp -rf "$PKG_DIR/tube-os-dash/var/lib/tubeos/"* "$ROOTFS_TARGET/var/lib/tubeos/" 2>/dev/null || true
+    $SUDO cp -rf "$PKG_DIR/tube-os-dash/var/lib/tubeos/"* "$ROOTFS_TARGET/var/lib/casaos/" 2>/dev/null || true
 fi
 if [ -d "$PKG_DIR/tubeos-branding/etc/xdg/autostart" ]; then
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/xdg/autostart"
@@ -920,7 +935,17 @@ if [ -d "$PKG_DIR/tube-os-dash/usr/lib/tmpfiles.d" ]; then
     $SUDO cp -f "$PKG_DIR/tube-os-dash/usr/lib/tmpfiles.d/"* "$ROOTFS_TARGET/usr/lib/tmpfiles.d/" 2>/dev/null || true
 fi
 
+# Enable SSH password auth & root login for easy remote access
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/ssh/sshd_config.d"
+$SUDO tee "$ROOTFS_TARGET/etc/ssh/sshd_config.d/tubeos.conf" > /dev/null << 'SSHCONF'
+PermitRootLogin yes
+PasswordAuthentication yes
+PermitEmptyPasswords yes
+KbdInteractiveAuthentication yes
+SSHCONF
+
 # Configure live Docker to use vfs driver (overlay-on-overlayfs safe for live ISO media)
+$SUDO mkdir -p "$ROOTFS_TARGET/etc/docker"
 $SUDO tee "$ROOTFS_TARGET/etc/docker/daemon.json" > /dev/null << 'DOCKERCONF'
 {
   "log-driver": "journald",
@@ -928,15 +953,23 @@ $SUDO tee "$ROOTFS_TARGET/etc/docker/daemon.json" > /dev/null << 'DOCKERCONF'
 }
 DOCKERCONF
 
-# Disable graphical target, enable multi-user, networking, avahi (mDNS), docker, dockermigrate, and installer
+# Disable graphical target, enable multi-user, networking, avahi (mDNS), docker, dockermigrate, CasaOS/TubeOS services, and installer
 $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    mkdir -p /var/log/casaos /var/log/tubeos /var/lib/tubeos/conf /var/lib/tubeos/db /var/lib/tubeos/apps /var/lib/tubeos/appstore /run/tubeos /var/run/tubeos /var/run/rclone /usr/share/tubeos/shell 2>/dev/null || true
+    mkdir -p /var/log/casaos /var/log/tubeos /var/lib/tubeos/conf /var/lib/tubeos/db /var/lib/tubeos/apps /var/lib/tubeos/appstore /run/tubeos /var/run/tubeos /run/casaos /var/run/casaos /var/run/rclone /usr/share/tubeos/shell 2>/dev/null || true
     systemctl set-default multi-user.target 2>/dev/null || true
     systemctl enable NetworkManager 2>/dev/null || true
     systemctl enable avahi-daemon 2>/dev/null || true
+    systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
     systemctl enable docker 2>/dev/null || true
     systemctl enable dockermigrate 2>/dev/null || true
+    systemctl enable rclone 2>/dev/null || true
+    systemctl enable tubeos-gateway 2>/dev/null || true
+    systemctl enable tubeos-message-bus 2>/dev/null || true
+    systemctl enable tubeos-user-service 2>/dev/null || true
+    systemctl enable tubeos-local-storage 2>/dev/null || true
+    systemctl enable tubeos-app-management 2>/dev/null || true
+    systemctl enable tubeos 2>/dev/null || true
     systemctl enable tubeos-installer 2>/dev/null || true
 " || true
 
@@ -999,11 +1032,10 @@ if [ "$DISTRO" = "arch" ]; then
     "
 fi
 
-# Unlock root account without password for live session and emergency login
+# Set root account password for live session and remote SSH access
 "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-    passwd -d root 2>/dev/null || true
+    echo 'root:tubeos' | chpasswd 2>/dev/null || true
     passwd -u root 2>/dev/null || true
-    usermod -p '' root 2>/dev/null || true
 " || true
 
 $SUDO rm -f "$ROOTFS_TARGET/usr/sbin/policy-rc.d" 2>/dev/null || true
@@ -1038,9 +1070,26 @@ if [ "$DISTRO" = "arch" ]; then
     KERNEL_PARAMS="archisobasedir=live archisolabel=TUBE_OS cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes copytoram=n plymouth.use-simpledrm=0 quiet splash loglevel=3 --"
     SAFE_PARAMS="archisobasedir=live archisolabel=TUBE_OS cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 --"
 else
-    cp "$ROOTFS_TARGET/boot/vmlinuz-"* "$STAGING/live/vmlinuz" 2>/dev/null || true
-    cp "$ROOTFS_TARGET/boot/initrd.img-"* "$STAGING/live/initrd.img" 2>/dev/null || \
-    cp "$ROOTFS_TARGET/boot/initrd.img" "$STAGING/live/initrd.img" 2>/dev/null || true
+    KERNEL_FILE=$(ls -t "$ROOTFS_TARGET"/boot/vmlinuz-* 2>/dev/null | head -n 1)
+    INITRD_FILE=$(ls -t "$ROOTFS_TARGET"/boot/initrd.img-* 2>/dev/null | head -n 1)
+    [ -z "$INITRD_FILE" ] && INITRD_FILE=$(ls -t "$ROOTFS_TARGET"/boot/initrd.img 2>/dev/null | head -n 1)
+    
+    if [ -n "$KERNEL_FILE" ] && [ -f "$KERNEL_FILE" ]; then
+        echo "  Copying kernel: $KERNEL_FILE -> $STAGING/live/vmlinuz"
+        cp "$KERNEL_FILE" "$STAGING/live/vmlinuz"
+    else
+        echo "  ERROR: No kernel found in $ROOTFS_TARGET/boot!"
+        exit 1
+    fi
+
+    if [ -n "$INITRD_FILE" ] && [ -f "$INITRD_FILE" ]; then
+        echo "  Copying initrd: $INITRD_FILE -> $STAGING/live/initrd.img"
+        cp "$INITRD_FILE" "$STAGING/live/initrd.img"
+    else
+        echo "  ERROR: No initrd found in $ROOTFS_TARGET/boot!"
+        exit 1
+    fi
+
     KERNEL_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin live-config.nox11autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 amdgpu.dcdebugmask=0x10 radeon.modeset=1 nvme_load=yes plymouth.use-simpledrm=0 quiet splash loglevel=3 noprompt --"
     SAFE_PARAMS="boot=live components locales=en_US.UTF-8 username=root autologin live-config.nox11autologin cow_spacesize=4G module_blacklist=nvidia,nvidia_modeset,nvidia_uvm,nvidia_drm nomodeset nvme_load=yes loglevel=3 noprompt --"
 fi
@@ -1219,15 +1268,15 @@ for mbr in \
     fi
 done
 
-# Create FAT EFI image for El Torito
+# Create FAT EFI image for El Torito (FAT16 with 64M size for universal UEFI/OVMF compatibility)
 EFI_IMG="$STAGING/boot/grub/efi.img"
 $SUDO rm -f "$EFI_IMG"
-$SUDO truncate -s 16M "$EFI_IMG"
-$SUDO mkfs.vfat -F 12 -n "TUBE_EFI" "$EFI_IMG" >/dev/null 2>&1 || true
+$SUDO dd if=/dev/zero of="$EFI_IMG" bs=1M count=64 2>/dev/null
+$SUDO mkfs.vfat -F 16 -n "TUBE_EFI" "$EFI_IMG" >/dev/null 2>&1 || $SUDO mkfs.vfat -n "TUBE_EFI" "$EFI_IMG" >/dev/null 2>&1
 if command -v mcopy >/dev/null 2>&1 && [ -f "$STAGING/EFI/BOOT/bootx64.efi" ]; then
-    $SUDO mmd -i "$EFI_IMG" ::EFI ::EFI/BOOT 2>/dev/null || true
-    $SUDO mcopy -i "$EFI_IMG" "$STAGING/EFI/BOOT/bootx64.efi" ::EFI/BOOT/bootx64.efi 2>/dev/null || true
-    $SUDO mcopy -i "$EFI_IMG" "$STAGING/boot/grub/grub.cfg" ::EFI/BOOT/grub.cfg 2>/dev/null || true
+    $SUDO mmd -i "$EFI_IMG" ::/EFI ::/EFI/BOOT 2>/dev/null || true
+    $SUDO mcopy -i "$EFI_IMG" "$STAGING/EFI/BOOT/bootx64.efi" ::/EFI/BOOT/bootx64.efi 2>/dev/null || true
+    $SUDO mcopy -i "$EFI_IMG" "$STAGING/boot/grub/grub.cfg" ::/EFI/BOOT/grub.cfg 2>/dev/null || true
 fi
 
 # Build the ISO

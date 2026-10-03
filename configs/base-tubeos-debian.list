@@ -14,6 +14,8 @@ coreutils
 less
 nano
 initramfs-tools
+cryptsetup
+cryptsetup-initramfs
 live-boot
 live-boot-initramfs-tools
 live-config

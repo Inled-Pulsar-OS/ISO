@@ -9,6 +9,8 @@ bash-completion
 sudo
 passwd
 initramfs-tools
+cryptsetup
+cryptsetup-initramfs
 cpio
 libpam-modules
 util-linux
