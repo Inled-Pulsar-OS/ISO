@@ -1247,10 +1247,10 @@ $pkg_name"
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                pulsar-store \
                 pulsaros-hblock \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
+
 
             # Install optional apps if published in repository
             /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
@@ -1530,9 +1530,9 @@ EOF
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                pulsar-store \
                 pulsaros-hblock \
                 hblock
+
             apt-get install -y --allow-downgrades droidtux appinstall seafari 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean

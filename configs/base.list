@@ -58,8 +58,8 @@ ca-certificates
 # Herramientas de configuración
 dconf-cli
 gnome-tweaks
-gnome-shell-extension-manager
 wget
+
 curl
 unzip
 imagemagick

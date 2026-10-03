@@ -70,8 +70,8 @@ ca-certificates
 # ── Configuration Tools ──────────────────────────────────────────────────────
 dconf-cli
 gnome-tweaks
-gnome-shell-extension-manager
 wget
+
 curl
 unzip
 imagemagick
