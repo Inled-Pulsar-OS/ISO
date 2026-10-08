@@ -1240,6 +1240,7 @@ $pkg_name"
                 pulsaros-$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
+                pulsaros-flydrop \
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
                 pulsaros-bootsound \
@@ -1248,6 +1249,7 @@ $pkg_name"
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsaros-hblock \
+                pulsaros-meta \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
@@ -1524,6 +1526,7 @@ EOF
                 pulsaros-$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
+                pulsaros-flydrop \
                 pulsaros-recovery \
                 pulsaros-bootsound \
                 pulsaros-hibernate \
