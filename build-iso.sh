@@ -59,9 +59,21 @@ DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
 MINIMAL=false       # Minimal ISO: trimmed package list for ~2-3GB target
 SQUASHFS_LEVEL="${SQUASHFS_LEVEL:-15}"  # Nivel zstd para squashfs (15=release, 12=test rápido)
 PULSAR_VERSION=""
+BUILD_VERBOSE="${BUILD_VERBOSE:-${VERBOSE:-0}}"
+export BUILD_VERBOSE
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --verbose)
+            BUILD_VERBOSE=1
+            export BUILD_VERBOSE
+            shift
+            ;;
+        --quiet|-q)
+            BUILD_VERBOSE=0
+            export BUILD_VERBOSE
+            shift
+            ;;
         --clean-base)
             CLEAN_BASE=true
             shift
@@ -179,6 +191,11 @@ fi
 if [ "$BOOTLOADER" = "grub" ]; then
     CMDS+=("grub-mkrescue")
 fi
+# The rEFInd Secure Boot chain signs rEFInd and the live kernels with the Pulsar
+# MOK key. If that key is present on the build host, sbsign is required.
+if [ "$BOOTLOADER" = "refind" ] && [ -f "$ISO_DIR/assets/secureboot/pulsar-mok.key" ]; then
+    CMDS+=("sbsign")
+fi
 
 for cmd in "${CMDS[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -221,15 +238,77 @@ if [ "$DISTRO" = "debian" ]; then
     fi
 fi
 
+# Map internal tool/binary names to the real package names of the host's
+# package manager (sbsign is sbsigntools on Arch and sbsigntool on Debian, etc).
+# Traduce nombres internos (binarios) a los nombres de paquete reales del
+# gestor del host (p.ej. sbsign -> sbsigntools en Arch, sbsigntool en Debian).
+host_package_names() {
+    local pkg_manager="$1" out=() item
+    for item in "${MISSING_PACKAGES[@]}"; do
+        case "$item" in
+            mmdebstrap|debootstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
+                out+=("$item")
+                ;;
+            mksquashfs)
+                out+=("squashfs-tools")
+                ;;
+            pacstrap)
+                out+=("arch-install-scripts")
+                ;;
+            grub-mkrescue)
+                if [ "$pkg_manager" = "pacman" ]; then
+                    out+=("grub")
+                else
+                    out+=("grub-common")
+                fi
+                ;;
+            grub-pc-bin|grub-efi-amd64-bin)
+                if [ "$pkg_manager" = "apt" ]; then
+                    out+=("$item")
+                fi
+                ;;
+            sbsign)
+                if [ "$pkg_manager" = "pacman" ]; then
+                    out+=("sbsigntools")
+                else
+                    out+=("sbsigntool")
+                fi
+                ;;
+            *)
+                out+=("$item")
+                ;;
+        esac
+    done
+    printf '%s\n' "${out[@]}"
+}
+
 # Install dependencies if they are missing / Instalar dependencias si faltan
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo "⚠️ Essential dependencies detected to be missing from the host: ${MISSING_PACKAGES[*]}"
     echo "These tools are required for Pulsar OS build ($BOOTLOADER)."
-    
+
+    # Detect the host package manager to give accurate install hints.
+    # Detecta el gestor de paquetes del host para dar pistas de instalación correctas.
+    pkg_manager=""
+    if command -v pacman >/dev/null 2>&1; then
+        pkg_manager="pacman"
+    elif command -v apt-get >/dev/null 2>&1; then
+        pkg_manager="apt"
+    fi
+
     # SAFETY GUARD: never touch the host package manager by default on developer machines.
     if [ "$ALLOW_HOST_INSTALL" != "true" ] && [ "$GITHUB_ACTIONS" != "true" ] && [ "$CI" != "true" ]; then
         echo "❌ Missing host dependencies. They will NOT auto-install to protect your system."
-        echo "   Manually install missing packages (e.g. sudo pacman -S ${MISSING_PACKAGES[*]})"
+        if [ -n "$pkg_manager" ]; then
+            mapfile -t manual_pkgs < <(host_package_names "$pkg_manager")
+            if [ "$pkg_manager" = "pacman" ]; then
+                echo "   Manually install missing packages (e.g. sudo pacman -S ${manual_pkgs[*]})"
+            else
+                echo "   Manually install missing packages (e.g. sudo apt-get install ${manual_pkgs[*]})"
+            fi
+        else
+            echo "   Manually install missing packages: ${MISSING_PACKAGES[*]}"
+        fi
         echo "   or repeat the command with the variable ALLOW_HOST_INSTALL=true to authorize the installation. To install pacstrap use arch-install-scripts"
         exit 1
     fi
@@ -248,48 +327,12 @@ if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     fi
     
     if [ "$auto_install" = true ]; then
-        # Detect package manager and install mapped packages
-        pkg_manager=""
-        if command -v pacman >/dev/null 2>&1; then
-            pkg_manager="pacman"
-        elif command -v apt-get >/dev/null 2>&1; then
-            pkg_manager="apt"
-        fi
-
         if [ -z "$pkg_manager" ]; then
             echo "❌ Error: A supported package manager (apt or pacman) was not detected."
             exit 1
         fi
 
-        packages_to_install=()
-        for item in "${MISSING_PACKAGES[@]}"; do
-            case "$item" in
-                mmdebstrap|debootstrap|fakeroot|rsync|jq|curl|unzip|wget|xorriso|imagemagick|psmisc|mtools|debian-archive-keyring|sassc)
-                    packages_to_install+=("$item")
-                    ;;
-                mksquashfs)
-                    packages_to_install+=("squashfs-tools")
-                    ;;
-                pacstrap)
-                    packages_to_install+=("arch-install-scripts")
-                    ;;
-                grub-mkrescue)
-                    if [ "$pkg_manager" = "pacman" ]; then
-                        packages_to_install+=("grub")
-                    else
-                        packages_to_install+=("grub-common")
-                    fi
-                    ;;
-                grub-pc-bin|grub-efi-amd64-bin)
-                    if [ "$pkg_manager" = "apt" ]; then
-                        packages_to_install+=("$item")
-                    fi
-                    ;;
-                *)
-                    packages_to_install+=("$item")
-                    ;;
-            esac
-        done
+        mapfile -t packages_to_install < <(host_package_names "$pkg_manager")
 
         # Deduplicate
         packages_to_install=($(echo "${packages_to_install[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
@@ -639,15 +682,43 @@ build_cloudflare_warp() {
     mkdir -p "$warp_tmp"
     $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$warp_tmp"
     echo "🔨 Compiling cloudflare-warp-bin from AUR into $dest_dir ..."
-    if ! run_as_user bash -c "git clone --depth=1 https://aur.archlinux.org/cloudflare-warp-bin.git '$warp_tmp/repo' 2>&1 | tail -n 5 > '$warp_log'"; then
-        echo "⚠️ Could not clone cloudflare-warp-bin from the AUR — WARP will not be bundled (see $warp_log)."
-        $SUDO rm -rf "$warp_tmp"
-        return 0
-    fi
-    if ! run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign 2>&1 | tail -n 15 >> '$warp_log'"; then
-        echo "⚠️ cloudflare-warp-bin build failed — WARP will not be bundled (see $warp_log)."
-        $SUDO rm -rf "$warp_tmp"
-        return 0
+    if [ "$BUILD_VERBOSE" = "1" ]; then
+        if ! run_as_user bash -c "git clone --depth=1 https://aur.archlinux.org/cloudflare-warp-bin.git '$warp_tmp/repo'"; then
+            echo "⚠️ Could not clone cloudflare-warp-bin from the AUR — WARP will not be bundled."
+            $SUDO rm -rf "$warp_tmp"
+            return 0
+        fi
+        if ! run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign"; then
+            echo "⚠️ cloudflare-warp-bin build failed — WARP will not be bundled."
+            $SUDO rm -rf "$warp_tmp"
+            return 0
+        fi
+    else
+        if ! run_as_user bash -c "git clone --quiet --depth=1 https://aur.archlinux.org/cloudflare-warp-bin.git '$warp_tmp/repo' > '$warp_log' 2>&1"; then
+            echo "⚠️ Could not clone cloudflare-warp-bin from the AUR — WARP will not be bundled (see $warp_log)."
+            $SUDO rm -rf "$warp_tmp"
+            return 0
+        fi
+        local start_sec=$SECONDS
+        run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign >> '$warp_log' 2>&1" &
+        local pid=$!
+        local spin='-\|/'
+        local i=0
+        while kill -0 $pid 2>/dev/null; do
+            i=$(( (i+1) % 4 ))
+            local elapsed=$(( SECONDS - start_sec ))
+            printf "\r   \e[36m[%c]\e[0m Compiling cloudflare-warp-bin... (%ds) " "${spin:$i:1}" "$elapsed"
+            sleep 0.5
+        done
+        printf "\r\033[K"
+        if ! wait $pid; then
+            echo "⚠️ cloudflare-warp-bin build failed — WARP will not be bundled (see $warp_log)."
+            echo "--- Last 20 lines of log ($warp_log) ---"
+            tail -n 20 "$warp_log" 2>/dev/null || true
+            echo "---------------------------------------"
+            $SUDO rm -rf "$warp_tmp"
+            return 0
+        fi
     fi
     $SUDO rm -rf "$warp_tmp"
     echo "✅ cloudflare-warp-bin compiled into $dest_dir"
@@ -760,7 +831,33 @@ CLEANEof
 
                 # -M: do not copy the host's mirrorlist into the target (reproducibility)
                 # -K: initialize and copy keyring from host
-                $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
+                if [ "$BUILD_VERBOSE" = "1" ]; then
+                    $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
+                else
+                    local pacstrap_log="/tmp/pulsaros-pacstrap-$$.log"
+                    echo "   ⏳ Bootstrapping Arch Linux base (logs: $pacstrap_log)..."
+                    local start_sec=$SECONDS
+                    $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST > "$pacstrap_log" 2>&1 &
+                    local pid=$!
+                    local spin='-\|/'
+                    local i=0
+                    while kill -0 $pid 2>/dev/null; do
+                        i=$(( (i+1) % 4 ))
+                        local elapsed=$(( SECONDS - start_sec ))
+                        printf "\r   \e[36m[%c]\e[0m Bootstrapping base packages... (%ds) " "${spin:$i:1}" "$elapsed"
+                        sleep 0.5
+                    done
+                    printf "\r\033[K"
+                    if ! wait $pid; then
+                        echo "❌ Error in pacstrap bootstrap! (see $pacstrap_log)"
+                        echo "--- Last 40 lines of pacstrap log ---"
+                        tail -n 40 "$pacstrap_log" 2>/dev/null || true
+                        echo "--------------------------------------"
+                        rm -f "$CLEAN_PACMAN_CONF"
+                        exit 1
+                    fi
+                    rm -f "$pacstrap_log"
+                fi
                 rm -f "$CLEAN_PACMAN_CONF"
 
                 # Write the pinned mirrorlist inside the base rootfs as well
@@ -936,7 +1033,7 @@ EOF
     if [ "$BOOTLOADER" = "grub" ]; then
         BOOTLOADER_PKGS="grub efibootmgr os-prober"
     else
-        BOOTLOADER_PKGS="refind efibootmgr grub os-prober"
+        BOOTLOADER_PKGS="refind efibootmgr grub os-prober mokutil"
     fi
 
     if $USE_LOCAL_PKGS; then
@@ -959,9 +1056,9 @@ EOF
             fi
             # Run as the original non-root user since makepkg cannot run as root
             if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
-                run_as_user bash -c "cd '$pkg_dir_source' && $pkg_cmd"
+                run_as_user bash -c "cd '$pkg_dir_source' && env BUILD_VERBOSE='$BUILD_VERBOSE' $pkg_cmd"
             else
-                (cd "$pkg_dir_source" && eval "$pkg_cmd")
+                (cd "$pkg_dir_source" && env BUILD_VERBOSE="$BUILD_VERBOSE" eval "$pkg_cmd")
             fi
         else
             echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing packages."
@@ -1038,7 +1135,9 @@ $pkg_name"
                 
                 echo "🔨 Compiling AUR dependency: $dep..."
                 BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep-$$"
-                $SUDO rm -rf "$BUILD_TEMP_DIR"
+                local aur_log="/tmp/pulsaros-aur-$dep-$$.log"
+                [ -n "$LOCAL_PKGS_DIR" ] && aur_log="$LOCAL_PKGS_DIR/aur-$dep.log"
+                $SUDO rm -rf "$BUILD_TEMP_DIR" "$aur_log"
                 mkdir -p "$BUILD_TEMP_DIR"
                 $SUDO chown "$ORIGINAL_USER":"$ORIGINAL_USER" "$BUILD_TEMP_DIR"
                 
@@ -1049,7 +1148,11 @@ $pkg_name"
                 fi
 
                 # Download PKGBUILD using git clone directly for reliability and speed
-                run_as_user bash -c "cd '$BUILD_TEMP_DIR' && git clone https://aur.archlinux.org/${pkg_base}.git"
+                if [ "$BUILD_VERBOSE" = "1" ]; then
+                    run_as_user bash -c "cd '$BUILD_TEMP_DIR' && git clone https://aur.archlinux.org/${pkg_base}.git"
+                else
+                    run_as_user bash -c "cd '$BUILD_TEMP_DIR' && git clone --quiet https://aur.archlinux.org/${pkg_base}.git" > "$aur_log" 2>&1 || true
+                fi
                 
                 # Dynamically locate the directory containing the PKGBUILD
                 dep_dir=$(find "$BUILD_TEMP_DIR" -maxdepth 2 -name "PKGBUILD" -exec dirname {} \; | head -n 1)
@@ -1069,9 +1172,31 @@ $pkg_name"
                     # We run as ORIGINAL_USER since makepkg cannot run as root.
                     # Use -cfd to build without checking or installing dependencies on the host system.
                     # Local AUR dependencies are installed inside the target chroot, never on the host.
-                    if ! run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign"; then
-                        echo "❌ Error: Could not compile AUR dependency: $dep"
-                        exit 1
+                    if [ "$BUILD_VERBOSE" = "1" ]; then
+                        if ! run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign"; then
+                            echo "❌ Error: Could not compile AUR dependency: $dep"
+                            exit 1
+                        fi
+                    else
+                        local start_sec=$SECONDS
+                        run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign" >> "$aur_log" 2>&1 &
+                        local pid=$!
+                        local spin='-\|/'
+                        local i=0
+                        while kill -0 $pid 2>/dev/null; do
+                            i=$(( (i+1) % 4 ))
+                            local elapsed=$(( SECONDS - start_sec ))
+                            printf "\r   \e[36m[%c]\e[0m Compiling %s from AUR... (%ds) " "${spin:$i:1}" "$dep" "$elapsed"
+                            sleep 0.5
+                        done
+                        printf "\r\033[K"
+                        if ! wait $pid; then
+                            echo "❌ Error: Could not compile AUR dependency: $dep (see $aur_log)"
+                            echo "--- Last 40 lines of AUR build log ---"
+                            tail -n 40 "$aur_log" 2>/dev/null || true
+                            echo "---------------------------------------"
+                            exit 1
+                        fi
                     fi
                     echo "✅ AUR dependency $dep compiled successfully."
                 else
@@ -1426,7 +1551,7 @@ EOF
         if [ "$BOOTLOADER" = "grub" ]; then
             BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober"
+            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober mokutil"
         fi
 
         $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar" > /dev/null <<EOF
@@ -1482,7 +1607,7 @@ EOF
         if [ "$BOOTLOADER" = "grub" ]; then
             BOOTLOADER_PKGS="grub-pc grub-efi-amd64-bin efibootmgr os-prober"
         else
-            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober"
+            BOOTLOADER_PKGS="efibootmgr grub-pc grub-efi-amd64-bin os-prober mokutil"
         fi
 
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -2418,8 +2543,13 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     else
         SQUASHFS_OUT="$ISO_STAGING/live/filesystem.squashfs"
     fi
+    local SQUASHFS_QUIET_FLAG=""
+    if [ "$BUILD_VERBOSE" != "1" ] && [ "$VERBOSE" != "1" ]; then
+        SQUASHFS_QUIET_FLAG="-no-progress"
+    fi
     $SUDO env "PATH=/usr/bin:/usr/sbin:/sbin:/bin:$PATH" mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
+        $SQUASHFS_QUIET_FLAG \
         -comp zstd -Xcompression-level "$SQUASHFS_LEVEL" \
         -b 1048576 \
         -processors "$BUILD_PROCESSORS" \
@@ -2624,6 +2754,49 @@ EOF_RECOVERY
     fi
 }
 
+# Resolve Microsoft/vendor signed Secure Boot binaries (shim, signed grub, MokManager).
+# Detecta los binarios firmados de Secure Boot (shim, grub firmado, MokManager).
+# Used by both the GRUB and the rEFInd packaging paths / Usado por GRUB y rEFInd.
+resolve_secure_boot_bins() {
+    SHIM_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/shim/shimx64.efi.signed" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/shimx64.efi.signed" \
+        "$ISO_DIR/assets/secureboot/shimx64.efi" \
+        "/usr/lib/shim/shimx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            SHIM_SIGNED="$p"
+            break
+        fi
+    done
+
+    GRUB_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
+        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
+        "$ISO_DIR/assets/secureboot/grubx64.efi" \
+        "/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            GRUB_SIGNED="$p"
+            break
+        fi
+    done
+
+    MM_SIGNED=""
+    for p in \
+        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi.signed" \
+        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi" \
+        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/mmx64.efi" \
+        "$ISO_DIR/assets/secureboot/mmx64.efi" \
+        "/usr/lib/shim/mmx64.efi.signed"; do
+        if [ -f "$p" ]; then
+            MM_SIGNED="$p"
+            break
+        fi
+    done
+}
+
 if [ "$BOOTLOADER" = "grub" ]; then
     # --------------------------------------------------------------------------
     # GRUB BOOTLOADER PACKAGING
@@ -2789,43 +2962,7 @@ EOF
         ISO_OUTPUT="$BUILD_DIR/pulsaros-${BRANCH}-${DISTRO}-grub${VER_SUFFIX}.iso"
     fi
     # Check for Microsoft/Vendor signed Secure Boot binaries (shim, signed grub, mokmanager)
-    SHIM_SIGNED=""
-    for p in \
-        "$ROOTFS_TARGET/usr/lib/shim/shimx64.efi.signed" \
-        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/shimx64.efi.signed" \
-        "$ISO_DIR/assets/secureboot/shimx64.efi" \
-        "/usr/lib/shim/shimx64.efi.signed"; do
-        if [ -f "$p" ]; then
-            SHIM_SIGNED="$p"
-            break
-        fi
-    done
-
-    GRUB_SIGNED=""
-    for p in \
-        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
-        "$ROOTFS_TARGET/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed" \
-        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" \
-        "$ISO_DIR/assets/secureboot/grubx64.efi" \
-        "/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"; do
-        if [ -f "$p" ]; then
-            GRUB_SIGNED="$p"
-            break
-        fi
-    done
-
-    MM_SIGNED=""
-    for p in \
-        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi.signed" \
-        "$ROOTFS_TARGET/usr/lib/shim/mmx64.efi" \
-        "$BUILD_DIR/rootfs-base-${BRANCH}-debian-${SYSTEM_TIER}/usr/lib/shim/mmx64.efi" \
-        "$ISO_DIR/assets/secureboot/mmx64.efi" \
-        "/usr/lib/shim/mmx64.efi.signed"; do
-        if [ -f "$p" ]; then
-            MM_SIGNED="$p"
-            break
-        fi
-    done
+    resolve_secure_boot_bins
 
     if [ -n "$SHIM_SIGNED" ] && [ -n "$GRUB_SIGNED" ]; then
         echo "🔒 Secure Boot con claves de Microsoft detectado y habilitado / Microsoft-signed Secure Boot enabled."
@@ -3186,6 +3323,83 @@ EOF
     $SUDO rm -f "$REFIND_MINIMAL_CONF_TMP"
     $SUDO rm -rf "$REFIND_THEME_DIR_TMP"
 
+    # --------------------------------------------------------------------------
+    # Secure Boot chain for rEFInd: shim -> grubx64.efi (signed rEFInd) + MOK
+    # Cadena de Secure Boot para rEFInd: shim -> grubx64.efi (rEFInd firmado) + MOK
+    # --------------------------------------------------------------------------
+    # shim always verifies grubx64.efi (rEFInd signed with the Pulsar MOK key).
+    # On first boot the user enrolls Pulsar's public key once (refind.cer) via
+    # MokManager. If no signed shim or no MOK key is available, we fall back to
+    # a plain rEFInd ISO that boots only with Secure Boot disabled.
+    # shim siempre verifica grubx64.efi (rEFInd firmado con la MOK de Pulsar).
+    # En el primer arranque el usuario enrola la clave pública una sola vez
+    # (refind.cer) vía MokManager. Sin shim firmado o sin clave MOK, la ISO
+    # queda sin Secure Boot.
+    # --------------------------------------------------------------------------
+    SECURE_BOOT_REFIND=false
+    resolve_secure_boot_bins
+    SB_MOK_KEY="$ISO_DIR/assets/secureboot/pulsar-mok.key"
+    SB_MOK_CRT="$ISO_DIR/assets/secureboot/pulsar-mok.crt"
+    SB_MOK_CER="$ISO_DIR/assets/secureboot/pulsar-mok.cer"
+
+    if [ -n "$SHIM_SIGNED" ] && [ -n "$MM_SIGNED" ] && \
+       [ -f "$SB_MOK_KEY" ] && [ -f "$SB_MOK_CRT" ] && [ -f "$SB_MOK_CER" ]; then
+        if ! command -v sbsign >/dev/null 2>&1; then
+            echo "❌ Secure Boot para rEFInd requiere 'sbsign' (paquete sbsigntool) en el host."
+            echo "   / Secure Boot for rEFInd requires 'sbsign' (sbsigntool package) on the host."
+            exit 1
+        fi
+        echo "🔒 Cadena Secure Boot rEFInd activada: shim -> grubx64.efi (rEFInd firmado con la MOK de Pulsar)."
+        echo "   -> Shim: $SHIM_SIGNED"
+        echo "   -> MokManager: $MM_SIGNED"
+        echo "   -> Clave MOK: $SB_MOK_CER (se enrola como refind.cer desde MokManager)"
+
+        # 1) Sign rEFInd and install it as grubx64.efi (the binary shim launches).
+        #    Firmar rEFInd y colocarlo como grubx64.efi (el binario que lanza shim).
+        $SUDO sbsign --key "$SB_MOK_KEY" --cert "$SB_MOK_CRT" \
+            --output "$ISO_STAGING/EFI/BOOT/grubx64.efi" \
+            "$REFIND_SHARE_DIR/refind_x64.efi" 2>/dev/null || exit 1
+
+        # 2) shim as bootx64.efi plus MokManager (mmx64.efi) in the same directory.
+        #    shim como bootx64.efi y MokManager (mmx64.efi) en el mismo directorio.
+        $SUDO cp -f "$SHIM_SIGNED" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
+        $SUDO cp -f "$MM_SIGNED"   "$ISO_STAGING/EFI/BOOT/mmx64.efi"
+
+        # 3) Public MOK certificate in DER format for MokManager "Enroll key from disk".
+        #    Certificado público MOK en formato DER para "Enroll key from disk".
+        $SUDO cp -f "$SB_MOK_CER" "$ISO_STAGING/EFI/BOOT/refind.cer"
+
+        # 4) Sign the live kernels: rEFInd loads them as EFI stub images and the
+        #    firmware checks their signature while Secure Boot is active.
+        #    Firmar los kernels live: rEFInd los carga como imagen EFI y el
+        #    firmware verifica su firma con Secure Boot activo.
+        for k in vmlinuz vmlinuz-recovery; do
+            if [ -f "$ISO_STAGING/EFI/BOOT/$k" ]; then
+                $SUDO sbsign --key "$SB_MOK_KEY" --cert "$SB_MOK_CRT" \
+                    --output "$ISO_STAGING/EFI/BOOT/$k.signed" \
+                    "$ISO_STAGING/EFI/BOOT/$k" 2>/dev/null || exit 1
+                $SUDO mv -f "$ISO_STAGING/EFI/BOOT/$k.signed" "$ISO_STAGING/EFI/BOOT/$k"
+            fi
+        done
+
+        # 5) Mirror the signed chain into efi.img (the FAT ESP the firmware boots
+        #    on hybrid ISOs). / Espejar la cadena firmada dentro de efi.img (ESP FAT).
+        $SUDO mcopy -o -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT/bootx64.efi" ::/EFI/BOOT/bootx64.efi
+        $SUDO mcopy -o -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT/grubx64.efi" ::/EFI/BOOT/grubx64.efi
+        $SUDO mcopy -o -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT/mmx64.efi" ::/EFI/BOOT/mmx64.efi
+        $SUDO mcopy -o -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT/refind.cer" ::/EFI/BOOT/refind.cer
+        for k in vmlinuz vmlinuz-recovery; do
+            if [ -f "$ISO_STAGING/EFI/BOOT/$k" ]; then
+                $SUDO mcopy -o -i "$EFI_IMG" "$ISO_STAGING/EFI/BOOT/$k" ::/EFI/BOOT/$k
+            fi
+        done
+        SECURE_BOOT_REFIND=true
+    else
+        echo "⚠️ Sin binarios de Secure Boot o clave MOK: la ISO rEFInd solo arrancará con Secure Boot desactivado."
+        echo "   / No Secure Boot binaries or MOK key found: this rEFInd ISO will only boot with Secure Boot disabled."
+        echo "   Proporciona ISO/assets/secureboot/{shimx64.efi,mmx64.efi,pulsar-mok.key,pulsar-mok.crt,pulsar-mok.cer}"
+    fi
+
     # Copy the custom GRUB theme to the ISO staging directory for Ventoy compatibility
     echo "🎨 Preparando tema limpio de GRUB para Ventoy..."
     $SUDO rm -rf "$ISO_STAGING/boot/grub/themes/Particle-circle-window"
@@ -3285,6 +3499,14 @@ EOF
       -no-emul-boot \
       -isohybrid-gpt-basdat \
       "$ISO_STAGING"
+
+    if $SECURE_BOOT_REFIND; then
+        echo "🔒 ISO rEFInd con cadena Secure Boot completada."
+        echo "   En máquinas con Secure Boot, al primer arranque shim abre MokManager:"
+        echo "   'Enroll key from disk' -> EFI/BOOT/refind.cer -> Reboot."
+        echo "   / First boot on Secure Boot machines: MokManager -> 'Enroll key"
+        echo "   from disk' -> EFI/BOOT/refind.cer -> Reboot."
+    fi
 fi
 
 BUILD_END_TS=$(date '+%Y-%m-%d %H:%M:%S')
