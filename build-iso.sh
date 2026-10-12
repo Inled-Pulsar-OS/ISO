@@ -834,16 +834,16 @@ CLEANEof
                 if [ "$BUILD_VERBOSE" = "1" ]; then
                     $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST
                 else
-                    local pacstrap_log="/tmp/pulsaros-pacstrap-$$.log"
+                    pacstrap_log="/tmp/pulsaros-pacstrap-$$.log"
                     echo "   ⏳ Bootstrapping Arch Linux base (logs: $pacstrap_log)..."
-                    local start_sec=$SECONDS
+                    start_sec=$SECONDS
                     $SUDO pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $PACKAGE_LIST > "$pacstrap_log" 2>&1 &
-                    local pid=$!
-                    local spin='-\|/'
-                    local i=0
+                    pid=$!
+                    spin='-\|/'
+                    i=0
                     while kill -0 $pid 2>/dev/null; do
                         i=$(( (i+1) % 4 ))
-                        local elapsed=$(( SECONDS - start_sec ))
+                        elapsed=$(( SECONDS - start_sec ))
                         printf "\r   \e[36m[%c]\e[0m Bootstrapping base packages... (%ds) " "${spin:$i:1}" "$elapsed"
                         sleep 0.5
                     done
@@ -1135,7 +1135,7 @@ $pkg_name"
                 
                 echo "🔨 Compiling AUR dependency: $dep..."
                 BUILD_TEMP_DIR="/tmp/pulsaros-aur-$dep-$$"
-                local aur_log="/tmp/pulsaros-aur-$dep-$$.log"
+                aur_log="/tmp/pulsaros-aur-$dep-$$.log"
                 [ -n "$LOCAL_PKGS_DIR" ] && aur_log="$LOCAL_PKGS_DIR/aur-$dep.log"
                 $SUDO rm -rf "$BUILD_TEMP_DIR" "$aur_log"
                 mkdir -p "$BUILD_TEMP_DIR"
@@ -1178,14 +1178,14 @@ $pkg_name"
                             exit 1
                         fi
                     else
-                        local start_sec=$SECONDS
+                        start_sec=$SECONDS
                         run_as_user bash -c "cd '$dep_dir' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign" >> "$aur_log" 2>&1 &
-                        local pid=$!
-                        local spin='-\|/'
-                        local i=0
+                        pid=$!
+                        spin='-\|/'
+                        i=0
                         while kill -0 $pid 2>/dev/null; do
                             i=$(( (i+1) % 4 ))
-                            local elapsed=$(( SECONDS - start_sec ))
+                            elapsed=$(( SECONDS - start_sec ))
                             printf "\r   \e[36m[%c]\e[0m Compiling %s from AUR... (%ds) " "${spin:$i:1}" "$dep" "$elapsed"
                             sleep 0.5
                         done
@@ -2543,7 +2543,7 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     else
         SQUASHFS_OUT="$ISO_STAGING/live/filesystem.squashfs"
     fi
-    local SQUASHFS_QUIET_FLAG=""
+    SQUASHFS_QUIET_FLAG=""
     if [ "$BUILD_VERBOSE" != "1" ] && [ "$VERBOSE" != "1" ]; then
         SQUASHFS_QUIET_FLAG="-no-progress"
     fi
