@@ -1217,6 +1217,7 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-keybindings-*
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-control-center-*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
