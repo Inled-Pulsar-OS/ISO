@@ -1294,8 +1294,8 @@ $pkg_name"
 
             # pulsaros-gnome bundles gnome-shell-extension-appindicator and declares
             # conflicts+replaces on it. pacman only honors 'replaces' for packages
-            # coming from a sync repo, so a local -U install fails with
-            # "unresolvable package conflicts". Remove the distro copy first.
+            # coming from a sync repo, so a local -U install fails on an
+            # unresolvable package conflict. Remove the distro copy first.
             if pacman -Q gnome-shell-extension-appindicator >/dev/null 2>&1; then
                 pacman -Rdd --noconfirm gnome-shell-extension-appindicator || true
             fi
