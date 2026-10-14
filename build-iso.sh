@@ -1229,7 +1229,11 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-keybindings-*
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-control-center-*
+        # NOTE: gnome-control-center is intentionally NOT removed here. Pulsar OS
+        # ships a patched build (macOS panels, Liquid Glass / Appearance controls,
+        # notch section, live-wallpaper engine) that must land in the live ISO,
+        # so the local package is installed below via `pacman -U` (a deliberate
+        # downgrade over Arch's stock gnome-control-center).
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
