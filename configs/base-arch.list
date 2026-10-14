@@ -55,8 +55,11 @@ totem
 # Flatpak
 flatpak
 # Extensiones GNOME (solo las que están en repos oficiales)
+# NOTA: gnome-shell-extension-appindicator NO se instala desde el repo: el
+# paquete pulsaros-gnome ya incluye su propia copia del applet y declara
+# conflicts/replaces sobre el paquete oficial. Instalarlo aquí rompería el
+# pacman -U de los paquetes locales (conflicto no resoluble).
 gnome-shell-extensions
-gnome-shell-extension-appindicator
 # Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
 python-nautilus
 # Dependencias Fildem HUD

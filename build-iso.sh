@@ -1280,6 +1280,14 @@ $pkg_name"
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
             pacman -Syu --noconfirm --overwrite '*'
 
+            # pulsaros-gnome bundles gnome-shell-extension-appindicator and declares
+            # conflicts+replaces on it. pacman only honors 'replaces' for packages
+            # coming from a sync repo, so a local -U install fails with
+            # "unresolvable package conflicts". Remove the distro copy first.
+            if pacman -Q gnome-shell-extension-appindicator >/dev/null 2>&1; then
+                pacman -Rdd --noconfirm gnome-shell-extension-appindicator || true
+            fi
+
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
@@ -1346,6 +1354,13 @@ $pkg_name"
             # bundled nautilus build provides/conflicts with it; remove upstream copy first
             if /usr/bin/pacman -Q libnautilus-extension >/dev/null 2>&1; then
                 /usr/bin/pacman -Rdd --noconfirm libnautilus-extension || true
+            fi
+
+            # pulsaros-gnome bundles gnome-shell-extension-appindicator and declares
+            # conflicts+replaces on it. Remove the distro copy explicitly so the
+            # transaction resolves deterministically (both -S and -U installs).
+            if /usr/bin/pacman -Q gnome-shell-extension-appindicator >/dev/null 2>&1; then
+                /usr/bin/pacman -Rdd --noconfirm gnome-shell-extension-appindicator || true
             fi
 
             # Install Pulsar OS packages and bootloader

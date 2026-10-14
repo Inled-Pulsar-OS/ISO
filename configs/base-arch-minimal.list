@@ -160,8 +160,11 @@ linux-headers
 flatpak
 
 # ── GNOME Extensions (official repos only) ───────────────────────────────────
+# NOTA: gnome-shell-extension-appindicator NO se instala desde el repo: el
+# paquete pulsaros-gnome ya incluye su propia copia del applet y declara
+# conflicts/replaces sobre el paquete oficial. Instalarlo aquí rompería el
+# pacman -U de los paquetes locales (conflicto no resoluble).
 gnome-shell-extensions
-gnome-shell-extension-appindicator
 
 # ── Fildem HUD / Global Menu Dependencies ────────────────────────────────────
 # Estos se pueden instalar post-install si se necesita el global menu
