@@ -688,6 +688,12 @@ build_cloudflare_warp() {
             $SUDO rm -rf "$warp_tmp"
             return 0
         fi
+        # The AUR package uses 'chrpath' (a makedepends) to rewrite the rpath of
+        # its bundled ELF libraries. When the host lacks chrpath, transparently
+        # use patchelf (already required by this ISO builder) instead of failing.
+        if ! command -v chrpath >/dev/null 2>&1; then
+            run_as_user bash -c "sed -i -e 's#chrpath --delete #patchelf --remove-rpath #g' -e 's#chrpath --replace \([^ ]*\) #patchelf --set-rpath \\1 #g' '$warp_tmp/repo/PKGBUILD'"
+        fi
         if ! run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign"; then
             echo "⚠️ cloudflare-warp-bin build failed — WARP will not be bundled."
             $SUDO rm -rf "$warp_tmp"
@@ -698,6 +704,12 @@ build_cloudflare_warp() {
             echo "⚠️ Could not clone cloudflare-warp-bin from the AUR — WARP will not be bundled (see $warp_log)."
             $SUDO rm -rf "$warp_tmp"
             return 0
+        fi
+        # The AUR package uses 'chrpath' (a makedepends) to rewrite the rpath of
+        # its bundled ELF libraries. When the host lacks chrpath, transparently
+        # use patchelf (already required by this ISO builder) instead of failing.
+        if ! command -v chrpath >/dev/null 2>&1; then
+            run_as_user bash -c "sed -i -e 's#chrpath --delete #patchelf --remove-rpath #g' -e 's#chrpath --replace \([^ ]*\) #patchelf --set-rpath \\1 #g' '$warp_tmp/repo/PKGBUILD'"
         fi
         local start_sec=$SECONDS
         run_as_user bash -c "cd '$warp_tmp/repo' && PKGDEST='$dest_dir' makepkg -cfd --noconfirm --nosign >> '$warp_log' 2>&1" &
@@ -1894,7 +1906,15 @@ LOGO=pulsar-logo
 ANSI_COLOR="38;2;135;206;235"
 EOF
     $SUDO mkdir -p "$ROOTFS_TARGET/usr/lib"
-    $SUDO cp -f "$ROOTFS_TARGET/etc/os-release" "$ROOTFS_TARGET/usr/lib/os-release"
+    # On Arch /etc/os-release is a symlink to ../usr/lib/os-release (and on some
+    # layouts the other way around), so the 'cat' above already wrote the real
+    # file. A plain 'cp' between the two paths then fails with
+    # "cp: '...os-release' and '...os-release' are the same file", which aborts
+    # the whole build because of 'set -e'. Only copy when they are distinct.
+    if [ "$(readlink -f "$ROOTFS_TARGET/etc/os-release" 2>/dev/null)" != \
+         "$(readlink -f "$ROOTFS_TARGET/usr/lib/os-release" 2>/dev/null)" ]; then
+        $SUDO cp -f "$ROOTFS_TARGET/etc/os-release" "$ROOTFS_TARGET/usr/lib/os-release"
+    fi
     
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     
