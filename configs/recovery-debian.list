@@ -45,13 +45,29 @@ ntfs-3g
 exfatprogs
 zenity
 
-# Networking
+# Networking & Hardware Drivers
 network-manager
 network-manager-applet
 wpasupplicant
 wireless-tools
+wireless-regdb
+iw
+rfkill
+aria2
 cifs-utils
 smbclient
+
+# Complete Wi-Fi / Ethernet Firmware & Drivers for all PCs and MacBooks
+firmware-linux-free
+firmware-misc-nonfree
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-libertas
+firmware-brcm80211
+broadcom-sta-dkms
+dkms
+linux-headers-amd64
 
 # Time Machine (Btrfs + Restic) Backup & Recovery
 restic

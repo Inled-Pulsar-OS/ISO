@@ -207,3 +207,9 @@ smbclient
 
 # ── HBlock (bloqueo de anuncios/rastreadores vía /etc/hosts) ────────────────
 hblock
+
+# ── Biometrics & Security (Face ID, Touch ID, Presence Detection) ───────────
+fprintd
+gaze
+gaze-gui
+gaze-gnome-extension
