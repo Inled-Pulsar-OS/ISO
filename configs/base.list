@@ -72,7 +72,6 @@ flatpak
 # Extensiones GNOME
 gnome-shell-extensions
 gnome-shell-extension-appindicator
-gnome-shell-extension-gsconnect
 # Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
 python3-nautilus
 # Dependencias Fildem HUD

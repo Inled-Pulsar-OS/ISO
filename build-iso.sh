@@ -1127,9 +1127,8 @@ $pkg_name"
 
         # cloudflare-warp-bin is bundled in the (minimal) ISO so the recovery/installer can
         # offer the user a VPN to reach the Inled repo in regions where Cloudflare is censored.
-        # localsend-bin is an extra package offered post-install. Both must be compiled from AUR
-        # since they are not present in the official repos or the Inled repo.
-        AUR_DEPS=("pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
+        # Both must be compiled from AUR since they are not present in official repos.
+        AUR_DEPS=("pamtester" "xremap-gnome-bin" "autokey-gtk" "winboat-bin" "cloudflare-warp-bin")
         aur_helper=""
         if command -v yay >/dev/null 2>&1; then
             aur_helper="yay"
@@ -1313,6 +1312,7 @@ $pkg_name"
                 $BOOTLOADER_PKGS \
                 droidtux \
                 seafari \
+                scrcpy \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
         "
@@ -1390,6 +1390,13 @@ $pkg_name"
                 pulsaros-theme \
                 pulsaros-gnome \
                 sayri \
+                pulsaros-vpn \
+                pulsaros-timemachine \
+                pulsaros-cloud \
+                pulsar-store \
+                pulsaros-circle-to-search \
+                scrcpy \
+                droidtux \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1397,6 +1404,7 @@ $pkg_name"
                 pulsaros-$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
+                pulsaros-feedback \
                 pulsaros-flydrop \
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
@@ -1412,8 +1420,15 @@ $pkg_name"
 
 
             # Install optional apps if published in repository
+            # gaze-gui / gaze-gnome-extension are optional: they are only
+            # published in the [inled] repo for the channels that already
+            # ship the Gaze binaries, so a missing package must not abort
+            # the build.
             /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
                 droidtux appinstall seafari winboat-bin pulsaros-circle-to-search 2>/dev/null || true
+            /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
+                gaze-gui gaze-gnome-extension 2>/dev/null || \
+                echo '⚠️  gaze-gui / gaze-gnome-extension not published in the [inled] repo for this channel (skipping).'
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
@@ -1683,6 +1698,7 @@ EOF
                 pulsaros-$BOOTLOADER \
                 pulsaros-essential \
                 pulsaros-welcome \
+                pulsaros-feedback \
                 pulsaros-flydrop \
                 pulsaros-recovery \
                 pulsaros-bootsound \

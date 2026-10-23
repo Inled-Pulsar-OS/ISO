@@ -82,7 +82,6 @@ flatpak
 # ── GNOME Extensions ─────────────────────────────────────────────────────────
 gnome-shell-extensions
 gnome-shell-extension-appindicator
-gnome-shell-extension-gsconnect
 # Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
 python3-nautilus
 gir1.2-ayatanaappindicator3-0.1

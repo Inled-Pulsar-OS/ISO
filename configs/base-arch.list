@@ -200,7 +200,10 @@ smbclient
 hblock
 
 # ── Biometrics & Security (Face ID, Touch ID, Presence Detection) ───────────
+# fprintd viene de los repos oficiales de Arch.
+# AVISO: 'gaze', 'gaze-gui' y 'gaze-gnome-extension' NO existen en los repos
+# oficiales (core/extra/multilib), por lo que pacstrap aborta con
+# "error: no se ha encontrado el paquete". Son paquetes propios de Pulsar OS
+# y se compilan desde PKG/arch/pkgbuilds/, instalándose más adelante en el
+# chroot con 'pacman -U' (ver build-iso.sh, fase de paquetes locales).
 fprintd
-gaze
-gaze-gui
-gaze-gnome-extension

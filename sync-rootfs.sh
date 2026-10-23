@@ -149,12 +149,7 @@ if [ "$DISTRO" = "arch" ]; then
                 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
                 update-desktop-database /usr/share/applications 2>/dev/null || true
 
-                # Fix GSConnect config.js paths if present
-                GSCONFIG=\"/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js\"
-                if [ -f \"\$GSCONFIG\" ]; then
-                    sed -i \"s|'/usr/local/share/|'/usr/share/|g\" \"\$GSCONFIG\"
-                fi
-                find /etc/skel/.config/gtk-4.0/ -name \"*.css\" -exec sed -i \"/@define-color accent_/d\" {} + 2>/dev/null || true
+                find /etc/skel/.config/gtk-4.0/ -name "*.css" -exec sed -i "/@define-color accent_/d" {} + 2>/dev/null || true
                 find /root/.config/gtk-4.0/ -name \"*.css\" -exec sed -i \"/@define-color accent_/d\" {} + 2>/dev/null || true
             '
             chmod -R a+r '$ROOTFS_TARGET/boot' 2>/dev/null || true
@@ -173,12 +168,6 @@ else
                 dpkg -i --force-overwrite /tmp/packages/*.deb 2>/dev/null || apt-get install -f -y --allow-downgrades
                 glib-compile-schemas /usr/share/glib-2.0/schemas/
                 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
-
-                # Fix GSConnect config.js paths if present
-                GSCONFIG=\"/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js\"
-                if [ -f \"\$GSCONFIG\" ]; then
-                    sed -i \"s|'/usr/local/share/|'/usr/share/|g\" \"\$GSCONFIG\"
-                fi
             '
             chmod -R a+r '$ROOTFS_TARGET/boot' 2>/dev/null || true
         "
