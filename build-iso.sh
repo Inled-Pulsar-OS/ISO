@@ -1397,6 +1397,7 @@ $pkg_name"
                 pulsaros-circle-to-search \
                 scrcpy \
                 droidtux \
+                pulsar-windows \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1414,6 +1415,8 @@ $pkg_name"
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsaros-hblock \
+                pulsaros-whatsnew \
+                pulsaros-update \
                 pulsaros-meta \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
@@ -1701,12 +1704,20 @@ EOF
                 pulsaros-feedback \
                 pulsaros-flydrop \
                 pulsaros-recovery \
+                pulsaros-live-wallpaper \
+                pulsaros-vpn \
+                pulsaros-cloud \
+                pulsaros-timemachine \
+                pulsar-store \
+                pulsar-windows \
                 pulsaros-bootsound \
                 pulsaros-hibernate \
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsaros-hblock \
+                pulsaros-whatsnew \
+                pulsaros-update \
                 hblock
 
             apt-get install -y --allow-downgrades droidtux appinstall seafari 2>/dev/null || true
@@ -2427,14 +2438,20 @@ unmount_tree "$ROOTFS_TARGET"
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/applications/install-macos.desktop" "$ROOTFS_TARGET/usr/share/applications/" 2>/dev/null || true
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/icons/." "$ROOTFS_TARGET/usr/share/icons/" 2>/dev/null || true
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/pixmaps/." "$ROOTFS_TARGET/usr/share/pixmaps/" 2>/dev/null || true
-        $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/gnome-background-properties" "$ROOTFS_TARGET/usr/share/backgrounds/macos"
-        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/gnome-background-properties/." "$ROOTFS_TARGET/usr/share/gnome-background-properties/" 2>/dev/null || true
-        if [ -d "/usr/share/gnome-background-properties" ]; then
-            $SUDO cp -rf "/usr/share/gnome-background-properties/." "$ROOTFS_TARGET/usr/share/gnome-background-properties/" 2>/dev/null || true
-        fi
-        if [ -d "/usr/share/backgrounds" ]; then
-            $SUDO cp -rf "/usr/share/backgrounds/." "$ROOTFS_TARGET/usr/share/backgrounds/" 2>/dev/null || true
-        fi
+
+        # Wallpapers: solo fondos propios de Pulsar OS. Los fondos de macOS se descargan bajo demanda.
+        $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/gnome-background-properties" "$ROOTFS_TARGET/usr/share/backgrounds" "$ROOTFS_TARGET/usr/share/backgrounds/macos"
+        # Copiar SOLO xml de fondos Pulsar
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/gnome-background-properties/pulsar-backgrounds.xml" "$ROOTFS_TARGET/usr/share/gnome-background-properties/" 2>/dev/null || true
+        # Copiar SOLO fondos propios
+        for bg in pulsar-os-tahoe.png pulsaros-golden-gate-background.png pulsaros-golden-gate-bg-oscuro.png; do
+            $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-essential/usr/share/backgrounds/$bg" "$ROOTFS_TARGET/usr/share/backgrounds/" 2>/dev/null || true
+        done
+        # Asegurar que NO quede el XML de macOS
+        $SUDO rm -f "$ROOTFS_TARGET/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml"
+        # Asegurar que el directorio macos esté vacío (descarga on-demand)
+        $SUDO find "$ROOTFS_TARGET/usr/share/backgrounds/macos" -type f -delete 2>/dev/null || true
+
         $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
     fi
 
