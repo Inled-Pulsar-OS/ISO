@@ -1396,7 +1396,7 @@ $pkg_name"
                 scrcpy \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
-                pulsaros-notch \
+                pulsaros-notchnux \
                 pulsaros-sddm \
                 pulsaros-plymouth \
                 pulsaros-$BOOTLOADER \
