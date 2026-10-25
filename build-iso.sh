@@ -1396,6 +1396,7 @@ $pkg_name"
                 scrcpy \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
+                pulsaros-notch \
                 pulsaros-sddm \
                 pulsaros-plymouth \
                 pulsaros-$BOOTLOADER \
@@ -2422,10 +2423,22 @@ unmount_tree "$ROOTFS_TARGET"
         $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
     fi
 
-    # Remove unwanted GNOME extensions from rootfs
-    echo "🧹 Removing unwanted GNOME extensions (places-menu, window-list)..."
-    $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
+    # Remove unwanted / deprecated GNOME extensions from rootfs
+    echo "🧹 Removing unwanted/deprecated GNOME extensions (ding, gsconnect, gaze, classic shell extensions)..."
+    $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/ding@rastersoft.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/macos-control-centre@pulsar.local" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/just-perfection-desktop@just-perfection" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/notification-position@drugo.dev" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/gnome-ui-tune@itstime.tech" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/pulsar-island@inled.es" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/pulsaros-control-center-button@inled.es" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/gaze@gundulabs.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/notchnux@adityasah.programs" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/apps-menu@gnome-shell-extensions.gcampax.github.com" \
+                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/auto-move-windows@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/search-light@icedman.github.com" 2>/dev/null || true
 
     # Recompile glib schemas, update desktop database and dconf database
