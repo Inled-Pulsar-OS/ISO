@@ -964,7 +964,7 @@ if [ "$DISTRO" = "arch" ]; then
     # bind-mounted cache that fails signature checks or reintroduces removed packages.
     for pattern in "pulsaros-*" "pulsar-store-*" "tubeos-*" "tube-os-*" "*calamares*" "sayri-*" \
                    "droidtux-*" "appinstall-*" "seafari-*" "nautilus*" "gnome-control-center*" \
-                   "winboat*" "driverman*" \
+                   "winboat*" "winboat-bin*" "driverman*" \
                    "gnome-macos-remap-wayland-*" "spotlight-gtk-*" \
                    "pulsar-pear-sound-theme-*" "*-debug-*"; do
         $SUDO rm -f "$PACMAN_CACHE_DIR"/$pattern.pkg.tar.zst \
@@ -1307,10 +1307,9 @@ $pkg_name"
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
             # Install remaining dependencies and packages.
-            # droidtux and seafari come from the [inled] repo via pacman.
             pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
-                droidtux \
+                appinstall \
                 seafari \
                 scrcpy \
                 qt6-multimedia \
@@ -1393,11 +1392,8 @@ $pkg_name"
                 pulsaros-vpn \
                 pulsaros-timemachine \
                 pulsaros-cloud \
-                pulsar-store \
                 pulsaros-circle-to-search \
                 scrcpy \
-                droidtux \
-                pulsar-windows \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-sddm \
@@ -1421,17 +1417,16 @@ $pkg_name"
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
+            # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
+            # pulsar-windows solo en ISO completa, no en minimal
+            if ! $MINIMAL; then
+                /usr/bin/pacman -S --needed --noconfirm --overwrite '*' pulsar-windows 2>/dev/null || echo '⚠️ pulsar-windows no disponible para este canal (skipping).'
+            fi
+
 
             # Install optional apps if published in repository
-            # gaze-gui / gaze-gnome-extension are optional: they are only
-            # published in the [inled] repo for the channels that already
-            # ship the Gaze binaries, so a missing package must not abort
-            # the build.
             /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
-                droidtux appinstall seafari winboat-bin pulsaros-circle-to-search 2>/dev/null || true
-            /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
-                gaze-gui gaze-gnome-extension 2>/dev/null || \
-                echo '⚠️  gaze-gui / gaze-gnome-extension not published in the [inled] repo for this channel (skipping).'
+                appinstall seafari pulsaros-circle-to-search 2>/dev/null || true
         "
         echo "✅ Arch packages installed from the Inled repository."
     fi
@@ -1644,7 +1639,7 @@ EOF
                     echo '⚠️ Direct batch install encountered conflicts, resolving...'
                     apt-get install -y --fix-broken || true
                     yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
-                    apt-get install -y --allow-downgrades droidtux appinstall seafari || true
+                    apt-get install -y --allow-downgrades appinstall seafari || true
                 }
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
@@ -1708,8 +1703,6 @@ EOF
                 pulsaros-vpn \
                 pulsaros-cloud \
                 pulsaros-timemachine \
-                pulsar-store \
-                pulsar-windows \
                 pulsaros-bootsound \
                 pulsaros-hibernate \
                 pulsar-pear-sound-theme \
@@ -1720,7 +1713,11 @@ EOF
                 pulsaros-update \
                 hblock
 
-            apt-get install -y --allow-downgrades droidtux appinstall seafari 2>/dev/null || true
+            apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
+            # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
+            if [ "$MINIMAL" != "true" ]; then
+                apt-get install -y --allow-downgrades pulsar-windows 2>/dev/null || true
+            fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1846,37 +1843,7 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
     fi
 "
 
-if [ "$DISTRO" = "debian" ] && ! $MINIMAL; then
-    # Download external winboat dependencies on host and copy to chroot
-    echo "📥 Downloading external dependencies (Winboat) on the host..."
-    WINBOAT_TMP="$BUILD_DIR/winboat-${VARIANT_NAME}-${BOOTLOADER}-$$.deb"
-    wget -q --timeout=15 --tries=3 -O "$WINBOAT_TMP" https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-    $SUDO cp "$WINBOAT_TMP" "$ROOTFS_TARGET/tmp/winboat.deb"
-    rm -f "$WINBOAT_TMP"
-
-    echo "📥 Installing Winboat..."
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        set -e
-        apt-get install -y /tmp/winboat.deb
-        rm -f /tmp/winboat.deb
-    "
-elif [ "$DISTRO" = "arch" ]; then
-    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        if ! command -v winboat >/dev/null 2>&1 && [ ! -f /opt/winboat/winboat ]; then
-            echo '📥 Installing Winboat on Arch (fallback)...'
-            /usr/bin/pacman -S --noconfirm winboat-bin 2>/dev/null || {
-                mkdir -p /tmp/winboat-install
-                cd /tmp/winboat-install
-                curl -sL -o winboat.deb https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-amd64.deb
-                bsdtar -xf winboat.deb data.tar.xz
-                bsdtar -xf data.tar.xz -C /
-                cd /
-                rm -rf /tmp/winboat-install
-            }
-        fi
-    "
-fi
+# Winboat eliminado: reemplazado por pulsar-windows
 
 # Configurar Flathub en el sistema e instalar Flatpaks esenciales (con caché persistente local)
 FLATPAK_CACHE_DIR="$BUILD_DIR/flatpak-cache"
