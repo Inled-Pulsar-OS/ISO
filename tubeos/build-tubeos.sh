@@ -174,6 +174,11 @@ ISO_OUTPUT="$BUILD_DIR/tubeos-$BRANCH-$DISTRO-$BOOTLOADER.iso"
 PACKAGE_LIST="$ISO_DIR/configs/base-tubeos-$DISTRO.list"
 CHROOT_BIN="$(command -v chroot || echo /usr/sbin/chroot)"
 
+# Pinned Arch mirror. The pacman-mirrorlist package ships every Server line
+# commented out, so a freshly pacstrapped rootfs has no servers for core/extra
+# ("error: no servers configured for repository: extra").
+ARCH_MIRROR="${ARCH_MIRROR:-https://geo.mirror.pkgbuild.com/\$repo/os/\$arch}"
+
 # Original user for makepkg (cannot run as root)
 ORIGINAL_USER=""
 if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
@@ -196,6 +201,14 @@ run_as_user() {
     else
         "$@"
     fi
+}
+
+# Write a working Arch mirrorlist into a rootfs (host and chroot alike)
+write_arch_mirrorlist() {
+    local root="$1"
+    [ -z "$root" ] && return 0
+    mkdir -p "$root/etc/pacman.d"
+    printf 'Server = %s\n' "$ARCH_MIRROR" > "$root/etc/pacman.d/mirrorlist"
 }
 
 echo "============================================="
@@ -324,6 +337,15 @@ if $USE_LOCAL; then
 
                 if should_rebuild_arch_pkg "$pkg"; then
                     echo "  🔨 Building $pkg..."
+                    # Stage precompiled assets (Go binaries, web bundles, ...) when
+                    # the source package ships a prepare-assets.sh, like the
+                    # Debian path already does. tube-os-dash needs it or
+                    # package() fails on the missing usr/bin.
+                    if [ -x "$PKG_DIR/$pkg/prepare-assets.sh" ]; then
+                        echo "  📦 Preparing assets for $pkg..."
+                        run_as_user bash -c "cd '$PKG_DIR/$pkg' && ./prepare-assets.sh" || \
+                            echo "  WARN: $pkg asset preparation failed"
+                    fi
                     run_as_user bash -c "cd '$PKGBUILD_DIR' && PKGDEST='$LOCAL_PKGS_DIR' makepkg -cfd --noconfirm --nosign 2>&1" || {
                         echo "  WARN: $pkg build failed, continuing..."
                     }
@@ -446,6 +468,8 @@ REPOEOF
                 BASE_PKGS=$(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$' | grep -vE 'tubeos-|tube-os-|dockermigrate|plasma-|kodi|python-' | tr '\n' ' ')
                 pacstrap -K -M -c -C "$CLEAN_PACMAN_CONF" "$ROOTFS_BASE" $BASE_PKGS
                 rm -f "$CLEAN_PACMAN_CONF"
+                # -M skips the host mirrorlist, so seed a pinned one for later chroot use
+                write_arch_mirrorlist "$ROOTFS_BASE"
             fi
         fi
         echo "  Copying base rootfs to target..."
@@ -524,6 +548,10 @@ Include = /etc/pacman.d/mirrorlist
 PACCONF
     $SUDO sed -i 's/^[[:space:]]*CheckSpace/#CheckSpace/' "$ROOTFS_TARGET/etc/pacman.conf"
 
+    # core/extra resolve through /etc/pacman.d/mirrorlist. The packaged file has
+    # every Server line commented out, so pin a real mirror before any download.
+    write_arch_mirrorlist "$ROOTFS_TARGET"
+
     # Keyring
     mkdir -p "$ROOTFS_TARGET/usr/share/keyrings"
     cp "$ISO_DIR/configs/inled-archive-keyring.gpg" "$ROOTFS_TARGET/usr/share/keyrings/" 2>/dev/null || true
@@ -534,8 +562,9 @@ PACCONF
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             pacman-key --init 2>/dev/null || true
             pacman-key --populate archlinux 2>/dev/null || true
-            pacman -Sy --noconfirm 2>/dev/null || true
-            pacman -S --noconfirm --needed --overwrite '*' $ALL_DEPS plymouth archiso uvicorn python-fastapi python-qrcode || true
+            pacman -Syy --noconfirm < /dev/null || true
+            pacman -S --noconfirm --needed --overwrite '*' $ALL_DEPS plymouth archiso mkinitcpio-archiso uvicorn python-fastapi python-qrcode < /dev/null \
+                || echo '  WARN: some base packages could not be installed'
         "
 
     if $USE_LOCAL; then
@@ -550,8 +579,14 @@ PACCONF
 
             "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
                 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-                pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst 2>/dev/null || pacman -U --noconfirm --nodeps --overwrite '*' /tmp/packages/*.pkg.tar.zst 2>/dev/null || true
-                pacman -S --noconfirm --needed --overwrite '*' $TUBEOS_PKG_NAMES 2>/dev/null || true
+                if ! pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst < /dev/null; then
+                    echo '  WARN: pacman -U failed, retrying without dependency resolution...'
+                    pacman -U --noconfirm --nodeps --overwrite '*' /tmp/packages/*.pkg.tar.zst < /dev/null || true
+                fi
+                pacman -S --noconfirm --needed --overwrite '*' $TUBEOS_PKG_NAMES < /dev/null \
+                    || echo '  WARN: some Tube OS packages are not available in the configured repos'
+                pacman -Q tubeos-installer tubeos-branding tubeos-ui >/dev/null 2>&1 \
+                    || echo '  ERROR: Tube OS packages are NOT installed in the target rootfs'
             "
             rm -rf "$ROOTFS_TARGET/tmp/packages"
         fi
@@ -560,16 +595,19 @@ PACCONF
         TUBEOS_PKG_NAMES=$(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$' | grep -E 'tubeos-|tube-os-|dockermigrate' | tr '\n' ' ')
         "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-            pacman -S --noconfirm --needed --overwrite '*' $TUBEOS_PKG_NAMES 2>/dev/null || true
+            pacman -S --noconfirm --needed --overwrite '*' $TUBEOS_PKG_NAMES < /dev/null \
+                || echo '  WARN: some Tube OS packages could not be installed'
         "
     fi
 
     if ! $REUSE_TARGET; then
         # Bootloader
         if [ "$BOOTLOADER" = "grub" ]; then
-            "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && pacman -S --noconfirm --needed --overwrite '*' grub os-prober efibootmgr"
+            "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && pacman -S --noconfirm --needed --overwrite '*' grub os-prober efibootmgr < /dev/null" \
+                || echo "  ERROR: failed to install GRUB packages"
         else
-            "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && pacman -S --noconfirm --needed --overwrite '*' refind efibootmgr grub os-prober"
+            "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && pacman -S --noconfirm --needed --overwrite '*' refind efibootmgr grub os-prober < /dev/null" \
+                || echo "  ERROR: failed to install rEFInd packages"
         fi
     fi
 
@@ -1012,8 +1050,15 @@ if [ "$DISTRO" = "arch" ]; then
     echo "  Configuring Arch initramfs with archiso hooks..."
     "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        pacman -S --noconfirm --needed archiso 2>/dev/null || true
-    " || true
+        # archiso 91+ no longer ships the mkinitcpio hooks; they live in
+        # mkinitcpio-archiso now. Without them mkinitcpio fails with
+        # Error: Hook 'archiso' cannot be found.
+        pacman -S --noconfirm --needed archiso mkinitcpio-archiso < /dev/null || true
+        if [ ! -f /usr/lib/initcpio/hooks/archiso ] || [ ! -f /usr/lib/initcpio/install/archiso ]; then
+            echo '  ERROR: archiso mkinitcpio hooks are missing (install mkinitcpio-archiso)'
+            exit 1
+        fi
+    "
 
     mkdir -p "$ROOTFS_TARGET/etc/mkinitcpio.conf.d"
     echo 'HOOKS=(base udev modconf keyboard kms plymouth archiso archiso_loop_mnt block filesystems)' > "$ROOTFS_TARGET/etc/mkinitcpio.conf.d/archiso.conf"

@@ -20,6 +20,7 @@ VARS_IMAGE="${BUILD_DIR}/OVMF_VARS.fd"
 # Defaults
 BOOT_MODE="iso" # "iso" or "disk"
 DISTRO="arch"   # "arch" or "debian"
+BOOTLOADER_ISO="grub" # ISO naming: "grub" or "refind"
 MEM=""          # Auto-set: 1024M for debian (RPi3 spec), 4G for arch
 SMP="4"
 DISK_SIZE="25G"
@@ -47,11 +48,13 @@ Options:
   --arch             Boot Tube OS Arch Linux ISO (default distro)
   --debian           Boot Tube OS Debian ISO
   --distro <distro>  Select distro: 'arch' or 'debian' (default: arch)
+  --refind           Prefer the rEFInd ISO (tubeos-stable-<distro>-refind.iso)
+  --grub             Prefer the GRUB ISO (tubeos-stable-<distro>-grub.iso, default)
   --reset-disk       Re-create virtual disk (${DISK_IMAGE})
   --disk-size <size> Virtual disk size (default: 25G)
   --mem <size>       RAM allocated to VM (default: 4G)
   --smp <cores>      Number of CPU cores (default: 4)
-  --iso-path <path>  Custom ISO path
+  --iso-path <path>  Custom ISO path (skips auto-detection)
   --port <port>      Host port for Web UI (guest:80) (default: 8088)
   --passthrough      Enable bridge network on virbr0 for LAN mDNS access (http://tubeos.local)
   --headless         Run in headless mode (no GUI window)
@@ -62,9 +65,15 @@ Port forwardings active in VM:
   Host ${MIGRATE_PORT}   -> Guest 8070 (DockerMigrate)
   Host ${SSH_PORT}   -> Guest 22   (SSH)
 
+Bridge mode prerequisites (once per host):
+  sudo virsh net-start default && sudo virsh net-autostart default
+  (needs qemu-bridge-helper + 'allow virbr0' in /etc/qemu/bridge.conf)
+
 Examples:
-  $(basename "$0") --iso --arch           # Boot Arch ISO
+  $(basename "$0") --iso --arch           # Boot Arch ISO (grub, else refind)
+  $(basename "$0") --iso --arch --refind  # Boot the rEFInd ISO
   $(basename "$0") --iso --debian         # Boot Debian ISO
+  $(basename "$0") --iso --passthrough    # Boot with virbr0 bridge networking
   $(basename "$0") --disk                 # Boot installed system from virtual disk
   $(basename "$0") --reset-disk --iso     # Re-create empty disk and boot ISO
 EOF
@@ -90,6 +99,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --debian)
             DISTRO="debian"
+            shift
+            ;;
+        --refind)
+            BOOTLOADER_ISO="refind"
+            shift
+            ;;
+        --grub)
+            BOOTLOADER_ISO="grub"
             shift
             ;;
         --distro)
@@ -138,6 +155,48 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ---------------------------------------------------------------------------
+# Pre-flight: liberar bloqueos huérfanos del disco virtual
+# Si una ejecución previa de QEMU se quedó colgada, retiene el "write lock"
+# del qcow2 y cualquier nuevo arranque falla con
+#   "Failed to get 'write' lock ... Is another process using the image?"
+# Detectamos quién tiene el disco abierto y, si es un qemu-system ajeno,
+# lo finalizamos antes de continuar.
+# ---------------------------------------------------------------------------
+release_stale_disk_locks() {
+    [[ -f "${DISK_IMAGE}" ]] || return 0
+    if ! command -v fuser >/dev/null 2>&1; then
+        echo -e "${YELLOW}Nota: 'fuser' no está instalado; no se puede verificar el bloqueo del disco.${NC}"
+        return 0
+    fi
+    if ! sudo fuser "${DISK_IMAGE}" >/dev/null 2>&1; then
+        return 0
+    fi
+    echo -e "${YELLOW}>>> El disco ${DISK_IMAGE} está siendo usado por otro proceso:${NC}"
+    sudo fuser -v "${DISK_IMAGE}" 2>/dev/null || true
+    local pids
+    pids="$(sudo fuser "${DISK_IMAGE}" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' || true)"
+    if [[ -n "${pids}" ]]; then
+        echo -e "${CYAN}>>> Finalizando procesos QEMU huérfanos que bloquean el disco...${NC}"
+        for pid in ${pids}; do
+            local comm
+            comm="$(ps -p "${pid}" -o comm= 2>/dev/null || true)"
+            if echo "${comm}" | grep -qi "qemu"; then
+                sudo kill "${pid}" 2>/dev/null || true
+                echo -e "    - PID ${pid} (${comm}) terminado"
+            fi
+        done
+        sleep 2
+        if sudo fuser "${DISK_IMAGE}" >/dev/null 2>&1; then
+            echo -e "${RED}No se pudo liberar el disco. Cierra manualmente cualquier QEMU que lo use y vuelve a intentar.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Disco liberado.${NC}"
+    fi
+}
+
+release_stale_disk_locks
+
 mkdir -p "${BUILD_DIR}"
 
 # Set default RAM and CPU matching target hardware
@@ -153,18 +212,27 @@ fi
 if [[ -n "${CUSTOM_ISO_PATH}" ]]; then
     ISO_FILE="${CUSTOM_ISO_PATH}"
 else
-    ISO_FILE="${BUILD_DIR}/tubeos-stable-${DISTRO}-grub.iso"
-    # Auto fallback if chosen distro iso is missing but the other exists
-    if [[ ! -f "${ISO_FILE}" ]]; then
-        if [[ "${DISTRO}" == "arch" ]] && [[ -f "${BUILD_DIR}/tubeos-stable-debian-grub.iso" ]]; then
-            echo -e "${YELLOW}Note: Arch ISO not found, falling back to Debian ISO.${NC}"
-            ISO_FILE="${BUILD_DIR}/tubeos-stable-debian-grub.iso"
-            DISTRO="debian"
-        elif [[ "${DISTRO}" == "debian" ]] && [[ -f "${BUILD_DIR}/tubeos-stable-arch-grub.iso" ]]; then
-            echo -e "${YELLOW}Note: Debian ISO not found, falling back to Arch ISO.${NC}"
-            ISO_FILE="${BUILD_DIR}/tubeos-stable-arch-grub.iso"
-            DISTRO="arch"
+    ISO_FILE=""
+    # Same distro first (preferred bootloader, then the other), then any tubeos ISO
+    for candidate in \
+        "${BUILD_DIR}/tubeos-stable-${DISTRO}-${BOOTLOADER_ISO}.iso" \
+        "${BUILD_DIR}/tubeos-stable-${DISTRO}-grub.iso" \
+        "${BUILD_DIR}/tubeos-stable-${DISTRO}-refind.iso"; do
+        if [[ -f "${candidate}" ]]; then
+            ISO_FILE="${candidate}"
+            break
         fi
+    done
+    if [[ -z "${ISO_FILE}" ]]; then
+        for candidate in "${BUILD_DIR}"/tubeos-stable-*.iso; do
+            if [[ -f "${candidate}" ]]; then
+                ISO_FILE="${candidate}"
+                break
+            fi
+        done
+    fi
+    if [[ -n "${ISO_FILE}" ]]; then
+        echo -e "${CYAN}>>> Using ISO: ${ISO_FILE}${NC}"
     fi
 fi
 
@@ -194,6 +262,23 @@ if [[ "${RESET_DISK}" == true ]] || [[ ! -f "${VARS_IMAGE}" ]]; then
         cp "${OVMF_VARS_SRC}" "${VARS_IMAGE}"
     fi
 fi
+
+# 2b. Ensure the disk/NVRAM images are writable by the user running QEMU.
+# The build script runs as root and leaves build/*.qcow2 and OVMF_VARS.fd
+# root-owned, which makes QEMU abort with "Could not open ... Permission denied".
+for _img in "${DISK_IMAGE}" "${VARS_IMAGE}"; do
+    if [[ -f "${_img}" ]] && [[ ! -w "${_img}" ]]; then
+        if [[ "$(id -u)" -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+            echo -e "${CYAN}>>> Fixing ownership of ${_img}${NC}"
+            sudo chown "$(id -u):$(id -g)" "${_img}" 2>/dev/null || true
+        fi
+        if [[ ! -w "${_img}" ]]; then
+            echo -e "${RED}Error: ${_img} is not writable by $(id -un).${NC}"
+            echo -e "${YELLOW}Fix it with: sudo chown $(id -u):$(id -g) ${_img}${NC}"
+            exit 1
+        fi
+    fi
+done
 
 # 3. Verify ISO presence if ISO boot
 if [[ "${BOOT_MODE}" == "iso" ]]; then
@@ -230,6 +315,13 @@ if [[ "${NET_MODE}" == "bridge" ]]; then
         virsh -c qemu:///system net-start default >/dev/null 2>&1 || sudo virsh net-start default >/dev/null 2>&1 || true
     fi
 
+    if ! ip link show virbr0 >/dev/null 2>&1; then
+        echo -e "${RED}>>> Could not bring up virbr0.${NC}"
+        echo -e "    Run this once, then retry with --passthrough:"
+        echo -e "      ${CYAN}sudo virsh net-start default${NC}"
+        echo -e "      ${CYAN}sudo virsh net-autostart default${NC}   # keep it up after reboots"
+    fi
+
     # Check bridge helper configuration
     if [[ -f "/usr/lib/qemu/qemu-bridge-helper" ]] && ip link show virbr0 >/dev/null 2>&1; then
         # Ensure IP forwarding & NAT Masquerading so guest has full internet access
@@ -242,8 +334,10 @@ if [[ "${NET_MODE}" == "bridge" ]]; then
             sudo iptables -I FORWARD 2 -o virbr0 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
 
         echo -e "${GREEN}>>> Network: Bridge Passthrough ACTIVE on virbr0 (NAT enabled)${NC}"
-        echo -e "    mDNS & Direct LAN:    ${CYAN}http://tubeos.local${NC} or ${CYAN}http://<vm-ip>${NC}"
-        echo -e "    DockerMigrate on LAN: ${CYAN}http://tubeos.local:8070${NC}"
+        echo -e "    From this host:       ${CYAN}http://tubeos.local${NC} or ${CYAN}http://192.168.122.x${NC}"
+        echo -e "    DockerMigrate:        ${CYAN}http://tubeos.local:8070${NC}"
+        echo -e "    Guest IP:             ${CYAN}sudo virsh net-dhcp-leases default${NC}"
+        echo -e "    DNS local:            ${CYAN}tubeos.local${NC} -> ${CYAN}192.168.122.10${NC}  (IP fija por DHCP, MAC 52:54:00:12:34:56; ya agregado a /etc/hosts)"
         # Single bridged NIC directly on virbr0 (avoids asymmetric routing collision)
         QEMU_CMD+=(
             -device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56

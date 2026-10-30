@@ -126,17 +126,22 @@ sudo ./build-parallel.sh --arch --minimal
 sudo ./build-parallel.sh --debian --refind
 ```
 
-## Testing in Chroot or the ISO quickly   
-The file for quickly testing the ISOs is `run-qemu.sh`, which accepts the following arguments:
-- `--iso` Boots from a previously built ISO image instead of directly from the chroot (build/rootfs-target)
-- `--refind` Selects the rEFInd bootloader (used with `--iso`)
-- `--grub` Selects the GRUB bootloader (used with `--iso`, default)
-- `--nvidia` Uses the NVIDIA variant of the rootfs/ISO
-- `--arch` Uses the ARCH variant of the rootfs/ISO
-- `--debian` Uses the Debian variant of the rootfs/ISO (default)
-- `--branch|-b <branch>` Sets the branch, must be `stable`, `forky` or `rolling` (default: `stable`)
+## Testing the ISO in QEMU
 
-Without `--iso`, the script boots the compiled rootfs (`build/rootfs-target-<branch>-<distro>[-nvidia]`) directly via 9pfs, without the need to package an ISO, making testing instantaneous.
+Two runners are available:
+
+- **`run-tubeos-vm.sh`** — Tube OS VM with persistent UEFI NVRAM, virtual disk,
+  user-mode NAT port forwarding and optional `virbr0` bridge. Documented in
+  detail in [Running and Testing with `run-tubeos-vm.sh`](#running-and-testing-with-run-tubeos-vmsh).
+- **`run-qemu.sh <iso>`** — minimal launcher for a quick smoke test: boots the
+  given ISO (or the first `pulsaros-*.iso` in `build/`) with KVM + OVMF, a 25 GB
+  throwaway disk at `/tmp/pulsar-test-disk.qcow2`, 4 GB RAM, 4 cores and plain
+  user-mode networking. It accepts no flags.
+
+```bash
+./run-qemu.sh build/tubeos-stable-arch-refind.iso   # smoke test
+./run-tubeos-vm.sh --iso --arch --refind            # full VM (ports, disk, bridge)
+```
 
 ## Building from GH Actions  
 The ISO version, release name, and branch must be specified.  
@@ -184,67 +189,123 @@ Tube OS provides a cinematic 10-foot TV user interface (Openbox + Tube OS UI / P
 Use `tubeos/build-tubeos.sh` (or `build-tubeos-iso.sh`):
 
 ```bash
-# Build Arch Linux edition (Plasma Bigscreen + Tube OS UI + CasaOS) [Fast/Quick Mode]
-sudo ./tubeos/build-tubeos.sh --arch --quick
+# Full build: Arch + rEFInd bootloader + locally built packages (clean target)
+sudo ./tubeos/build-tubeos.sh --arch --local --refind
 
-# Build Debian edition (Openbox + Tube OS UI + CasaOS) [Fast/Quick Mode]
-sudo ./tubeos/build-tubeos.sh --debian --quick
+# Incremental: only rebuild packages whose sources changed, keep the base cache
+sudo ./tubeos/build-tubeos.sh --arch --local --refind -i
 
-# Rebuild only modified packages incrementally
-sudo ./tubeos/build-tubeos.sh --arch --incremental
+# Quick: reuse the already populated target rootfs (fastest iteration)
+sudo ./tubeos/build-tubeos.sh --arch --local --refind -q
+
+# Debian edition (Openbox + Tube OS UI + CasaOS)
+sudo ./tubeos/build-tubeos.sh --debian --local
 ```
+
+The ISO is written to `build/tubeos-<branch>-<distro>-<bootloader>.iso`, e.g.
+`build/tubeos-stable-arch-refind.iso`.
 
 ### Running and Testing with `run-tubeos-vm.sh`
 
-The `run-tubeos-vm.sh` script automates QEMU virtual machine creation, UEFI/OVMF firmware configuration, port forwarding, and disk persistence.
+`run-tubeos-vm.sh` creates/reuses a virtual disk (`build/tubeos-disk.qcow2`),
+configures UEFI (OVMF + persistent NVRAM), forwards ports and boots either the
+Live ISO or the installed disk with KVM acceleration.
 
-#### How `run-tubeos-vm.sh` works:
+#### 1. Quick start (user-mode NAT, no host setup)
 
-1. **Boot from Live ISO (Installation Mode)**:
-   ```bash
-   ./run-tubeos-vm.sh --iso --arch
-   # or for Debian:
-   ./run-tubeos-vm.sh --iso --debian
-   ```
-   - Automatically attaches a virtual disk (`build/tubeos-disk.qcow2`, 25GB) and boots the ISO with KVM hardware acceleration.
-   - Forwards ports to your host machine:
-     - **Host `http://localhost:8088`** -> Guest port `80` (Tube OS Web Installer / CasaOS Dashboard)
-     - **Host `http://localhost:8070`** -> Guest port `8070` (DockerMigrate)
-     - **Host `localhost:2222`** -> Guest port `22` (SSH)
+```bash
+./run-tubeos-vm.sh --iso --arch            # auto-detects ...-grub.iso, then ...-refind.iso
+./run-tubeos-vm.sh --iso --arch --refind   # force the rEFInd ISO
+./run-tubeos-vm.sh --iso --debian
+./run-tubeos-vm.sh --iso-path build/tubeos-stable-arch-refind.iso   # explicit path
+```
 
-2. **Boot from Installed Virtual Disk (Installed Mode)**:
-   Once installed via the Web Installer at `http://localhost:8088`, boot directly into your installed system:
-   ```bash
-   ./run-tubeos-vm.sh --disk
-   ```
+The ISO name depends on the bootloader used at build time:
+`tubeos-stable-<distro>-grub.iso` or `tubeos-stable-<distro>-refind.iso`.
+If the file is not found, pass `--refind`/`--grub` or `--iso-path`.
 
-3. **Reset Virtual Disk (Fresh Start)**:
-   Wipes the existing virtual disk and boots a clean ISO:
-   ```bash
-   ./run-tubeos-vm.sh --reset-disk --iso
-   ```
+Ports forwarded to the host in this mode:
 
-4. **LAN Bridge & mDNS Mode**:
-   Bridges directly to `virbr0` for direct network access (`http://tubeos.local`):
-   ```bash
-   ./run-tubeos-vm.sh --iso --passthrough
-   ```
+| Host | Guest | Service |
+| :--- | :--- | :--- |
+| `http://localhost:8088` | 80 | Tube OS Web Installer / CasaOS dashboard |
+| `http://localhost:8070` | 8070 | DockerMigrate |
+| `localhost:2222` | 22 | SSH (`ssh -p 2222 root@localhost`, password `tubeos`) |
 
-### Options Reference for `run-tubeos-vm.sh`
+#### 2. Bridge mode (`virbr0`, `http://tubeos.local`)
+
+`--passthrough` (aliases `--bridge`, `--tap`) attaches the guest NIC to the
+libvirt `virbr0` bridge instead of user-mode NAT. The guest gets a real IP in
+`192.168.122.0/24`, so mDNS works (`http://tubeos.local`) and the VM can be
+reached from the host and from other VMs/containers on that bridge.
+
+One-time host setup (the script tries it, but it needs root):
+
+```bash
+sudo virsh net-start default        # creates virbr0 + dnsmasq DHCP
+sudo virsh net-autostart default    # keep it up after reboots
+ip -br link show virbr0             # must exist before using --passthrough
+```
+
+Requirements:
+
+- `qemu-bridge-helper` installed and setuid root
+  (`/usr/lib/qemu/qemu-bridge-helper`, shipped by QEMU).
+- `/etc/qemu/bridge.conf` containing `allow virbr0`.
+- Your user in the `libvirt` group (and `wheel`/`sudo` for the setup step).
+
+Then:
+
+```bash
+./run-tubeos-vm.sh --iso --arch --passthrough
+sudo virsh net-dhcp-leases default     # guest IP if mDNS does not resolve
+```
+
+In bridge mode there is **no port forwarding**: the guest listens directly on
+its own IP, so the installer is `http://<guest-ip>/` (port 80) and SSH is
+`ssh root@<guest-ip>` (password `tubeos`).
+
+> `virbr0` is a **NAT** bridge, not a real LAN bridge: the host reaches the VM at
+> `http://tubeos.local` / `192.168.122.x`, but other machines on your LAN cannot.
+> For that you need a host bridge (`br0`) bound to the physical NIC and
+> `-netdev bridge,br=br0` — it depends on your network setup (NetworkManager
+> bridge connection or `systemd-networkd`).
+
+#### 3. Installed system and fresh disk
+
+```bash
+./run-tubeos-vm.sh --disk               # boot the installed system from the qcow2
+./run-tubeos-vm.sh --reset-disk --iso   # wipe the disk and reinstall
+./run-tubeos-vm.sh --iso --headless     # no GUI window (ports/serial only)
+```
+
+#### 4. Options reference
 
 | Option | Description |
 | :--- | :--- |
 | `--iso` | Boots from the Live ISO image with the virtual disk attached (default). |
 | `--disk` | Boots directly from the installed virtual disk (`tubeos-disk.qcow2`). |
-| `--arch` | Selects the Arch Linux ISO (`tubeos-stable-arch-grub.iso`). |
-| `--debian` | Selects the Debian ISO (`tubeos-stable-debian-grub.iso`). |
+| `--arch` | Selects the Arch Linux edition (default). |
+| `--debian` | Selects the Debian edition. |
+| `--refind` / `--grub` | Prefers `tubeos-stable-<distro>-refind.iso` / `-grub.iso`. |
+| `--iso-path <path>` | Uses an explicit ISO path (skips auto-detection). |
+| `--passthrough` | Bridge networking on `virbr0` (mDNS / `tubeos.local`). |
 | `--reset-disk` | Re-creates an empty virtual disk before booting. |
-| `--disk-size <size>` | Sets the virtual disk size (default: `25G`). |
-| `--mem <size>` | Sets VM RAM allocation (default: `4G`). |
-| `--smp <cores>` | Sets VM CPU core count (default: `4`). |
-| `--port <port>` | Sets host port for Web UI access (default: `8088`). |
-| `--passthrough` | Enables bridge networking on `virbr0` for mDNS LAN access (`tubeos.local`). |
-| `--headless` | Runs without graphical window (terminal only). |
+| `--disk-size <size>` | Virtual disk size (default: `25G`). |
+| `--mem <size>` | VM RAM allocation (default: `4G`; `1024M` for Debian). |
+| `--smp <cores>` | VM CPU core count (default: `4`). |
+| `--port <port>` | Host port for the Web UI (guest port 80, default: `8088`). |
+| `--headless` | Runs without a graphical window. |
+
+#### 5. Troubleshooting
+
+| Symptom | Fix |
+| :--- | :--- |
+| `ISO file not found` | Built with `--refind`? Add `--refind` or `--iso-path build/tubeos-stable-arch-refind.iso`. |
+| `Bridge virbr0 is not active` | `sudo virsh net-start default && sudo virsh net-autostart default`. |
+| `failed to add tap interface` / bridge helper error | `sudo chmod u+s /usr/lib/qemu/qemu-bridge-helper` and add `allow virbr0` to `/etc/qemu/bridge.conf`. |
+| `Warning: /dev/kvm not writable` | Add your user to the `kvm` group (`sudo usermod -aG kvm $USER`, re-login). |
+| `tubeos.local` does not resolve | Use the IP from `sudo virsh net-dhcp-leases default`; needs `avahi`/`nss-mdns` on the host. |
 
 ## Packages  
 PulsarOS is fully declarative; packages are built and obtained from [repo PKG](https://github.com/Inled-Pulsar-OS/PKG)

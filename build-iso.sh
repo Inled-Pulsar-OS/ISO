@@ -1237,6 +1237,12 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/dockermigrate-*.pkg.tar.zst
+        # Not on the live ISO: pulsar-store, the Windows-app runner and the Update
+        # Assistant are installed to disk at install time by pulsaros-recovery
+        # (forced "Pulsar OS extras"), together with the rest of the extras.
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat-bin-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
 
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
@@ -1390,6 +1396,7 @@ $pkg_name"
                 pulsaros-gnome \
                 sayri \
                 pulsaros-vpn \
+                pulsaros-firewall \
                 pulsaros-timemachine \
                 pulsaros-cloud \
                 pulsaros-circle-to-search \
@@ -1413,7 +1420,6 @@ $pkg_name"
                 gnome-macos-remap-wayland \
                 pulsaros-hblock \
                 pulsaros-whatsnew \
-                pulsaros-update \
                 pulsaros-meta \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
@@ -1588,6 +1594,11 @@ EOF
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug*
+        # Not on the live ISO: installed to disk at install time by pulsaros-recovery
+        # (forced "Pulsar OS extras").
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
         else
@@ -1702,6 +1713,7 @@ EOF
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
                 pulsaros-vpn \
+                pulsaros-firewall \
                 pulsaros-cloud \
                 pulsaros-timemachine \
                 pulsaros-bootsound \
@@ -1711,7 +1723,6 @@ EOF
                 gnome-macos-remap-wayland \
                 pulsaros-hblock \
                 pulsaros-whatsnew \
-                pulsaros-update \
                 hblock
 
             apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
@@ -2215,6 +2226,19 @@ EOF
         echo "⚠️ warp-svc.service not present in target — skipping WARP daemon enable (cloudflare-warp-bin may have failed to build)."
     fi
 
+    # Enable UFW and initialize default Pulsar OS rules
+    if [ -f "$ROOTFS_TARGET/usr/bin/ufw" ]; then
+        echo "🛡️ Configuring default Pulsar OS firewall rules (UFW)..."
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+            systemctl enable ufw.service 2>/dev/null || true
+            if [ -x /usr/lib/pulsaros-firewall/firewall-helper ]; then
+                /usr/lib/pulsaros-firewall/firewall-helper init-defaults 2>/dev/null || true
+            fi
+            mkdir -p /etc/systemd/user/graphical-session.target.wants 2>/dev/null || true
+            ln -sf /usr/lib/systemd/user/pulsar-firewall-watcher.service /etc/systemd/user/graphical-session.target.wants/ 2>/dev/null || true
+        "
+    fi
+
     # Copy skeleton files to live user home directory to ensure all dconf settings and GTK4 themes are applied
     echo "⚙️ Configurando el directorio home del usuario live..."
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -2434,7 +2458,6 @@ unmount_tree "$ROOTFS_TARGET"
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/pulsar-island@inled.es" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/pulsaros-control-center-button@inled.es" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/gaze@gundulabs.com" \
-                 "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/notchnux@adityasah.programs" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/apps-menu@gnome-shell-extensions.gcampax.github.com" \
@@ -2516,6 +2539,18 @@ EOI
         fi
         if command -v dconf >/dev/null 2>&1; then
             dconf update 2>/dev/null || true
+        fi
+    " 2>/dev/null || true
+
+    # Mask heavy background indexing daemons (localsearch / tracker)
+    echo "🛑 Masking localsearch and tracker background indexing services in rootfs..."
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/systemd/user"
+    for srv in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service; do
+        $SUDO ln -sf /dev/null "$ROOTFS_TARGET/etc/systemd/user/$srv" 2>/dev/null || true
+    done
+    $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service 2>/dev/null || true
         fi
     " 2>/dev/null || true
 

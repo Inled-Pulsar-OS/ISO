@@ -16,13 +16,24 @@ util-linux
 dbus
 networkmanager
 archiso
+mkinitcpio-archiso
 plymouth
 avahi
 nss-mdns
+# Firmware & microcode (needed for GPU / wifi / early KMS on real hardware)
+linux-firmware-amdgpu
+linux-firmware-intel
+linux-firmware-nvidia
+linux-firmware-broadcom
+linux-firmware-realtek
+linux-firmware-mediatek
+intel-ucode
+amd-ucode
+sof-firmware
+alsa-firmware
 # Tube OS packages
 python
 python-fastapi
-python-uvicorn
 uvicorn
 python-multipart
 python-qrcode
