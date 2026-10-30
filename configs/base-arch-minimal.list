@@ -31,6 +31,7 @@ gnome-shell
 gnome-session
 gnome-control-center
 gnome-terminal
+fastfetch
 gnome-tweaks
 dconf
 
