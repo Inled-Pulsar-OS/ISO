@@ -597,10 +597,10 @@ cleanup() {
         $SUDO swapoff "$ROOTFS_TARGET/swapfile" 2>/dev/null || true
     fi
 
-    # Restore original DNS config in target if backup exists
-    # Restaurar DNS original en el target si quedó copia
-    if [ -f "$ROOTFS_TARGET/etc/resolv.conf.bak" ]; then
-        $SUDO mv "$ROOTFS_TARGET/etc/resolv.conf.bak" "$ROOTFS_TARGET/etc/resolv.conf" 2>/dev/null || true
+    # Ensure solid fallback DNS configuration in the target live system
+    $SUDO rm -f "$ROOTFS_TARGET/etc/resolv.conf.bak"
+    if [ -d "$ROOTFS_TARGET/etc" ]; then
+        printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 1.0.0.1\n" | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null 2>&1 || true
     fi
 
     unmount_tree "$ROOTFS_TARGET"
@@ -1457,10 +1457,10 @@ $pkg_name"
             set -e
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             /usr/bin/pacman -U --noconfirm --overwrite '*' /tmp/warp/cloudflare-warp-bin-*.pkg.tar.zst
-            /usr/bin/systemctl enable warp-svc 2>/dev/null || true
+            /usr/bin/systemctl disable warp-svc 2>/dev/null || true
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/warp"
-        echo "✅ Cloudflare WARP bundlado e instalado (warp-cli / warp-svc)."
+        echo "✅ Cloudflare WARP bundlado e instalado (inactivo por defecto, activable bajo demanda)."
     else
         echo "⚠️ cloudflare-warp-bin no compilado — la ISO seguirá sin WARP."
     fi
@@ -2200,14 +2200,10 @@ EOF
     # normally in the final booted system.
     $SUDO rm -f "$ROOTFS_TARGET/etc/modprobe.d/nvidia-initramfs-blacklist.conf"
 
-    # Enable the Cloudflare WARP daemon (bundled via cloudflare-warp-bin) so the
-    # recovery/installer can offer the VPN with a single "warp-cli connect" when
-    # the user has network but the Inled repo (apt.inled.es) is censored/blocked.
+    # Ensure Cloudflare WARP daemon is disabled by default on boot so it does not hijack DNS/network.
+    # It will be enabled on-demand by pulsaros-recovery when the user clicks 'Enable Cloudflare WARP VPN'.
     if [ -f "$ROOTFS_TARGET/usr/lib/systemd/system/warp-svc.service" ]; then
-        echo "🌐 Enabling Cloudflare WARP daemon (warp-svc)..."
-        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl enable warp-svc 2>/dev/null || true"
-    else
-        echo "⚠️ warp-svc.service not present in target — skipping WARP daemon enable (cloudflare-warp-bin may have failed to build)."
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl disable warp-svc 2>/dev/null || true"
     fi
 
     # Enable UFW and initialize default Pulsar OS rules
@@ -2231,6 +2227,19 @@ EOF
             chown -R live:live /home/live 2>/dev/null || true
         fi
     "
+
+    # Configure NetworkManager to manage DNS dynamically and set working fallback DNS
+    echo "🌐 Setting up solid NetworkManager DNS configuration and fallback resolv.conf..."
+    $SUDO mkdir -p "$ROOTFS_TARGET/etc/NetworkManager/conf.d"
+    cat << 'EOF' | $SUDO tee "$ROOTFS_TARGET/etc/NetworkManager/conf.d/dns.conf" > /dev/null
+[main]
+dns=default
+EOF
+    cat << 'EOF' | $SUDO tee "$ROOTFS_TARGET/etc/resolv.conf" > /dev/null
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+nameserver 1.0.0.1
+EOF
 else
     echo "--- 🔄 Finalizando y actualizando initramfs y servicios de sistema (Debian) ---"
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
@@ -2420,11 +2429,20 @@ unmount_tree "$ROOTFS_TARGET"
         # Asegurar que el directorio macos esté vacío (descarga on-demand)
         $SUDO find "$ROOTFS_TARGET/usr/share/backgrounds/macos" -type f -delete 2>/dev/null || true
 
-        $SUDO chmod +x "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
+        $SUDO rm -f "$ROOTFS_TARGET/usr/bin/install-macos" 2>/dev/null || true
     fi
 
-    # Remove unwanted / deprecated GNOME extensions from rootfs
-    echo "🧹 Removing unwanted/deprecated GNOME extensions (ding, gsconnect, gaze, classic shell extensions)..."
+    # Remove unwanted / deprecated GNOME extensions and desktop launchers from rootfs
+    echo "🧹 Removing unwanted/deprecated GNOME extensions and unwanted apps..."
+    $SUDO rm -f "$ROOTFS_TARGET/usr/share/applications/qv4l2.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/qvidcap.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/install-macos.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/pulsaros-biometrics.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/pulsaros-presence-debug.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/pulsaros-timemachine.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/pulsaros-vpn.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/pulsaros-firewall.desktop" \
+                 "$ROOTFS_TARGET/usr/share/applications/gaze.desktop" 2>/dev/null || true
     $SUDO rm -rf "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/ding@rastersoft.com" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io" \
                  "$ROOTFS_TARGET/usr/share/gnome-shell/extensions/macos-control-centre@pulsar.local" \
