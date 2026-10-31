@@ -3273,7 +3273,7 @@ scanfor manual
 dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
 dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
-hideui singleuser,hints,label
+hideui singleuser,hints
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live (RAM)" {
@@ -3321,7 +3321,7 @@ scanfor manual
 dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
 dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
-hideui singleuser,hints,label
+hideui singleuser,hints
 
 menuentry "Pulsar OS Live (RAM)" {
     loader /EFI/BOOT/vmlinuz
@@ -3369,10 +3369,9 @@ EOF
         $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$REFIND_THEME_DIR_TMP"
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$REFIND_THEME_DIR_TMP/theme.conf"
-    $SUDO sed -i 's/^hideui .*/hideui singleuser,hints,label/' "$REFIND_THEME_DIR_TMP/theme.conf"
-    grep -q "hideui.*label" "$REFIND_THEME_DIR_TMP/theme.conf" || echo "hideui singleuser,hints,label" | $SUDO tee -a "$REFIND_THEME_DIR_TMP/theme.conf" > /dev/null
+    $SUDO sed -i 's/^hideui .*/hideui singleuser,hints/' "$REFIND_THEME_DIR_TMP/theme.conf"
     if [ -d "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" ]; then
-        $SUDO sed -i 's/^hideui .*/hideui singleuser,hints,label/' "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark/theme.conf" 2>/dev/null || true
+        $SUDO sed -i 's/^hideui .*/hideui singleuser,hints/' "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark/theme.conf" 2>/dev/null || true
     fi
     BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR" ]; then
