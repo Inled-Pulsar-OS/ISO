@@ -604,6 +604,7 @@ cleanup() {
     fi
 
     unmount_tree "$ROOTFS_TARGET"
+    unmount_tree "$ROOTFS_BASE"
     unmount_tree "$ISO_STAGING"
 
     # Restore host KVM and PTMX node permissions
@@ -623,6 +624,7 @@ cleanup() {
 preflight_cleanup() {
     echo "🔍 Checking residual mounts for ${VARIANT_NAME}..."
     unmount_tree "$ROOTFS_TARGET"
+    unmount_tree "$ROOTFS_BASE"
     unmount_tree "$ISO_STAGING"
     $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
     if [ ! -c /dev/ptmx ]; then
@@ -914,10 +916,47 @@ CLEANEof
                         --arch="$ARCH" \
                         --components="main,contrib,non-free,non-free-firmware" \
                         $KEYRING_PARAM \
-                        --include="$PACKAGE_LIST" \
                         "$DEBIAN_VERSION" \
                         "$ROOTFS_BASE" \
                         "$MIRROR"
+
+                    (
+                        set +e
+                        echo "⚙️ Configurando montajes temporales en base Debian para resolución APT..."
+                        $SUDO rm -f "$ROOTFS_BASE/etc/resolv.conf"
+                        printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" | $SUDO tee "$ROOTFS_BASE/etc/resolv.conf" > /dev/null
+                        $SUDO mount -t proc proc "$ROOTFS_BASE/proc"
+                        $SUDO mount -t sysfs sys "$ROOTFS_BASE/sys"
+                        $SUDO mount --bind /dev "$ROOTFS_BASE/dev"
+                        $SUDO mount --make-rprivate "$ROOTFS_BASE/dev" 2>/dev/null || true
+                        $SUDO mount --bind /dev/pts "$ROOTFS_BASE/dev/pts" 2>/dev/null || true
+                        $SUDO mount -t tmpfs tmpfs "$ROOTFS_BASE/dev/shm" -o mode=1777 2>/dev/null || true
+
+                        printf '#!/bin/sh\nexit 101\n' | $SUDO tee "$ROOTFS_BASE/usr/sbin/policy-rc.d" > /dev/null
+                        $SUDO chmod +x "$ROOTFS_BASE/usr/sbin/policy-rc.d"
+
+                        echo "📦 Instalando paquetes base con APT en el chroot..."
+                        APT_PKGS=$(echo "$PACKAGE_LIST" | tr ',' ' ')
+                        $SUDO "$CHROOT_BIN" "$ROOTFS_BASE" /bin/bash -c "
+                            set -e
+                            export DEBIAN_FRONTEND=noninteractive
+                            export LANG=C.UTF-8
+                            export LC_ALL=C.UTF-8
+                            echo 'refind refind/install_to_esp boolean false' | debconf-set-selections 2>/dev/null || true
+                            apt-get update
+                            apt-get install -y --no-install-recommends $APT_PKGS
+                            apt-get clean
+                        "
+                        apt_status=$?
+
+                        $SUDO rm -f "$ROOTFS_BASE/usr/sbin/policy-rc.d"
+                        unmount_tree "$ROOTFS_BASE"
+
+                        if [ $apt_status -ne 0 ]; then
+                            echo "❌ Error instalando paquetes base de Debian vía APT"
+                            exit $apt_status
+                        fi
+                    )
                 fi
                     
                 # Save the actually used package list in the base cache for future diffs

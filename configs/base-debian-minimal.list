@@ -120,6 +120,8 @@ nano
 
 # ── File Manager & Portals ───────────────────────────────────────────────────
 nautilus
+localsearch
+tinysparql
 gnome-keyring
 xdg-desktop-portal-gnome
 xdg-desktop-portal

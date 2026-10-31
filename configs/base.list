@@ -104,6 +104,8 @@ vim
 gnome-text-editor
 # Gestión de Archivos y Portales
 nautilus
+localsearch
+tinysparql
 file-roller
 gnome-keyring
 xdg-desktop-portal-gnome
