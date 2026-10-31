@@ -57,6 +57,7 @@ BRANCH="stable"
 WITH_NVIDIA=false
 DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
 MINIMAL=false       # Minimal ISO: trimmed package list for ~2-3GB target
+BIG_ISO=false       # Big ISO: ship full application suite directly in live environment
 SQUASHFS_LEVEL="${SQUASHFS_LEVEL:-15}"  # Nivel zstd para squashfs (15=release, 12=test rápido)
 PULSAR_VERSION=""
 BUILD_VERBOSE="${BUILD_VERBOSE:-${VERBOSE:-0}}"
@@ -110,9 +111,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --minimal)
             MINIMAL=true
+            BIG_ISO=false
             shift
             ;;
         --full)
+            MINIMAL=false
+            shift
+            ;;
+        --big|--big-iso|--full-live)
+            BIG_ISO=true
             MINIMAL=false
             shift
             ;;
@@ -498,6 +505,8 @@ if $WITH_NVIDIA; then
 fi
 if $MINIMAL; then
     VARIANT_NAME="${VARIANT_NAME}-minimal"
+elif $BIG_ISO; then
+    VARIANT_NAME="${VARIANT_NAME}-big"
 fi
 
 ROOTFS_BASE="$BUILD_DIR/rootfs-base-${VARIANT_NAME}"
@@ -1300,18 +1309,21 @@ $pkg_name"
         # Not on the live ISO: pulsar-store, the Windows-app runner and the Update
         # Assistant are installed to disk at install time by pulsaros-recovery
         # (forced "Pulsar OS extras"), together with the rest of the extras.
+        # When --big is specified, keep all extra apps in the live image except pulsar-store and winboat.
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat-bin-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri-*.pkg.tar.zst
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman-*.pkg.tar.zst
+        if ! $BIG_ISO; then
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri-*.pkg.tar.zst
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman-*.pkg.tar.zst
+        fi
 
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
@@ -1389,10 +1401,15 @@ $pkg_name"
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
-            # Ensure extra/heavy packages are stripped from the live ISO chroot
-            pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+            if ! $BIG_ISO; then
+                # Ensure extra/heavy packages are stripped from the live ISO chroot
+                pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+            else
+                echo '🌟 [Pulsar OS Live Big] Manteniendo suite completa de aplicaciones en el entorno Live...'
+                pacman -Rdd --noconfirm pulsar-store winboat-bin 2>/dev/null || true
+            fi
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
@@ -1489,13 +1506,22 @@ $pkg_name"
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
-            # pulsar-windows, gaze, hidamari, sayri, scrcpy, meta se instalan al instalar el sistema a disco, no en la ISO live
-            echo 'ℹ️ [Pulsar OS Live] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
+            if ! $BIG_ISO; then
+                # pulsar-windows, gaze, hidamari, sayri, scrcpy, meta se instalan al instalar el sistema a disco, no en la ISO live
+                echo 'ℹ️ [Pulsar OS Live] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
 
-            # Ensure extra/heavy packages are stripped from the live ISO chroot
-            /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+                # Ensure extra/heavy packages are stripped from the live ISO chroot
+                /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+            else
+                echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Arch en el entorno Live...'
+                /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
+                    pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman pulsar-windows scrcpy gnome-tweaks file-roller \
+                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+                /usr/bin/pacman -Rdd --noconfirm pulsar-store winboat-bin 2>/dev/null || true
+            fi
 
 
             # Install optional apps if published in repository
@@ -1670,20 +1696,21 @@ EOF
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug*
-        # Not on the live ISO: installed to disk at install time by pulsaros-recovery
-        # (forced "Pulsar OS extras").
+        # Always exclude pulsar-store and winboat
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine_*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri*.deb
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman*.deb
+        if ! $BIG_ISO; then
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine_*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri*.deb
+            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman*.deb
+        fi
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
         else
@@ -1737,11 +1764,16 @@ EOF
                     yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
                     apt-get install -y --allow-downgrades appinstall seafari || true
                 }
-            # Purge extra apps not intended for the live ISO environment
-            dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
-                scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
-                gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+            if ! $BIG_ISO; then
+                # Purge extra apps not intended for the live ISO environment
+                dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
+                    scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+            else
+                echo "🌟 [Pulsar OS Live Big] Manteniendo la suite completa de aplicaciones Debian en el Live..."
+                dpkg --purge --force-all pulsar-store winboat 2>/dev/null || true
+            fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1807,12 +1839,22 @@ EOF
                 pulsaros-whatsnew
 
             apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
-            # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
-            echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
-            dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
-                scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
-                gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+            if ! $BIG_ISO; then
+                # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
+                echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
+                dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
+                    scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+            else
+                echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Debian en el Live...'
+                apt-get install -y --allow-downgrades --no-install-recommends \
+                    pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                    pulsaros-timemachine gaze sayri driverman pulsar-windows \
+                    scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+                dpkg --purge --force-all pulsar-store winboat 2>/dev/null || true
+            fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
