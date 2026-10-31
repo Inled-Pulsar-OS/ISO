@@ -186,7 +186,7 @@ MISSING_PACKAGES=()
 if [ "$DISTRO" = "arch" ]; then
     CMDS=("pacstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc" "patchelf")
 else
-    CMDS=("mmdebstrap" "fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
+    CMDS=("fakeroot" "rsync" "jq" "curl" "unzip" "wget" "mksquashfs" "xorriso" "sassc")
 fi
 if [ "$BOOTLOADER" = "grub" ]; then
     CMDS+=("grub-mkrescue")
@@ -897,16 +897,28 @@ CLEANEof
                     echo "🔑 Usando llavero de Debian: /usr/share/keyrings/debian-archive-keyring.gpg"
                 fi
                 
-                # Execute Debian Bootstrap
-                $SUDO /usr/bin/mmdebstrap \
-                    --architecture="$ARCH" \
-                    --components="main,contrib,non-free,non-free-firmware" \
-                    --variant=apt \
-                    $KEYRING_PARAM \
-                    --include="$PACKAGE_LIST" \
-                    "$DEBIAN_VERSION" \
-                    "$ROOTFS_BASE" \
-                    "$MIRROR"
+                # Execute Debian Bootstrap (mmdebstrap if available, fallback to debootstrap)
+                if command -v mmdebstrap >/dev/null 2>&1; then
+                    $SUDO mmdebstrap \
+                        --architecture="$ARCH" \
+                        --components="main,contrib,non-free,non-free-firmware" \
+                        --variant=apt \
+                        $KEYRING_PARAM \
+                        --include="$PACKAGE_LIST" \
+                        "$DEBIAN_VERSION" \
+                        "$ROOTFS_BASE" \
+                        "$MIRROR"
+                else
+                    echo "📦 mmdebstrap no encontrado; usando debootstrap..."
+                    $SUDO debootstrap \
+                        --arch="$ARCH" \
+                        --components="main,contrib,non-free,non-free-firmware" \
+                        $KEYRING_PARAM \
+                        --include="$PACKAGE_LIST" \
+                        "$DEBIAN_VERSION" \
+                        "$ROOTFS_BASE" \
+                        "$MIRROR"
+                fi
                     
                 # Save the actually used package list in the base cache for future diffs
                 if $WITH_NVIDIA; then
