@@ -1395,12 +1395,7 @@ $pkg_name"
                 pulsaros-theme \
                 pulsaros-gnome \
                 sayri \
-                pulsaros-vpn \
-                pulsaros-firewall \
-                pulsaros-timemachine \
-                pulsaros-cloud \
                 pulsaros-circle-to-search \
-                scrcpy \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
                 pulsaros-notchnux \
@@ -1418,17 +1413,13 @@ $pkg_name"
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                pulsaros-hblock \
                 pulsaros-whatsnew \
                 pulsaros-meta \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
             # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            # pulsar-windows solo en ISO completa, no en minimal
-            if ! $MINIMAL; then
-                /usr/bin/pacman -S --needed --noconfirm --overwrite '*' pulsar-windows 2>/dev/null || echo '⚠️ pulsar-windows no disponible para este canal (skipping).'
-            fi
+            echo "ℹ️ [Pulsar OS Live] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco."
 
 
             # Install optional apps if published in repository
@@ -1712,24 +1703,16 @@ EOF
                 pulsaros-flydrop \
                 pulsaros-recovery \
                 pulsaros-live-wallpaper \
-                pulsaros-vpn \
-                pulsaros-firewall \
-                pulsaros-cloud \
-                pulsaros-timemachine \
                 pulsaros-bootsound \
                 pulsaros-hibernate \
                 pulsar-pear-sound-theme \
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
-                pulsaros-hblock \
-                pulsaros-whatsnew \
-                hblock
+                pulsaros-whatsnew
 
             apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
             # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            if [ "$MINIMAL" != "true" ]; then
-                apt-get install -y --allow-downgrades pulsar-windows 2>/dev/null || true
-            fi
+            echo "ℹ️ [Pulsar OS Live Debian] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco."
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "

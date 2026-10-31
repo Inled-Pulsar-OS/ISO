@@ -177,14 +177,7 @@ libkeybinder3
 gtk3
 gtk4
 gtk4-layer-shell
-tesseract
-
-# ── Development / Build Tools (minimal) ──────────────────────────────────────
-# git is listed above; no docker, no full dev stack
-
 # ── GNOME Apps (essential only) ──────────────────────────────────────────────
-gnome-calculator
-gnome-calendar
 # Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
 python-nautilus
 
@@ -196,21 +189,6 @@ archiso
 mkinitcpio-archiso
 squashfs-tools
 
-# ── Time Machine Backup & Recovery (Btrfs + Restic + Rclone + Samba) ─────────
+# ── Btrfs Filesystem Support ─────────────────────────────────────────────────
 btrfs-progs
-restic
-rclone
-cifs-utils
-smbclient
-
-# ── HBlock (bloqueo de anuncios/rastreadores vía /etc/hosts) ────────────────
-hblock
-
-# ── Biometrics & Security (Face ID, Touch ID, Firewall) ─────────────────────
-fprintd
-ufw
-
-# ── Android & Device Integration (Pulsar Phone / ADB) ─────────────────────────
-android-tools
-scrcpy
 

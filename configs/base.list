@@ -57,15 +57,11 @@ git
 ca-certificates
 # Herramientas de configuración
 dconf-cli
-gnome-tweaks
 wget
 
 curl
 unzip
 imagemagick
-# Navegador y Multimedia
-vlc
-totem
 # Flatpak
 flatpak
 
@@ -102,18 +98,6 @@ shim-signed
 mokutil
 efibootmgr
 os-prober
-# Aplicaciones Estándar
-gnome-calculator
-gnome-calendar
-geary
-xournalpp
-loupe
-gnome-contacts
-gnome-music
-amberol
-endeavour
-gnome-clocks
-gnome-weather
 # Editores de texto
 nano
 vim
@@ -149,21 +133,16 @@ hfsprogs
 gparted
 gnome-disk-utility
 gnome-system-monitor
-gnome-logs
-baobab
 htop
 inxi
 wl-clipboard
 p7zip-full
 zip
 locales
-docker.io
 bluez
 bluez-tools
 rfkill
-autokey-gtk
 alsa-utils
-tesseract-ocr
 # Aceleración QEMU/VirGL
 libgl1-mesa-dri
 libvirglrenderer1
@@ -200,9 +179,6 @@ xserver-xorg-video-intel
 mesa-va-drivers
 mesa-vulkan-drivers
 intel-media-va-driver-non-free
-# Time Machine Backup & Recovery (Btrfs + Restic + Samba)
+# Btrfs Filesystem Support
 btrfs-progs
-restic
-cifs-utils
-smbclient
 

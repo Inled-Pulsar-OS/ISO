@@ -118,8 +118,6 @@ efibootmgr
 os-prober
 
 # ── Essential Apps ───────────────────────────────────────────────────────────
-gnome-calculator
-gnome-calendar
 gnome-text-editor
 nano
 
@@ -170,9 +168,7 @@ wl-clipboard
 p7zip-full
 zip
 locales
-autokey-gtk
 alsa-utils
-tesseract-ocr
 
 # ── Graphics Acceleration & Intel Drivers ────────────────────────────────────
 mesa-utils
