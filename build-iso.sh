@@ -1419,7 +1419,7 @@ $pkg_name"
                 qt6-multimedia-gstreamer
 
             # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            echo "ℹ️ [Pulsar OS Live] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco."
+            echo 'ℹ️ [Pulsar OS Live] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco.'
 
 
             # Install optional apps if published in repository
@@ -1712,7 +1712,7 @@ EOF
 
             apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
             # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            echo "ℹ️ [Pulsar OS Live Debian] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco."
+            echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco.'
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
