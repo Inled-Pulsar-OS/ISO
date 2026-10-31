@@ -1250,6 +1250,7 @@ $pkg_name"
         # (forced "Pulsar OS extras"), together with the rest of the extras.
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat-bin-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn-*.pkg.tar.zst
@@ -1621,6 +1622,7 @@ EOF
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock_*.deb
@@ -1684,7 +1686,7 @@ EOF
                 }
             # Purge extra apps not intended for the live ISO environment
             dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman winboat pulsar-store pulsaros-update \
+                pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
                 scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
                 gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
@@ -1755,7 +1757,7 @@ EOF
             # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
             echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
             dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                pulsaros-timemachine gaze sayri driverman winboat pulsar-store pulsaros-update \
+                pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
                 scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
                 gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
