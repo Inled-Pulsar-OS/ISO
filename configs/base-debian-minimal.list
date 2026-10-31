@@ -69,12 +69,10 @@ ca-certificates
 
 # ── Configuration Tools ──────────────────────────────────────────────────────
 dconf-cli
-gnome-tweaks
 wget
 
 curl
 unzip
-imagemagick
 
 # ── Flatpak ──────────────────────────────────────────────────────────────────
 flatpak
@@ -118,12 +116,10 @@ efibootmgr
 os-prober
 
 # ── Essential Apps ───────────────────────────────────────────────────────────
-gnome-text-editor
 nano
 
 # ── File Manager & Portals ───────────────────────────────────────────────────
 nautilus
-file-roller
 gnome-keyring
 xdg-desktop-portal-gnome
 xdg-desktop-portal
@@ -157,11 +153,6 @@ e2fsprogs
 dosfstools
 xfsprogs
 ntfs-3g
-gparted
-gnome-disk-utility
-gnome-system-monitor
-gnome-logs
-baobab
 htop
 inxi
 wl-clipboard
@@ -208,8 +199,5 @@ live-boot-initramfs-tools
 # ── Apple / Mac File System Support ──────────────────────────────────────────
 hfsprogs
 
-# ── Time Machine Backup & Recovery (Btrfs + Restic + Samba) ───────────────────
+# ── Filesystem Support ───────────────────────────────────────────────────────
 btrfs-progs
-restic
-cifs-utils
-smbclient

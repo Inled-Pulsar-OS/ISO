@@ -32,7 +32,6 @@ gnome-session
 gnome-control-center
 gnome-terminal
 fastfetch
-gnome-tweaks
 dconf
 
 # ── Display Manager ──────────────────────────────────────────────────────────
@@ -79,7 +78,6 @@ efibootmgr
 
 # ── File Manager & Portals ───────────────────────────────────────────────────
 nautilus
-file-roller
 gnome-keyring
 xdg-desktop-portal-gnome
 xdg-desktop-portal
@@ -104,16 +102,11 @@ alsa-firmware
 
 # ── Text Editors ─────────────────────────────────────────────────────────────
 nano
-# vim: solo instalado post-install si se necesita
-gnome-text-editor
 
 # ── System Utilities (lightweight) ───────────────────────────────────────────
 e2fsprogs
 dosfstools
 ntfs-3g
-gnome-disk-utility
-gparted
-gnome-system-monitor
 htop
 zstd
 # p7zip: redundante con zip/unzip

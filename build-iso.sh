@@ -1243,6 +1243,14 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat-bin-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman-*.pkg.tar.zst
 
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind-*.pkg.tar.zst
@@ -1317,9 +1325,13 @@ $pkg_name"
                 $BOOTLOADER_PKGS \
                 appinstall \
                 seafari \
-                scrcpy \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
+
+            # Ensure extra/heavy packages are stripped from the live ISO chroot
+            pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         if ! grep -q '\[inled\]' "$ROOTFS_TARGET/etc/pacman.conf"; then
@@ -1394,7 +1406,6 @@ $pkg_name"
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
-                sayri \
                 pulsaros-circle-to-search \
                 pulsaros-global-menu \
                 pulsaros-spotlight-launcher \
@@ -1414,12 +1425,16 @@ $pkg_name"
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsaros-whatsnew \
-                pulsaros-meta \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
-            # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            echo 'ℹ️ [Pulsar OS Live] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco.'
+            # pulsar-windows, gaze, hidamari, sayri, scrcpy, meta se instalan al instalar el sistema a disco, no en la ISO live
+            echo 'ℹ️ [Pulsar OS Live] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
+
+            # Ensure extra/heavy packages are stripped from the live ISO chroot
+            /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
 
 
             # Install optional apps if published in repository
@@ -1590,6 +1605,14 @@ EOF
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-firewall_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-timemachine_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gaze*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/sayri*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/driverman*.deb
         if [ "$BOOTLOADER" = "grub" ]; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-refind_*.deb
         else
@@ -1621,7 +1644,6 @@ EOF
             echo 'refind refind/install_to_esp boolean false' | debconf-set-selections
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update || true
-            apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
 
             if [ \"$BOOTLOADER\" = \"refind\" ]; then
                 echo \"📥 Ensuring rEFInd binary is installed...\"
@@ -1644,6 +1666,11 @@ EOF
                     yes | apt-get install -y --allow-downgrades /tmp/packages/*.deb
                     apt-get install -y --allow-downgrades appinstall seafari || true
                 }
+            # Purge extra apps not intended for the live ISO environment
+            dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                pulsaros-timemachine gaze sayri driverman winboat pulsar-store pulsaros-update \
+                scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1668,7 +1695,6 @@ EOF
             echo 'DPkg::options { \"--force-overwrite\"; };' > /etc/apt/apt.conf.d/99force-overwrite
             apt-get update
             apt-get install -y cpio 2>/dev/null || true
-            apt-get install -y scrcpy 2>/dev/null || apt-get install -y -t ${DEBIAN_VERSION}-backports scrcpy 2>/dev/null || true
             apt-get install -y rclone 2>/dev/null || true
             apt-get install -y network-manager-applet nm-connection-editor 2>/dev/null || true
 
@@ -1688,7 +1714,6 @@ EOF
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
-                sayri \
                 nautilus \
                 pulsaros-control-center \
                 pulsaros-global-menu \
@@ -1711,8 +1736,12 @@ EOF
                 pulsaros-whatsnew
 
             apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
-            # pulsar-windows, gaze, hidamari se instalan al instalar el sistema a disco, no en la ISO live
-            echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas (pulsar-windows, hidamari) se reservan para la instalación a disco.'
+            # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
+            echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
+            dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
+                pulsaros-timemachine gaze sayri driverman winboat pulsar-store pulsaros-update \
+                scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
         "
@@ -1840,32 +1869,9 @@ $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
 
 # Winboat eliminado: reemplazado por pulsar-windows
 
-# Configurar Flathub en el sistema e instalar Flatpaks esenciales (con caché persistente local)
-FLATPAK_CACHE_DIR="$BUILD_DIR/flatpak-cache"
-if [ -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
-    echo "✨ Hidamari (Flatpak) ya está presente en el rootfs. Omitiendo descarga."
-else
-    echo "📦 Configurando repositorio Flathub e instalando Flatpaks..."
-    if [ -d "$FLATPAK_CACHE_DIR" ] && [ -d "$FLATPAK_CACHE_DIR/app/io.github.jeffshee.Hidamari" ]; then
-        echo "⚡ Restaurando Flatpaks (Hidamari y runtimes) desde la caché local ($FLATPAK_CACHE_DIR)..."
-        $SUDO mkdir -p "$ROOTFS_TARGET/var/lib/flatpak"
-        $SUDO cp -a "$FLATPAK_CACHE_DIR"/* "$ROOTFS_TARGET/var/lib/flatpak/" 2>/dev/null || true
-    fi
-
-    if [ ! -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
-        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-            flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-            flatpak install --system -y --noninteractive flathub io.github.jeffshee.Hidamari || true
-        "
-        if [ -d "$ROOTFS_TARGET/var/lib/flatpak/app/io.github.jeffshee.Hidamari" ]; then
-            echo "💾 Guardando Flatpaks en la caché local persistente ($FLATPAK_CACHE_DIR)..."
-            $SUDO mkdir -p "$FLATPAK_CACHE_DIR"
-            $SUDO cp -a "$ROOTFS_TARGET/var/lib/flatpak"/* "$FLATPAK_CACHE_DIR/" 2>/dev/null || true
-        fi
-    else
-        echo "✅ Hidamari y runtimes restaurados instantáneamente desde la caché local (0s de descarga)."
-    fi
-fi
+# Hidamari Flatpak is excluded from the Live ISO to keep it lightweight (~2GB).
+# It will be installed onto the target drive post-install via pulsaros-recovery.
+$SUDO rm -rf "$ROOTFS_TARGET/var/lib/flatpak"
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
@@ -1968,14 +1974,9 @@ blacklist bcma
 EOF
 $SUDO chmod 644 "$ROOTFS_TARGET/etc/modprobe.d/broadcom-wl-blacklist.conf"
 
-# Pre-install ultimate-macOS-KVM in hidden directory /opt/.ultimate-macOS-KVM
-echo "🍏 Pre-installing ultimate-macOS-KVM in /opt/.ultimate-macOS-KVM..."
-$SUDO mkdir -p "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
-if [ ! -f "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM/main.py" ]; then
-    $SUDO rm -rf "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
-    $SUDO git clone --depth=1 https://github.com/Coopydood/ultimate-macOS-KVM "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM" 2>/dev/null || true
-fi
-$SUDO chmod -R 777 "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM" 2>/dev/null || true
+# ultimate-macOS-KVM is excluded from the Live ISO to keep it lightweight.
+# It will be installed onto the target drive post-install via pulsaros-recovery.
+$SUDO rm -rf "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
 
 # ==============================================================================
 # PHASE 6: Final Tasks (Initramfs regeneration and cleanup)
@@ -2327,27 +2328,19 @@ unmount_tree "$ROOTFS_TARGET"
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then
-        echo "📦 Staging dedicated Debian Recovery environment into target rootfs and ISO..."
-        $SUDO mkdir -p "$ISO_STAGING/recovery" "$ISO_STAGING/recovery/live" "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/live" "$ROOTFS_TARGET/usr/share/pulsaros-recovery"
-        # Hardlinks for ISO_STAGING (won't be rsync'd, saves disk during build)
+        echo "📦 Staging dedicated Debian Recovery environment into ISO staging..."
+        $SUDO mkdir -p "$ISO_STAGING/recovery" "$ISO_STAGING/recovery/live"
+        # Hardlinks for ISO_STAGING
         $SUDO ln -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/filesystem.squashfs"
         $SUDO ln -f "$REC_OUT/filesystem.squashfs" "$ISO_STAGING/recovery/live/filesystem.squashfs"
-        # Copies for ROOTFS_TARGET (rsync'd to disk — hardlinks cause cross-device link errors)
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/recovery/filesystem.squashfs"
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/live/filesystem.squashfs"
-        $SUDO cp -f "$REC_OUT/filesystem.squashfs" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/recovery-filesystem.squashfs"
         if [ -f "$REC_OUT/vmlinuz-recovery" ]; then
             $SUDO ln -f "$REC_OUT/vmlinuz-recovery" "$ISO_STAGING/recovery/vmlinuz-recovery"
-            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/recovery/vmlinuz-recovery"
-            $SUDO cp -f "$REC_OUT/vmlinuz-recovery" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/vmlinuz-recovery"
         else
             echo "❌ Error: Recovery kernel missing at $REC_OUT/vmlinuz-recovery"
             exit 1
         fi
         if [ -f "$REC_OUT/initramfs-recovery.img" ]; then
             $SUDO ln -f "$REC_OUT/initramfs-recovery.img" "$ISO_STAGING/recovery/initramfs-recovery.img"
-            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/recovery/initramfs-recovery.img"
-            $SUDO cp -f "$REC_OUT/initramfs-recovery.img" "$ROOTFS_TARGET/usr/share/pulsaros-recovery/initramfs-recovery.img"
         else
             echo "❌ Error: Recovery initramfs missing at $REC_OUT/initramfs-recovery.img"
             exit 1
@@ -2618,6 +2611,11 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     if [ "$BUILD_VERBOSE" != "1" ] && [ "$VERBOSE" != "1" ]; then
         SQUASHFS_QUIET_FLAG="-no-progress"
     fi
+
+    # Clean any temporary or bulky recovery/flatpak assets from target rootfs before squashing
+    $SUDO rm -rf "$ROOTFS_TARGET/recovery" "$ROOTFS_TARGET/live/filesystem.squashfs" \
+                 "$ROOTFS_TARGET/var/lib/flatpak" "$ROOTFS_TARGET/opt/.ultimate-macOS-KVM"
+
     $SUDO env "PATH=/usr/bin:/usr/sbin:/sbin:/bin:$PATH" mksquashfs "$ROOTFS_TARGET" "$SQUASHFS_OUT" \
         -noappend \
         $SQUASHFS_QUIET_FLAG \
@@ -2631,6 +2629,10 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
         -e tmp/* \
         -e var/tmp/* \
         -e var/log/* \
+        -e recovery/* \
+        -e live/* \
+        -e var/lib/flatpak/* \
+        -e opt/.ultimate-macOS-KVM/* \
         -e root/.bash_history
 
     # Also export standalone recovery SquashFS image for local recovery partition and GitHub Releases
@@ -2643,12 +2645,10 @@ echo "📦 Compressing rootfs into SquashFS (zstd level 19)..."
     $SUDO cp -f "$SQUASHFS_OUT" "$RECOVERY_SQUASHFS"
 
     # Stage base OS image into standard paths inside ISO staging for offline recovery partition deployment
-    $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64" "$ROOTFS_TARGET/recovery/images"
+    $SUDO mkdir -p "$ISO_STAGING/images" "$ISO_STAGING/arch/x86_64"
     # Hardlinks for ISO_STAGING (won't be rsync'd)
     $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/images/pulsaros-base.squashfs"
     $SUDO ln -f "$SQUASHFS_OUT" "$ISO_STAGING/arch/x86_64/airootfs.sfs"
-    # Copy for ROOTFS_TARGET (rsync'd to disk — hardlinks cause cross-device link errors)
-    $SUDO cp -f "$SQUASHFS_OUT" "$ROOTFS_TARGET/recovery/images/pulsaros-base.squashfs"
 
 # 2. Copy Kernel and Initrd to ISO staging / Copiar Kernel e Initrd al directorio de la ISO
 if [ "$DISTRO" = "arch" ]; then
