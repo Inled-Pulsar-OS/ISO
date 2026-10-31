@@ -3378,14 +3378,11 @@ EOF
         echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
         $SUDO cp -f "$BOOT_ICONS_DIR/toram.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_toram.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_normal.png" 2>/dev/null || true
-        $SUDO cp -f "$BOOT_ICONS_DIR/os_pulsaros_normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_normal.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/normal.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_debug.png" 2>/dev/null || true
         $SUDO cp -f "$BOOT_ICONS_DIR/old.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_old.png" 2>/dev/null || true
-        if [ -f "$BOOT_ICONS_DIR/os_recovery.png" ]; then
-            $SUDO cp -f "$BOOT_ICONS_DIR/os_recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_recovery.png" 2>/dev/null || true
-        elif [ -f "$BOOT_ICONS_DIR/recovery.png" ]; then
-            $SUDO cp -f "$BOOT_ICONS_DIR/recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_recovery.png" 2>/dev/null || true
-        fi
+        $SUDO cp -f "$BOOT_ICONS_DIR/recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_recovery.png" 2>/dev/null || true
+        $SUDO cp -f "$BOOT_ICONS_DIR/recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_recovery.png" 2>/dev/null || true
     fi
 
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind or /usr/share/refind-*, Arch directly under /usr/share/refind)
