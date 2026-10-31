@@ -1220,6 +1220,14 @@ $pkg_name"
 
         echo "📂 Using local packages from: $LOCAL_PKGS_DIR"
 
+        # Stage offline packages into /opt/pulsar-pkgs so recovery can always find and install them
+        echo "📦 Staging offline Pulsar packages to /opt/pulsar-pkgs..."
+        $SUDO mkdir -p "$ROOTFS_TARGET/opt/pulsar-pkgs"
+        $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/opt/pulsar-pkgs/"
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/autokey-qt-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
+
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
         
@@ -1596,6 +1604,14 @@ EOF
         fi
 
         echo "📂 Using local packages from: $LOCAL_DEBS_DIR"
+
+        # Stage offline packages into /opt/pulsar-pkgs so recovery can always find and install them
+        echo "📦 Staging offline Debian packages to /opt/pulsar-pkgs..."
+        $SUDO mkdir -p "$ROOTFS_TARGET/opt/pulsar-pkgs"
+        $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/opt/pulsar-pkgs/"
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug*
+
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
@@ -2294,6 +2310,12 @@ echo "---💿 Creating Pulsar OS Live ISO Image /Creating Pulsar OS Live ISO ---
 $SUDO rm -rf "$ISO_STAGING"
 mkdir -p "$ISO_STAGING/live"
 mkdir -p "$ISO_STAGING/boot/grub"
+mkdir -p "$ISO_STAGING/packages"
+
+if [ -d "$ROOTFS_TARGET/opt/pulsar-pkgs" ]; then
+    echo "📦 Staging offline packages to live media (/packages)..."
+    $SUDO cp -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/* "$ISO_STAGING/packages/" 2>/dev/null || true
+fi
 
 
 if [ "$DISTRO" = "arch" ]; then
