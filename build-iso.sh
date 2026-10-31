@@ -2206,14 +2206,15 @@ EOF
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl disable warp-svc 2>/dev/null || true"
     fi
 
-    # Enable UFW and initialize default Pulsar OS rules
+    # Prepare UFW default Pulsar OS rules, but disable ufw.service on the live ISO
+    # so the live installer session is never blocked from DHCP or DNS.
     if [ -f "$ROOTFS_TARGET/usr/bin/ufw" ]; then
         echo "🛡️ Configuring default Pulsar OS firewall rules (UFW)..."
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
-            systemctl enable ufw.service 2>/dev/null || true
             if [ -x /usr/lib/pulsaros-firewall/firewall-helper ]; then
                 /usr/lib/pulsaros-firewall/firewall-helper init-defaults 2>/dev/null || true
             fi
+            systemctl disable ufw.service 2>/dev/null || true
             mkdir -p /etc/systemd/user/graphical-session.target.wants 2>/dev/null || true
             ln -sf /usr/lib/systemd/user/pulsar-firewall-watcher.service /etc/systemd/user/graphical-session.target.wants/ 2>/dev/null || true
         "
