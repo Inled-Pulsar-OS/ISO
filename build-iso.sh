@@ -1227,6 +1227,7 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/autokey-qt-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store-*.pkg.tar.zst
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
@@ -1612,6 +1613,7 @@ EOF
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/opt/pulsar-pkgs/"
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug*
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store_*.deb
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
@@ -2317,6 +2319,7 @@ mkdir -p "$ISO_STAGING/packages"
 if [ -d "$ROOTFS_TARGET/opt/pulsar-pkgs" ]; then
     echo "📦 Staging offline packages to live media (/packages)..."
     $SUDO cp -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/* "$ISO_STAGING/packages/" 2>/dev/null || true
+    $SUDO rm -f "$ISO_STAGING/packages"/pulsar-store* 2>/dev/null || true
 fi
 
 
@@ -3270,6 +3273,7 @@ scanfor manual
 dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
 dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
+hideui singleuser,hints,label
 include themes/rEFInd-Regular-Dark/theme.conf
 
 menuentry "Pulsar OS Live (RAM)" {
@@ -3317,6 +3321,7 @@ scanfor manual
 dont_scan_dirs EFI,live,recovery,boot,EFI/BOOT/drivers_x64,themes
 dont_scan_files *
 default_selection "+,pulsaros,Pulsar OS Live (RAM)"
+hideui singleuser,hints,label
 
 menuentry "Pulsar OS Live (RAM)" {
     loader /EFI/BOOT/vmlinuz
@@ -3364,6 +3369,11 @@ EOF
         $SUDO git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$REFIND_THEME_DIR_TMP"
     fi
     $SUDO sed -i '/#MENUENTRIES/q' "$REFIND_THEME_DIR_TMP/theme.conf"
+    $SUDO sed -i 's/^hideui .*/hideui singleuser,hints,label/' "$REFIND_THEME_DIR_TMP/theme.conf"
+    grep -q "hideui.*label" "$REFIND_THEME_DIR_TMP/theme.conf" || echo "hideui singleuser,hints,label" | $SUDO tee -a "$REFIND_THEME_DIR_TMP/theme.conf" > /dev/null
+    if [ -d "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark" ]; then
+        $SUDO sed -i 's/^hideui .*/hideui singleuser,hints,label/' "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark/theme.conf" 2>/dev/null || true
+    fi
     BOOT_ICONS_DIR="$(resolve_boot_icons)"
     if [ -d "$BOOT_ICONS_DIR" ]; then
         echo "📦 Asegurando iconos de arranque live personalizados en rEFInd ISO..."
