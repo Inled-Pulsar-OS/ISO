@@ -1309,12 +1309,13 @@ $pkg_name"
         # Not on the live ISO: pulsar-store, the Windows-app runner and the Update
         # Assistant are installed to disk at install time by pulsaros-recovery
         # (forced "Pulsar OS extras"), together with the rest of the extras.
-        # When --big is specified, keep all extra apps in the live image except pulsar-store and winboat.
+        # Always exclude pulsar-store, winboat, droidtux, and pulsaros-update
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat-bin-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/droidtux-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
         if ! $BIG_ISO; then
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows-*.pkg.tar.zst
-            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update-*.pkg.tar.zst
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta-*.pkg.tar.zst
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn-*.pkg.tar.zst
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-hblock-*.pkg.tar.zst
@@ -1405,10 +1406,10 @@ $pkg_name"
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Manteniendo suite completa de aplicaciones en el entorno Live...'
-                pacman -Rdd --noconfirm pulsar-store winboat-bin 2>/dev/null || true
+                pacman -Rdd --noconfirm pulsar-store winboat-bin droidtux pulsaros-update 2>/dev/null || true
             fi
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
@@ -1513,14 +1514,14 @@ $pkg_name"
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
+                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Arch en el entorno Live...'
                 /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
                     pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman pulsar-windows scrcpy gnome-tweaks file-roller \
                     gnome-text-editor gnome-disk-utility gparted gnome-system-monitor 2>/dev/null || true
-                /usr/bin/pacman -Rdd --noconfirm pulsar-store winboat-bin 2>/dev/null || true
+                /usr/bin/pacman -Rdd --noconfirm pulsar-store winboat-bin droidtux pulsaros-update 2>/dev/null || true
             fi
 
 
@@ -1691,16 +1692,19 @@ EOF
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug*
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store_*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/winboat*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/droidtux*.deb
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug*
-        # Always exclude pulsar-store and winboat
+        # Always exclude pulsar-store, winboat, droidtux, and pulsaros-update from live ISO
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/droidtux*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
         if ! $BIG_ISO; then
-            $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-update_*.deb
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-windows*.deb
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-meta_*.deb
             $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsaros-vpn_*.deb
@@ -1756,7 +1760,6 @@ EOF
             yes | apt-get install -y --allow-downgrades --no-install-recommends $BOOTLOADER_PKGS
             yes | apt-get install -y --allow-downgrades \
                 /tmp/packages/*.deb \
-                droidtux \
                 appinstall \
                 seafari || {
                     echo '⚠️ Direct batch install encountered conflicts, resolving...'
@@ -1769,10 +1772,10 @@ EOF
                 dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
-                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick droidtux 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Manteniendo la suite completa de aplicaciones Debian en el Live...'
-                dpkg --purge --force-all pulsar-store winboat 2>/dev/null || true
+                dpkg --purge --force-all pulsar-store winboat droidtux pulsaros-update 2>/dev/null || true
             fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
@@ -1845,7 +1848,7 @@ EOF
                 dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
-                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
+                    gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick droidtux 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Debian en el Live...'
                 apt-get install -y --allow-downgrades --no-install-recommends \
@@ -1853,7 +1856,7 @@ EOF
                     pulsaros-timemachine gaze sayri driverman pulsar-windows \
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
-                dpkg --purge --force-all pulsar-store winboat 2>/dev/null || true
+                dpkg --purge --force-all pulsar-store winboat droidtux pulsaros-update 2>/dev/null || true
             fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
