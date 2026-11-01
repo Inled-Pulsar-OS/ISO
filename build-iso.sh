@@ -1288,6 +1288,12 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/winboat-bin-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/droidtux-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsaros-update-*.pkg.tar.zst
+        if ! $BIG_ISO; then
+            $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-windows-*.pkg.tar.zst
+        fi
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_PKGS_DIR"/*.pkg.tar.zst "$ROOTFS_TARGET/tmp/packages/"
@@ -1684,6 +1690,11 @@ EOF
         fi
 
         echo "📂 Using local packages from: $LOCAL_DEBS_DIR"
+        for pw_dist in "$ISO_DIR/../pulsar-windows/dist" "/home/jaime/Documentos/pulsar/pulsar-windows/dist"; do
+            if [ -d "$pw_dist" ]; then
+                $SUDO cp -n "$pw_dist"/*.deb "$LOCAL_DEBS_DIR"/ 2>/dev/null || true
+            fi
+        done
 
         # Stage offline packages into /opt/pulsar-pkgs so recovery can always find and install them
         echo "📦 Staging offline Debian packages to /opt/pulsar-pkgs..."
@@ -1694,6 +1705,10 @@ EOF
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/winboat*.deb
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/droidtux*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsaros-update_*.deb
+        if ! $BIG_ISO; then
+            $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-windows*.deb
+        fi
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
@@ -1775,13 +1790,21 @@ EOF
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick droidtux 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Manteniendo la suite completa de aplicaciones Debian en el Live...'
+                if ls /tmp/packages/pulsar-windows*.deb 1>/dev/null 2>&1; then
+                    echo '📦 Instalando pulsar-windows en Live Big...'
+                    dpkg -i /tmp/packages/pulsar-windows*.deb 2>/dev/null || apt-get install -f -y 2>/dev/null || true
+                fi
                 dpkg --purge --force-all pulsar-store winboat droidtux pulsaros-update 2>/dev/null || true
             fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
+            rm -f /etc/xdg/autostart/pulsaros-update.desktop /usr/share/applications/pulsaros-update.desktop 2>/dev/null || true
+            rm -f /etc/xdg/autostart/droidtux.desktop /usr/share/applications/droidtux.desktop 2>/dev/null || true
         "
         $SUDO rm -rf "$ROOTFS_TARGET/tmp/packages"
         $SUDO rm -f "$ROOTFS_TARGET/etc/apt/preferences.d/local-pulsar"
+        $SUDO rm -f "$ROOTFS_TARGET/etc/xdg/autostart/pulsaros-update.desktop" "$ROOTFS_TARGET/usr/share/applications/pulsaros-update.desktop" 2>/dev/null || true
+        $SUDO rm -f "$ROOTFS_TARGET/etc/xdg/autostart/droidtux.desktop" "$ROOTFS_TARGET/usr/share/applications/droidtux.desktop" 2>/dev/null || true
         echo "✅ Local and cross-installed packages successfully."
     else
         echo "---🌐 PRODUCTION MODE: Installing packages from APT repository ---"
@@ -1853,13 +1876,15 @@ EOF
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Debian en el Live...'
                 apt-get install -y --allow-downgrades --no-install-recommends \
                     pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                    pulsaros-timemachine gaze sayri driverman pulsar-windows \
+                    pulsaros-timemachine sayri driverman \
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
                 dpkg --purge --force-all pulsar-store winboat droidtux pulsaros-update 2>/dev/null || true
             fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
+            rm -f /etc/xdg/autostart/pulsaros-update.desktop /usr/share/applications/pulsaros-update.desktop 2>/dev/null || true
+            rm -f /etc/xdg/autostart/droidtux.desktop /usr/share/applications/droidtux.desktop 2>/dev/null || true
         "
     fi
 
@@ -1868,6 +1893,8 @@ EOF
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/curl"
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/wget"
     $SUDO rm -f "$ROOTFS_TARGET/usr/bin/gpg"
+    $SUDO rm -f "$ROOTFS_TARGET/etc/xdg/autostart/pulsaros-update.desktop" "$ROOTFS_TARGET/usr/share/applications/pulsaros-update.desktop" 2>/dev/null || true
+    $SUDO rm -f "$ROOTFS_TARGET/etc/xdg/autostart/droidtux.desktop" "$ROOTFS_TARGET/usr/share/applications/droidtux.desktop" 2>/dev/null || true
 
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         dpkg-divert --remove --rename /usr/bin/curl 2>/dev/null || true
