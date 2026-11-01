@@ -1771,7 +1771,7 @@ EOF
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
             else
-                echo "🌟 [Pulsar OS Live Big] Manteniendo la suite completa de aplicaciones Debian en el Live..."
+                echo '🌟 [Pulsar OS Live Big] Manteniendo la suite completa de aplicaciones Debian en el Live...'
                 dpkg --purge --force-all pulsar-store winboat 2>/dev/null || true
             fi
             rm -f /etc/apt/apt.conf.d/99force-overwrite
