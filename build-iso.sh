@@ -2540,6 +2540,9 @@ unmount_tree "$ROOTFS_TARGET"
 
     # 5. pulsaros-gnome overrides & dconf settings
     if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome" ]; then
+        if [ -f "$PULSAR_ROOT/PKG/pulsaros-gnome/prepare-assets.sh" ]; then
+            $SUDO PKG_ROOT_OVERRIDE="$PULSAR_ROOT/PKG" bash "$PULSAR_ROOT/PKG/pulsaros-gnome/prepare-assets.sh" "$ROOTFS_TARGET" 2>/dev/null || true
+        fi
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/share/glib-2.0/schemas/." "$ROOTFS_TARGET/usr/share/glib-2.0/schemas/" 2>/dev/null || true
         $SUDO mkdir -p "$ROOTFS_TARGET/etc/dconf/db/local.d" "$ROOTFS_TARGET/etc/dconf/profile"
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/dconf/db/local.d/." "$ROOTFS_TARGET/etc/dconf/db/local.d/" 2>/dev/null || true
