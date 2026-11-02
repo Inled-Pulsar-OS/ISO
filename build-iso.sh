@@ -1411,7 +1411,7 @@ $pkg_name"
             if ! $BIG_ISO; then
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                    pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                    pulsaros-timemachine gaze sayri scrcpy gnome-tweaks file-roller \
                     gnome-text-editor gnome-disk-utility gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Manteniendo suite completa de aplicaciones en el entorno Live...'
@@ -1520,7 +1520,7 @@ $pkg_name"
 
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                    pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
+                    pulsaros-timemachine gaze sayri scrcpy gnome-tweaks file-roller \
                     gnome-text-editor gnome-disk-utility gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Arch en el entorno Live...'
@@ -1865,12 +1865,13 @@ EOF
                 gnome-macos-remap-wayland \
                 pulsaros-whatsnew
 
-            apt-get install -y --allow-downgrades appinstall seafari gparted 2>/dev/null || true
+            apt-get install -y --allow-downgrades appinstall seafari gparted driverman 2>/dev/null || true
+            apt-get --fix-broken install -y --allow-downgrades 2>/dev/null || true
             if ! $BIG_ISO; then
                 # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
                 echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
                 dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
-                    pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
+                    pulsaros-timemachine gaze sayri winboat pulsar-windows pulsar-store pulsaros-update \
                     scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility \
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick droidtux 2>/dev/null || true
             else
@@ -1882,6 +1883,7 @@ EOF
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick 2>/dev/null || true
                 dpkg --purge --force-all pulsar-store winboat droidtux pulsaros-update 2>/dev/null || true
             fi
+            apt-get --fix-broken install -y --allow-downgrades 2>/dev/null || true
             rm -f /etc/apt/apt.conf.d/99force-overwrite
             apt-get clean
             rm -f /etc/xdg/autostart/pulsaros-update.desktop /usr/share/applications/pulsaros-update.desktop 2>/dev/null || true
@@ -1984,7 +1986,8 @@ if [ "$DISTRO" = "debian" ]; then
     fi
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update 2>/dev/null && \
+        apt-get update 2>/dev/null
+        apt-get --fix-broken install -y --allow-downgrades 2>/dev/null || true
         apt-get install -y --allow-downgrades cloudflare-warp 2>/dev/null && \
         systemctl enable warp-svc 2>/dev/null || \
         echo '⚠️  Cloudflare WARP not available, skipping (ISO will still work without VPN)'
