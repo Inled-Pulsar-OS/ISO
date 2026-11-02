@@ -1604,7 +1604,7 @@ else
     $SUDO tee "$ROOTFS_TARGET/etc/apt/preferences.d/99inled" > /dev/null <<'EOF'
 Package: *
 Pin: origin "apt.inled.es"
-Pin-Priority: 1001
+Pin-Priority: 990
 EOF
 
     # Create temporary dpkg-diverts to intercept DroidTux's and AppInstall's keyring setup

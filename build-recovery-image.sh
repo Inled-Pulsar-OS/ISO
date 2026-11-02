@@ -317,7 +317,7 @@ INLEDLIST"
 $SUDO bash -c "cat << 'INLEDPIN' > '$ROOTFS_REC/etc/apt/preferences.d/99inled'
 Package: *
 Pin: origin \"apt.inled.es\"
-Pin-Priority: 1001
+Pin-Priority: 990
 INLEDPIN"
 
 # Install Pulsar OS packages from apt.inled.es
