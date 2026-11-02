@@ -1412,7 +1412,7 @@ $pkg_name"
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
+                    gnome-text-editor gnome-disk-utility gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Manteniendo suite completa de aplicaciones en el entorno Live...'
                 pacman -Rdd --noconfirm pulsar-store winboat-bin droidtux pulsaros-update 2>/dev/null || true
@@ -1510,6 +1510,7 @@ $pkg_name"
                 pulsaros-boot-icons \
                 gnome-macos-remap-wayland \
                 pulsaros-whatsnew \
+                gparted \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
 
@@ -1520,7 +1521,7 @@ $pkg_name"
                 # Ensure extra/heavy packages are stripped from the live ISO chroot
                 /usr/bin/pacman -Rdd --noconfirm pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman scrcpy gnome-tweaks file-roller \
-                    gnome-text-editor gnome-disk-utility gparted gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
+                    gnome-text-editor gnome-disk-utility gnome-system-monitor droidtux pulsaros-update 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Arch en el entorno Live...'
                 /usr/bin/pacman -S --needed --noconfirm --overwrite '*' \
@@ -1864,13 +1865,13 @@ EOF
                 gnome-macos-remap-wayland \
                 pulsaros-whatsnew
 
-            apt-get install -y --allow-downgrades appinstall seafari 2>/dev/null || true
+            apt-get install -y --allow-downgrades appinstall seafari gparted 2>/dev/null || true
             if ! $BIG_ISO; then
                 # pulsar-windows, gaze, hidamari, sayri, scrcpy se instalan al instalar el sistema a disco, no en la ISO live
                 echo 'ℹ️ [Pulsar OS Live Debian] Apps pesadas y GNOME utilities se reservan para la instalación a disco.'
                 dpkg --purge --force-all pulsaros-meta pulsaros-vpn pulsaros-hblock pulsaros-firewall \
                     pulsaros-timemachine gaze sayri driverman winboat pulsar-windows pulsar-store pulsaros-update \
-                    scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility gparted \
+                    scrcpy gnome-tweaks file-roller gnome-text-editor gnome-disk-utility \
                     gnome-system-monitor gnome-logs baobab restic cifs-utils smbclient imagemagick droidtux 2>/dev/null || true
             else
                 echo '🌟 [Pulsar OS Live Big] Instalando suite completa de aplicaciones Debian en el Live...'
@@ -1977,14 +1978,14 @@ if [ "$DISTRO" = "debian" ]; then
     $SUDO bash -c "curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output '$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'" 2>/dev/null || true
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/apt/sources.list.d"
     if [ -f "$ROOTFS_TARGET/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg" ]; then
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/cloudflare-warp.list" > /dev/null
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ trixie main" | $SUDO tee "$ROOTFS_TARGET/etc/apt/sources.list.d/cloudflare-warp.list" > /dev/null
     else
         echo "⚠️  Cloudflare WARP keyring not downloaded, skipping repo setup."
     fi
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         export DEBIAN_FRONTEND=noninteractive
         apt-get update 2>/dev/null && \
-        apt-get install -y --no-install-recommends cloudflare-warp 2>/dev/null && \
+        apt-get install -y --allow-downgrades cloudflare-warp 2>/dev/null && \
         systemctl enable warp-svc 2>/dev/null || \
         echo '⚠️  Cloudflare WARP not available, skipping (ISO will still work without VPN)'
         apt-get clean 2>/dev/null || true
@@ -2345,7 +2346,7 @@ EOF
 
     # Ensure Cloudflare WARP daemon is disabled by default on boot so it does not hijack DNS/network.
     # It will be enabled on-demand by pulsaros-recovery when the user clicks 'Enable Cloudflare WARP VPN'.
-    if [ -f "$ROOTFS_TARGET/usr/lib/systemd/system/warp-svc.service" ]; then
+    if [ -f "$ROOTFS_TARGET/usr/lib/systemd/system/warp-svc.service" ] || [ -f "$ROOTFS_TARGET/lib/systemd/system/warp-svc.service" ]; then
         $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl disable warp-svc 2>/dev/null || true"
     fi
 
