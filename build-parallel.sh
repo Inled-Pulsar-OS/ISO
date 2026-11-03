@@ -42,8 +42,8 @@ Filtros de objetivos:
   --refind | --refind-only  Compila únicamente ediciones con rEFInd (Arch y Debian)
 
 Opciones adicionales (se pasan a cada build):
-  --minimal             Compilación mínima optimizada (~2-3GB)
-  --full                Compilación estándar completa
+  --minimal             Compilación mínima optimizada (~2-3GB) [Por defecto]
+  --full                Compilación estándar completa (~4-6GB)
   --clean-base          Elimina y reconstruye desde cero la caché base
   --nvidia              Incluye controladores propietarios NVIDIA y Broadcom
   --branch, -b <rama>   Rama de compilación: stable, unstable, forky, rolling (def: stable)
@@ -95,8 +95,8 @@ Filtros de objetivos:
   --refind | --refind-only  Compila únicamente ediciones con rEFInd (Arch y Debian)
 
 Opciones adicionales (se pasan a cada build):
-  --minimal             Compilación mínima optimizada (~2-3GB)
-  --full                Compilación estándar completa
+  --minimal             Compilación mínima optimizada (~2-3GB) [Por defecto]
+  --full                Compilación estándar completa (~4-6GB)
   --clean-base          Elimina y reconstruye desde cero la caché base
   --nvidia              Incluye controladores propietarios NVIDIA y Broadcom
   --branch, -b <rama>   Rama de compilación: stable, unstable, forky, rolling (def: stable)
@@ -205,6 +205,18 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Perfil por defecto: asegurar compilación MINIMAL a menos que se especifique --full o --big
+HAS_PROFILE_ARG=false
+for arg in "${EXTRA_ARGS[@]}"; do
+    if [ "$arg" = "--minimal" ] || [ "$arg" = "--full" ] || [ "$arg" = "--big" ] || [ "$arg" = "--big-iso" ]; then
+        HAS_PROFILE_ARG=true
+        break
+    fi
+done
+if [ "$HAS_PROFILE_ARG" = false ]; then
+    EXTRA_ARGS+=("--minimal")
+fi
 
 # Si no se definieron targets específicos, resolver mediante filtros o valores por defecto
 if [ "$EXPLICIT_SPECIFIC_TARGET" = false ]; then

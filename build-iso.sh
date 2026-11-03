@@ -56,8 +56,8 @@ BOOTLOADER="grub" # Default bootloader is GRUB / El cargador por defecto es GRUB
 BRANCH="stable"
 WITH_NVIDIA=false
 DISTRO="debian"   # Distribution: debian or arch / Distribución: debian o arch
-MINIMAL=false       # Minimal ISO: trimmed package list for ~2-3GB target
-BIG_ISO=false       # Big ISO: ship full application suite directly in live environment
+MINIMAL=true      # Minimal ISO: trimmed package list for ~2-3GB target (default)
+BIG_ISO=false     # Big ISO: ship full application suite directly in live environment
 SQUASHFS_LEVEL="${SQUASHFS_LEVEL:-15}"  # Nivel zstd para squashfs (15=release, 12=test rápido)
 PULSAR_VERSION=""
 BUILD_VERBOSE="${BUILD_VERBOSE:-${VERBOSE:-0}}"
