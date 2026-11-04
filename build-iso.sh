@@ -2027,16 +2027,8 @@ $SUDO rm -rf "$ROOTFS_TARGET/var/lib/flatpak"
 
 # Asegurar identidad visual y logo oficial de Pulsar OS en GNOME Settings
 echo "🎨 Aplicando identidad visual y logo de Pulsar OS..."
-    if [ "$DISTRO" = "debian" ]; then
-        _iso_ver="${PULSAR_VERSION:-${DEBIAN_VERSION:-13}}"
-    else
-        _iso_ver="${PULSAR_VERSION:-rolling}"
-    fi
-    _iso_base="Pulsar OS Bitten Fruit ${DISTRO^} Based"
-    _iso_pretty="$_iso_base"
-    if [ -n "$PULSAR_VERSION" ] && [ "$PULSAR_VERSION" != "rolling" ]; then
-        _iso_pretty="$_iso_base ($PULSAR_VERSION)"
-    fi
+    _iso_ver="${PULSAR_VERSION:-2.0-preview}"
+    _iso_pretty="Pulsar OS Bitten Fruit ${_iso_ver} (${DISTRO^} Based)"
     _build_id="$(date +%Y%m%d%H%M)"
 
     cat <<EOF > "$ROOTFS_TARGET/etc/os-release"
