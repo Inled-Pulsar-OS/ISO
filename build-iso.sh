@@ -3515,10 +3515,19 @@ EOF
         $SUDO cp -f "$BOOT_ICONS_DIR/recovery.png" "$REFIND_THEME_DIR_TMP/icons/os_pulsaros_recovery.png" 2>/dev/null || true
     fi
 
+    # Ensure theme is permanently available in rootfs and live ISO staging
+    $SUDO mkdir -p "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark"
+    $SUDO cp -r "$REFIND_THEME_DIR_TMP"/* "$ROOTFS_TARGET/usr/share/refind/themes/rEFInd-Regular-Dark/" 2>/dev/null || true
+    $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark"
+    $SUDO cp -r "$REFIND_THEME_DIR_TMP"/* "$ISO_STAGING/EFI/BOOT/themes/rEFInd-Regular-Dark/" 2>/dev/null || true
+
     # Determine the location of rEFInd files in the chroot (Debian has it under /usr/share/refind/refind or /usr/share/refind-*, Arch directly under /usr/share/refind)
     REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind"
     if [ -d "$ROOTFS_TARGET/usr/share/refind/refind" ]; then
         REFIND_SHARE_DIR="$ROOTFS_TARGET/usr/share/refind/refind"
+        if [ ! -d "$ROOTFS_TARGET/usr/share/refind/drivers_x64" ] && [ -d "$REFIND_SHARE_DIR/drivers_x64" ]; then
+            $SUDO cp -r "$REFIND_SHARE_DIR/drivers_x64" "$ROOTFS_TARGET/usr/share/refind/drivers_x64" 2>/dev/null || true
+        fi
     else
         found_refind=$(find "$ROOTFS_TARGET/usr/share" -maxdepth 3 -type f -name "refind_x64.efi" 2>/dev/null | head -1)
         if [ -n "$found_refind" ]; then
@@ -3530,7 +3539,7 @@ EOF
     echo "📂 Copiando archivos de rEFInd, kernel e initrd a la raíz de la ISO staging..."
     $SUDO cp "$REFIND_SHARE_DIR/refind_x64.efi" "$ISO_STAGING/EFI/BOOT/bootx64.efi"
     $SUDO mkdir -p "$ISO_STAGING/EFI/BOOT/drivers_x64"
-    $SUDO cp "$REFIND_SHARE_DIR/drivers_x64/"*iso9660*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
+    $SUDO cp "$REFIND_SHARE_DIR/drivers_x64/"*.efi "$ISO_STAGING/EFI/BOOT/drivers_x64/" 2>/dev/null || true
     $SUDO cp "$REFIND_MINIMAL_CONF_TMP" "$ISO_STAGING/EFI/BOOT/refind.conf"
     
     # Copy kernels and initrds directly to the UEFI boot folder on the ISO
