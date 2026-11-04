@@ -1128,6 +1128,8 @@ EOF
             fi
             # Run as the original non-root user since makepkg cannot run as root
             if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
+                # Guarantee non-root user ownership across the whole PKG tree so makepkg never hits EACCES
+                $SUDO chown -R "$ORIGINAL_USER:$ORIGINAL_USER" "$pkg_dir_source/.." 2>/dev/null || true
                 run_as_user bash -c "cd '$pkg_dir_source' && env BUILD_VERBOSE='$BUILD_VERBOSE' $pkg_cmd"
             else
                 (cd "$pkg_dir_source" && env BUILD_VERBOSE="$BUILD_VERBOSE" eval "$pkg_cmd")
@@ -1664,6 +1666,9 @@ EOF
                 echo "🔨 Compilando todos los paquetes locales de forma fresca para la rama $BRANCH..."
             fi
             (cd "$pkg_dir_source" && DEBIAN_CHROOT="$ROOTFS_TARGET" ROOTFS_TARGET="$ROOTFS_TARGET" ROOTFS_BASE="$ROOTFS_BASE" eval "$pkg_cmd")
+            if [ -n "$ORIGINAL_USER" ] && [ "$ORIGINAL_USER" != "root" ]; then
+                $SUDO chown -R "$ORIGINAL_USER:$ORIGINAL_USER" "$pkg_dir_source" 2>/dev/null || true
+            fi
         else
             echo "⚠️ Warning: Packaging script not found in $pkg_dir_source/package-and-deploy.sh. An attempt will be made to use pre-existing debs."
         fi
