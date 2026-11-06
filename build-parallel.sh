@@ -321,12 +321,12 @@ if [ -d "$SCRIPT_DIR/../PKG" ] && [ "$SKIP_PKG" = false ]; then
 
     if $NEED_DEBIAN_PKGS && [ -f "$SCRIPT_DIR/../PKG/package-and-deploy.sh" ]; then
         echo "   🔨 [Debian] Compilando paquetes .deb locales..."
-        (cd "$SCRIPT_DIR/../PKG" && ./package-and-deploy.sh all $INC_PARAM || true)
+        (cd "$SCRIPT_DIR/../PKG" && ./package-and-deploy.sh all $INC_PARAM)
     fi
 
     if $NEED_ARCH_PKGS && [ -f "$SCRIPT_DIR/../PKG/arch/package-and-deploy.sh" ]; then
         echo "   🔨 [Arch] Compilando paquetes .pkg.tar.zst locales..."
-        (cd "$SCRIPT_DIR/../PKG/arch" && ./package-and-deploy.sh all $INC_PARAM || true)
+        (cd "$SCRIPT_DIR/../PKG/arch" && ./package-and-deploy.sh all $INC_PARAM)
     fi
 fi
 
@@ -367,7 +367,7 @@ if $TARGET_ARCH_GRUB; then
     NAMES+=("Arch (GRUB)")
     COLORS+=("\033[1;36m") # Cyan
     LOGS+=("$LOG")
-    run_build_worker "Arch (GRUB)" "\033[1;36m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --arch --grub --skip-pkg "${EXTRA_ARGS[@]}" &
+    run_build_worker "Arch (GRUB)" "\033[1;36m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --arch --grub --local --skip-pkg "${EXTRA_ARGS[@]}" &
     PIDS+=($!)
 fi
 
@@ -378,7 +378,7 @@ if $TARGET_ARCH_REFIND; then
     NAMES+=("Arch (rEFInd)")
     COLORS+=("\033[1;34m") # Blue
     LOGS+=("$LOG")
-    run_build_worker "Arch (rEFInd)" "\033[1;34m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --arch --refind --skip-pkg "${EXTRA_ARGS[@]}" &
+    run_build_worker "Arch (rEFInd)" "\033[1;34m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --arch --refind --local --skip-pkg "${EXTRA_ARGS[@]}" &
     PIDS+=($!)
 fi
 
@@ -389,7 +389,7 @@ if $TARGET_DEBIAN_GRUB; then
     NAMES+=("Debian (GRUB)")
     COLORS+=("\033[1;35m") # Magenta
     LOGS+=("$LOG")
-    run_build_worker "Debian (GRUB)" "\033[1;35m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --debian --grub --skip-pkg "${EXTRA_ARGS[@]}" &
+    run_build_worker "Debian (GRUB)" "\033[1;35m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --debian --grub --local --skip-pkg "${EXTRA_ARGS[@]}" &
     PIDS+=($!)
 fi
 
@@ -400,7 +400,7 @@ if $TARGET_DEBIAN_REFIND; then
     NAMES+=("Debian (rEFInd)")
     COLORS+=("\033[1;33m") # Yellow
     LOGS+=("$LOG")
-    run_build_worker "Debian (rEFInd)" "\033[1;33m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --debian --refind --skip-pkg "${EXTRA_ARGS[@]}" &
+    run_build_worker "Debian (rEFInd)" "\033[1;33m" "$LOG" "$SCRIPT_DIR/build-iso.sh" --debian --refind --local --skip-pkg "${EXTRA_ARGS[@]}" &
     PIDS+=($!)
 fi
 

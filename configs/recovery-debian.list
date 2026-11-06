@@ -59,7 +59,9 @@ smbclient
 
 # Complete Wi-Fi / Ethernet Firmware & Drivers for all PCs and MacBooks
 firmware-linux-free
+firmware-linux-nonfree
 firmware-misc-nonfree
+firmware-amd-graphics
 firmware-iwlwifi
 firmware-realtek
 firmware-atheros

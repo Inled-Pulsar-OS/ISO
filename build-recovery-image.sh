@@ -574,11 +574,130 @@ $SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
   <desktops><number>1</number></desktops>
   <resize><drawContents>yes</drawContents></resize>
   <applications/>
-  <keyboard/>
+  <keyboard>
+    <keybind key=\"A-F4\">
+      <action name=\"Close\"/>
+    </keybind>
+    <keybind key=\"A-Tab\">
+      <action name=\"NextWindow\">
+        <finalactions>
+          <action name=\"Focus\"/>
+          <action name=\"Raise\"/>
+          <action name=\"Unshade\"/>
+        </finalactions>
+      </action>
+    </keybind>
+    <keybind key=\"A-S-Tab\">
+      <action name=\"PreviousWindow\">
+        <finalactions>
+          <action name=\"Focus\"/>
+          <action name=\"Raise\"/>
+          <action name=\"Unshade\"/>
+        </finalactions>
+      </action>
+    </keybind>
+  </keyboard>
   <mouse>
     <dragThreshold>8</dragThreshold>
     <doubleClickTime>200</doubleClickTime>
     <screenEdgeWarpTime>0</screenEdgeWarpTime>
+    <context name=\"Frame\">
+      <mousebind button=\"A-Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"A-Left\" action=\"Click\">
+        <action name=\"Unshade\"/>
+      </mousebind>
+      <mousebind button=\"A-Left\" action=\"Drag\">
+        <action name=\"Move\"/>
+      </mousebind>
+      <mousebind button=\"A-Right\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/><action name=\"Unshade\"/>
+      </mousebind>
+      <mousebind button=\"A-Right\" action=\"Drag\">
+        <action name=\"Resize\"/>
+      </mousebind>
+    </context>
+    <context name=\"Titlebar\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Move\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"DoubleClick\">
+        <action name=\"ToggleMaximize\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+    </context>
+    <context name=\"Titlebar Top Right Bottom Left TLCorner TRCorner BRCorner BLCorner\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/><action name=\"Unshade\"/>
+      </mousebind>
+      <mousebind button=\"Right\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+        <action name=\"ShowMenu\"><menu>client-menu</menu></action>
+      </mousebind>
+    </context>
+    <context name=\"Top\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Resize\"><edge>top</edge></action>
+      </mousebind>
+    </context>
+    <context name=\"Left\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Resize\"><edge>left</edge></action>
+      </mousebind>
+    </context>
+    <context name=\"Right\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Resize\"><edge>right</edge></action>
+      </mousebind>
+    </context>
+    <context name=\"Bottom\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Resize\"><edge>bottom</edge></action>
+      </mousebind>
+    </context>
+    <context name=\"TRCorner BRCorner TLCorner BLCorner\">
+      <mousebind button=\"Left\" action=\"Drag\">
+        <action name=\"Resize\"/>
+      </mousebind>
+    </context>
+    <context name=\"Client\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Middle\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Right\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+    </context>
+    <context name=\"Iconify\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"Click\">
+        <action name=\"Iconify\"/>
+      </mousebind>
+    </context>
+    <context name=\"Maximize\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"Click\">
+        <action name=\"ToggleMaximize\"/>
+      </mousebind>
+    </context>
+    <context name=\"Close\">
+      <mousebind button=\"Left\" action=\"Press\">
+        <action name=\"Focus\"/><action name=\"Raise\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"Click\">
+        <action name=\"Close\"/>
+      </mousebind>
+    </context>
     <context name=\"Desktop\">
       <mousebind button=\"Left\" action=\"Press\">
         <action name=\"Focus\"/><action name=\"Raise\"/>
@@ -850,6 +969,69 @@ LIVE_BOOT_COMPONENTS=\"yes\"
 LIVE_USERNAME=\"live\"
 LIVE_USER_DEFAULT_GROUPS=\"sudo audio video plugdev disk users input\"
 LIVECONF"
+
+# Patch live-boot to search Btrfs subvolumes (@, @/recovery/live, @/live)
+# This prevents Debian live-boot from dropping to BusyBox on dualboot/Btrfs installs
+for helpers_path in "$ROOTFS_REC/usr/lib/live/boot/9990-misc-helpers.sh" "$ROOTFS_REC/lib/live/boot/9990-misc-helpers.sh"; do
+    if [ -f "$helpers_path" ]; then
+        $SUDO python3 -c '
+import sys
+p = sys.argv[1]
+with open(p, "r") as f:
+    c = f.read()
+
+old_is_live = """is_live_path()
+{
+\tDIRECTORY="${1}/${LIVE_MEDIA_PATH}"
+\tfor FILESYSTEM in squashfs ext2 ext3 ext4 xfs dir jffs
+\tdo
+\t\tif ls "${DIRECTORY}/"*.${FILESYSTEM} > /dev/null 2>&1
+\t\tthen
+\t\t\treturn 0
+\t\tfi
+\tdone
+\treturn 1
+}"""
+
+new_is_live = """is_live_path()
+{
+\tfor candidate in "${1}/${LIVE_MEDIA_PATH}" "${1}/@/${LIVE_MEDIA_PATH}" "${1}/@/recovery/${LIVE_MEDIA_PATH}" "${1}/@/recovery/live" "${1}/@/live" "${1}/recovery/live" "${1}/live"
+\tdo
+\t\tfor FILESYSTEM in squashfs ext2 ext3 ext4 xfs dir jffs
+\t\tdo
+\t\t\tif ls "${candidate}/"*.${FILESYSTEM} > /dev/null 2>&1
+\t\t\tthen
+\t\t\t\tLIVE_MEDIA_PATH_FOUND="${candidate#"${1}/"}"
+\t\t\t\treturn 0
+\t\t\tfi
+\tdone
+\tdone
+\treturn 1
+}"""
+
+old_mount_imgs = """\tif is_live_path "${directory}"
+\tthen
+\t\t[ -n "${mac}" ] && adddirectory="${directory}/${LIVE_MEDIA_PATH}/${mac}"
+\t\tsetup_unionfs "${directory}/${LIVE_MEDIA_PATH}" "${rootmnt}" "${adddirectory}"
+\telse"""
+
+new_mount_imgs = """\tif is_live_path "${directory}"
+\tthen
+\t\tlocal rel_path="${LIVE_MEDIA_PATH_FOUND:-${LIVE_MEDIA_PATH}}"
+\t\t[ -n "${mac}" ] && adddirectory="${directory}/${rel_path}/${mac}"
+\t\tsetup_unionfs "${directory}/${rel_path}" "${rootmnt}" "${adddirectory}"
+\telse"""
+
+if old_is_live in c:
+    c = c.replace(old_is_live, new_is_live)
+if old_mount_imgs in c:
+    c = c.replace(old_mount_imgs, new_mount_imgs)
+
+with open(p, "w") as f:
+    f.write(c)
+' "$helpers_path"
+    fi
+done
 
 # ==============================================================================
 # PHASE 4: Generate initramfs, kernel, and SquashFS
