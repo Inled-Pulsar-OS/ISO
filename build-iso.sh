@@ -1383,9 +1383,11 @@ $pkg_name"
                 pacman -Rdd --noconfirm libnautilus-extension || true
             fi
 
-            # Pin our custom nautilus so pacman -Syu doesn't download/replace it with upstream
+            # Pin custom local packages so pacman -Syu doesn't download/replace them with remote/upstream
             if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
-                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus' /etc/pacman.conf
+                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center' /etc/pacman.conf
+            else
+                sed -i 's/^IgnorePkg.*/IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center/' /etc/pacman.conf
             fi
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
