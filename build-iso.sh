@@ -2693,17 +2693,44 @@ EOI
         fi
     " 2>/dev/null || true
 
-    # Mask heavy background indexing daemons (localsearch / tracker)
-    echo "🛑 Masking localsearch and tracker background indexing services in rootfs..."
+    # Mask heavy background indexing daemons (localsearch / tracker), evolution, ibus, smartcard, wwan
+    echo "🛑 Masking localsearch, tracker, evolution, ibus and unused daemons in rootfs..."
     $SUDO mkdir -p "$ROOTFS_TARGET/etc/systemd/user"
-    for srv in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service; do
+    for srv in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+               tracker-miner-fs-3.service tracker-extract-3.service \
+               evolution-calendar-factory.service evolution-addressbook-factory.service \
+               evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
+               org.freedesktop.IBus.session.GNOME.service \
+               org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
+               org.gnome.SettingsDaemon.PrintNotifications.service \
+               org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
+               org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service; do
         $SUDO ln -sf /dev/null "$ROOTFS_TARGET/etc/systemd/user/$srv" 2>/dev/null || true
     done
     $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "
         if command -v systemctl >/dev/null 2>&1; then
-            systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service 2>/dev/null || true
+            systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+                                   tracker-miner-fs-3.service tracker-extract-3.service \
+                                   evolution-calendar-factory.service evolution-addressbook-factory.service \
+                                   evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
+                                   org.freedesktop.IBus.session.GNOME.service \
+                                   org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
+                                   org.gnome.SettingsDaemon.PrintNotifications.service \
+                                   org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
+                                   org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service 2>/dev/null || true
+            systemctl mask iio-sensor-proxy.service bolt.service gazed.service colord.service 2>/dev/null || true
+            systemctl disable cups.service docker.service containerd.service warp-svc.service tailscaled.service 2>/dev/null || true
+            systemctl enable cups.socket docker.socket 2>/dev/null || true
         fi
     " 2>/dev/null || true
+
+    # Disable autostart entries for tracker/localsearch, autokey, appinstall-daemon and pulsar-windows
+    if [ -f "$ROOTFS_TARGET/etc/xdg/autostart/localsearch-3.desktop" ]; then
+        echo "Hidden=true" | $SUDO tee -a "$ROOTFS_TARGET/etc/xdg/autostart/localsearch-3.desktop" >/dev/null || true
+    fi
+    $SUDO rm -f "$ROOTFS_TARGET/etc/xdg/autostart/pulsar-windows.desktop" \
+                "$ROOTFS_TARGET/etc/xdg/autostart/autokey.desktop" \
+                "$ROOTFS_TARGET/etc/xdg/autostart/appinstall-daemon.desktop" 2>/dev/null || true
 
 # ── Deep clean rootfs before compression ──────────────────────────────────
 echo "🧹 Deep-cleaning rootfs before SquashFS compression..."
