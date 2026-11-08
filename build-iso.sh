@@ -2719,7 +2719,7 @@ EOI
                                    org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
                                    org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service 2>/dev/null || true
             systemctl mask iio-sensor-proxy.service bolt.service gazed.service colord.service 2>/dev/null || true
-            systemctl disable cups.service docker.service containerd.service warp-svc.service tailscaled.service 2>/dev/null || true
+            systemctl disable cups.service docker.service containerd.service tailscaled.service 2>/dev/null || true
             systemctl enable cups.socket docker.socket 2>/dev/null || true
         fi
     " 2>/dev/null || true
