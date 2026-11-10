@@ -89,6 +89,15 @@ OVMF_VARS="$VM_DIR/OVMF_VARS.fd"
 if [ "${FRESH:-0}" = "1" ]; then
     rm -f "$TEST_DISK" "$OVMF_VARS"
 fi
+# An empty disk file (interrupted qemu-img, or a stub) is not a qcow2 image: recreate it.
+# Anything non-empty that is not qcow2 is never deleted, only reported.
+if [ -f "$TEST_DISK" ] && [ ! -s "$TEST_DISK" ]; then
+    echo "⚠️  $TEST_DISK is empty: recreating it." >&2
+    rm -f "$TEST_DISK"
+elif [ -s "$TEST_DISK" ] && ! qemu-img info "$TEST_DISK" 2>/dev/null | grep -q '^file format: qcow2'; then
+    echo "❌ $TEST_DISK is not a qcow2 image. Move it away or run with FRESH=1." >&2
+    exit 1
+fi
 if [ ! -f "$TEST_DISK" ]; then
     echo "📦 Creating virtual ${DISK_SIZE:-25G} disk at $TEST_DISK for installer / recovery test..."
     qemu-img create -f qcow2 "$TEST_DISK" "${DISK_SIZE:-25G}" >/dev/null
