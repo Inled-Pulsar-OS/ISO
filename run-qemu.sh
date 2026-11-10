@@ -38,13 +38,23 @@ fi
 ISO="$(realpath "$ISO")"
 
 # --- Tools --------------------------------------------------------------------
-command -v qemu-system-x86_64 >/dev/null || { echo "❌ qemu-system-x86_64 not found (install qemu-full)." >&2; exit 1; }
-command -v qemu-img >/dev/null || { echo "❌ qemu-img not found." >&2; exit 1; }
+command -v qemu-system-x86_64 >/dev/null || { echo "❌ qemu-system-x86_64 not found. Install qemu-full (Arch) or qemu-system-x86 (Debian/Ubuntu)." >&2; exit 1; }
+command -v qemu-img >/dev/null || { echo "❌ qemu-img not found. Install qemu-full (Arch) or qemu-utils (Debian/Ubuntu)." >&2; exit 1; }
 
-# --- UEFI firmware (split CODE + VARS, as shipped by edk2-ovmf) ----------------
+# --- UEFI firmware --------------------------------------------------------------
+# Preferred: split CODE + VARS pair, so UEFI variables persist between boots.
+#   Arch    edk2-ovmf: /usr/share/edk2/x64/OVMF_CODE.4m.fd + OVMF_VARS.4m.fd
+#   Debian  ovmf:      /usr/share/OVMF/OVMF_CODE_4M.fd + OVMF_VARS_4M.fd
+#                      (bookworm also ships the older 2M OVMF_CODE.fd + OVMF_VARS.fd)
+#   Fedora  edk2-ovmf: /usr/share/edk2/ovmf/OVMF_CODE.fd + OVMF_VARS.fd
+# Fallback: a single OVMF.fd image via -bios (Debian /usr/share/ovmf/OVMF.fd);
+#   it works, but UEFI variables are not saved.
+# OVMF_DIRS="dir1 dir2" overrides the split-pair search path.
 OVMF_CODE=""
 OVMF_VARS_TEMPLATE=""
-for dir in /usr/share/edk2/x64 /usr/share/edk2-ovmf/x64 /usr/share/OVMF /usr/share/ovmf/x64 /usr/share/ovmf; do
+OVMF_BIOS=""
+read -r -a OVMF_SEARCH <<< "${OVMF_DIRS:-/usr/share/edk2/x64 /usr/share/edk2-ovmf/x64 /usr/share/edk2/ovmf /usr/share/OVMF /usr/share/ovmf/x64 /usr/share/ovmf}"
+for dir in "${OVMF_SEARCH[@]}"; do
     for code in OVMF_CODE.4m.fd OVMF_CODE_4M.fd OVMF_CODE.fd; do
         vars="${code/CODE/VARS}"
         if [ -f "$dir/$code" ] && [ -f "$dir/$vars" ]; then
@@ -56,7 +66,17 @@ for dir in /usr/share/edk2/x64 /usr/share/edk2-ovmf/x64 /usr/share/OVMF /usr/sha
 done
 
 if [ -z "$OVMF_CODE" ]; then
-    echo "❌ OVMF firmware (CODE + VARS) not found. Install edk2-ovmf (Arch) or ovmf (Debian)." >&2
+    for f in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF.fd \
+             /usr/share/edk2-ovmf/x64/OVMF.fd /usr/share/edk2/x64/OVMF.4m.fd; do
+        if [ -f "$f" ]; then
+            OVMF_BIOS="$f"
+            break
+        fi
+    done
+fi
+
+if [ -z "$OVMF_CODE" ] && [ -z "$OVMF_BIOS" ]; then
+    echo "❌ OVMF firmware not found. Install edk2-ovmf (Arch) or ovmf (Debian/Ubuntu)." >&2
     exit 1
 fi
 
@@ -73,26 +93,39 @@ if [ ! -f "$TEST_DISK" ]; then
     echo "📦 Creating virtual ${DISK_SIZE:-25G} disk at $TEST_DISK for installer / recovery test..."
     qemu-img create -f qcow2 "$TEST_DISK" "${DISK_SIZE:-25G}" >/dev/null
 fi
-[ -f "$OVMF_VARS" ] || cp "$OVMF_VARS_TEMPLATE" "$OVMF_VARS"
+if [ -n "$OVMF_CODE" ]; then
+    # A VARS file from a different firmware build (Debian 2M vs 4M) makes QEMU refuse to start.
+    if [ -f "$OVMF_VARS" ] && [ "$(stat -c %s "$OVMF_VARS")" != "$(stat -c %s "$OVMF_VARS_TEMPLATE")" ]; then
+        echo "⚠️  $OVMF_VARS does not match the installed firmware (size changed): recreating it." >&2
+        rm -f "$OVMF_VARS"
+    fi
+    [ -f "$OVMF_VARS" ] || cp "$OVMF_VARS_TEMPLATE" "$OVMF_VARS"
+fi
 
 # --- Acceleration --------------------------------------------------------------
 if [ "${NO_KVM:-0}" != "1" ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     ACCEL=(-enable-kvm -cpu host)
 else
-    echo "⚠️  /dev/kvm not usable: running without KVM (slow)." >&2
+    echo "⚠️  /dev/kvm not usable: running without KVM (slow). On Debian/Ubuntu add yourself to the 'kvm' group." >&2
     ACCEL=(-cpu max)
 fi
 
 echo "🚀 Booting Pulsar OS ISO in QEMU (UEFI OVMF): $ISO"
-echo "   firmware: $OVMF_CODE"
+if [ -n "$OVMF_CODE" ]; then
+    echo "   firmware: $OVMF_CODE"
+    UEFI=(-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE"
+          -drive if=pflash,format=raw,file="$OVMF_VARS")
+else
+    echo "   firmware: $OVMF_BIOS (single image: UEFI variables are not saved)"
+    UEFI=(-bios "$OVMF_BIOS")
+fi
 echo "   disk:     $TEST_DISK"
 
 exec qemu-system-x86_64 \
     "${ACCEL[@]}" \
     -m "${RAM:-5G}" \
     -smp "${CPUS:-4}" \
-    -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
-    -drive if=pflash,format=raw,file="$OVMF_VARS" \
+    "${UEFI[@]}" \
     -drive file="$TEST_DISK",if=virtio,format=qcow2 \
     -drive file="$ISO",media=cdrom,readonly=on \
     -boot menu=on \
