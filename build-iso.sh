@@ -2481,13 +2481,11 @@ unmount_tree "$ROOTFS_TARGET"
     # Build dedicated Debian Recovery environment (base is cached internally for speed)
     REC_OUT="$SCRIPT_DIR/build/recovery-out"
     if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
-        if [ "$USE_LOCAL_PKGS" = "true" ] || [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
-            (
-                flock -x 200
-                echo "📦 Building / Updating dedicated Debian Recovery environment..."
-                $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" SQUASHFS_LEVEL="$SQUASHFS_LEVEL" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" $([ "$USE_LOCAL_PKGS" = "true" ] && echo "--local-pkgs") || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
-            ) 200>"$BUILD_DIR/.recovery.lock"
-        fi
+        (
+            flock -x 200
+            echo "📦 Building / Updating dedicated Debian Recovery environment..."
+            $SUDO env BRANCH="$BRANCH" USE_LOCAL_PKGS="$USE_LOCAL_PKGS" SQUASHFS_LEVEL="$SQUASHFS_LEVEL" bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "$BRANCH" $([ "$USE_LOCAL_PKGS" = "true" ] && echo "--local-pkgs") || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
+        ) 200>"$BUILD_DIR/.recovery.lock"
     fi
 
     if [ -f "$REC_OUT/filesystem.squashfs" ]; then

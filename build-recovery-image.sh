@@ -599,7 +599,7 @@ $SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
   </keyboard>
   <mouse>
     <dragThreshold>8</dragThreshold>
-    <doubleClickTime>200</doubleClickTime>
+    <doubleClickTime>500</doubleClickTime>
     <screenEdgeWarpTime>0</screenEdgeWarpTime>
     <context name=\"Frame\">
       <mousebind button=\"A-Left\" action=\"Press\">
@@ -676,7 +676,7 @@ $SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
     </context>
     <context name=\"Iconify\">
       <mousebind button=\"Left\" action=\"Press\">
-        <action name=\"Focus\"/><action name=\"Raise\"/>
+        <action name=\"Focus\"/><action name=\"Raise\"/><action name=\"Unshade\"/>
       </mousebind>
       <mousebind button=\"Left\" action=\"Click\">
         <action name=\"Iconify\"/>
@@ -684,7 +684,7 @@ $SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
     </context>
     <context name=\"Maximize\">
       <mousebind button=\"Left\" action=\"Press\">
-        <action name=\"Focus\"/><action name=\"Raise\"/>
+        <action name=\"Focus\"/><action name=\"Raise\"/><action name=\"Unshade\"/>
       </mousebind>
       <mousebind button=\"Left\" action=\"Click\">
         <action name=\"ToggleMaximize\"/>
@@ -692,9 +692,12 @@ $SUDO bash -c "cat << 'OB_RC' > '$ROOTFS_REC/etc/xdg/openbox/rc.xml'
     </context>
     <context name=\"Close\">
       <mousebind button=\"Left\" action=\"Press\">
-        <action name=\"Focus\"/><action name=\"Raise\"/>
+        <action name=\"Focus\"/><action name=\"Raise\"/><action name=\"Unshade\"/>
       </mousebind>
       <mousebind button=\"Left\" action=\"Click\">
+        <action name=\"Close\"/>
+      </mousebind>
+      <mousebind button=\"Left\" action=\"Release\">
         <action name=\"Close\"/>
       </mousebind>
     </context>
@@ -971,7 +974,11 @@ LIVE_USER_DEFAULT_GROUPS=\"sudo audio video plugdev disk users input\"
 LIVECONF"
 
 # Patch live-boot to search Btrfs subvolumes (@, @/recovery/live, @/live)
-# This prevents Debian live-boot from dropping to BusyBox on dualboot/Btrfs installs
+# This prevents Debian live-boot from dropping to BusyBox on dualboot/Btrfs installs.
+# ALSO: makes an explicit live-media= device BINDING in find_livefs, so the
+# installed Recovery entry never falls back to scanning every device (which
+# booted the installer live ISO — the full OS — instead of the installed
+# recovery environment).
 for helpers_path in "$ROOTFS_REC/usr/lib/live/boot/9990-misc-helpers.sh" "$ROOTFS_REC/lib/live/boot/9990-misc-helpers.sh"; do
     if [ -f "$helpers_path" ]; then
         $SUDO python3 -c '
@@ -995,13 +1002,17 @@ old_is_live = """is_live_path()
 
 new_is_live = """is_live_path()
 {
-\tfor candidate in "${1}/${LIVE_MEDIA_PATH}" "${1}/@/${LIVE_MEDIA_PATH}" "${1}/@/recovery/${LIVE_MEDIA_PATH}" "${1}/@/recovery/live" "${1}/@/live" "${1}/recovery/live" "${1}/live"
+\tfor candidate in "${1}/${LIVE_MEDIA_PATH}" "${1}/@/${LIVE_MEDIA_PATH}" "${1}/@/recovery/${LIVE_MEDIA_PATH}" "${1}/@/recovery/live" "${1}/@/live" "${1}/recovery/live" "${1}/recovery" "${1}/live" "${1}"
 \tdo
 \t\tfor FILESYSTEM in squashfs ext2 ext3 ext4 xfs dir jffs
 \t\tdo
 \t\t\tif ls "${candidate}/"*.${FILESYSTEM} > /dev/null 2>&1
 \t\t\tthen
-\t\t\t\tLIVE_MEDIA_PATH_FOUND="${candidate#"${1}/"}"
+\t\t\t\tif [ "${candidate}" = "${1}" ]; then
+\t\t\t\t\tLIVE_MEDIA_PATH_FOUND="."
+\t\t\t\telse
+\t\t\t\t\tLIVE_MEDIA_PATH_FOUND="${candidate#"${1}/"}"
+\t\t\t\tfi
 \t\t\t\treturn 0
 \t\t\tfi
 \tdone
@@ -1018,18 +1029,66 @@ old_mount_imgs = """\tif is_live_path "${directory}"
 new_mount_imgs = """\tif is_live_path "${directory}"
 \tthen
 \t\tlocal rel_path="${LIVE_MEDIA_PATH_FOUND:-${LIVE_MEDIA_PATH}}"
-\t\t[ -n "${mac}" ] && adddirectory="${directory}/${rel_path}/${mac}"
-\t\tsetup_unionfs "${directory}/${rel_path}" "${rootmnt}" "${adddirectory}"
+\t\t[ "${rel_path}" = "." ] && rel_path=""
+\t\t[ -n "${mac}" ] && adddirectory="${directory}${rel_path:+/${rel_path}}/${mac}"
+\t\tsetup_unionfs "${directory}${rel_path:+/${rel_path}}" "${rootmnt}" "${adddirectory}"
 \telse"""
+
+old_already_tried = """\t\tdevuid=$(blkid -o value -s UUID "$devname")
+\t\t[ -n "$devuid" ] && grep -qs "\\<$devuid\\>" /var/lib/live/boot/devices-already-tried-to-mount && continue"""
+
+new_already_tried = """\t\tdevuid=$(blkid -o value -s UUID "$devname")
+\t\t# Do not skip explicit LIVE_MEDIA on retry
+\t\t[ -z "${skip_uuid_check}" ] && [ -n "$devuid" ] && grep -qs "\\<$devuid\\>" /var/lib/live/boot/devices-already-tried-to-mount && continue"""
+
+old_strict_media = """\t\t\t\tif check_dev "null" "${LIVE_MEDIA}" "skip_uuid_check"
+\t\t\t\tthen
+\t\t\t\t\treturn 0
+\t\t\t\tfi
+\t\t\tfi
+\t\t\t;;"""
+new_strict_media = """\t\t\t\tif check_dev "null" "${LIVE_MEDIA}" "skip_uuid_check"
+\t\t\t\tthen
+\t\t\t\t\treturn 0
+\t\t\t\tfi
+\t\t\t\t# live-media= is BINDING (Pulsar OS): when an explicit medium was
+\t\t\t\t# requested but does not contain the live filesystem, do NOT fall back
+\t\t\t\t# to scanning every block device (CD/USB included). The old fallback
+\t\t\t\t# made the installed Recovery entry silently boot the installer live
+\t\t\t\t# ISO (the full OS) instead of the installed recovery environment.
+\t\t\t\t# find_livefs retries during its timeout; if the medium never shows
+\t\t\t\t# up, live-boot panics with a clear error instead.
+\t\t\t\treturn 1
+\t\t\tfi
+\t\t\t;;"""
 
 if old_is_live in c:
     c = c.replace(old_is_live, new_is_live)
 if old_mount_imgs in c:
     c = c.replace(old_mount_imgs, new_mount_imgs)
+if old_already_tried in c:
+    c = c.replace(old_already_tried, new_already_tried)
+if old_strict_media in c:
+    c = c.replace(old_strict_media, new_strict_media)
 
 with open(p, "w") as f:
     f.write(c)
 ' "$helpers_path"
+
+        # The patches above are silent no-ops if upstream live-boot changes
+        # its formatting. A recovery image built without them reproduces the
+        # "boots the live ISO / BusyBox on dualboot" bugs, so fail the build
+        # loudly instead of shipping a broken recovery environment.
+        if ! $SUDO grep -q "LIVE_MEDIA_PATH_FOUND" "$helpers_path"; then
+            echo "FATAL: live-boot is_live_path patch did not apply to $helpers_path" >&2
+            echo "       (upstream 9990-misc-helpers.sh changed; update the patch in build-recovery-image.sh)" >&2
+            exit 1
+        fi
+        if ! $SUDO grep -q "live-media= is BINDING" "$helpers_path"; then
+            echo "FATAL: live-boot find_livefs strict live-media patch did not apply to $helpers_path" >&2
+            echo "       (upstream 9990-misc-helpers.sh changed; update the patch in build-recovery-image.sh)" >&2
+            exit 1
+        fi
     fi
 done
 
@@ -1071,6 +1130,7 @@ echo "✅ Recovery desktop contract OK (Openbox + pulsar-recovery-assistant, GDM
 $SUDO bash -c "cat << 'FSTAB' > '$ROOTFS_REC/etc/fstab'
 # fstab for PULSAR recovery initramfs/live (escrito por build-recovery-image.sh)
 LABEL=PULSAR_RECOVERY  /media/pulsar-recovery  ext4    ro,noatime,nofail  0 0
+LABEL=PULSAR_BOOT      /media/pulsar-boot      ext4    ro,noatime,nofail  0 0
 LABEL=PULSAR_OS        /media/pulsar-os        btrfs   ro,noatime,nofail  0 0
 LABEL=PULSAR_ISO       /media/pulsar-iso       iso9660 ro,noatime,nofail  0 0
 FSTAB"

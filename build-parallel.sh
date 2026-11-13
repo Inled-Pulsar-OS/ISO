@@ -330,10 +330,10 @@ if [ -d "$SCRIPT_DIR/../PKG" ] && [ "$SKIP_PKG" = false ]; then
     fi
 fi
 
-# Pre-generar el entorno de recovery dedicado de Debian si no existe
+# Pre-generar el entorno de recovery dedicado de Debian si no existe o ha cambiado
 REC_OUT="$SCRIPT_DIR/build/recovery-out"
-if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ] && [ ! -f "$REC_OUT/filesystem.squashfs" ]; then
-    echo "🛠️  Pre-generando imagen de recuperación compartida (Debian Recovery)..."
+if [ -f "$SCRIPT_DIR/build-recovery-image.sh" ]; then
+    echo "🛠️  Verificando / pre-generando imagen de recuperación compartida (Debian Recovery)..."
     bash "$SCRIPT_DIR/build-recovery-image.sh" --branch "${BRANCH:-stable}" || echo "⚠️ Notice: Recovery build finished with warnings, continuing..."
 fi
 
