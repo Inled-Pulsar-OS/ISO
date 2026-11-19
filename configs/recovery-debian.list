@@ -89,7 +89,7 @@ openbox
 xterm
 feh
 
-# Graphic Libraries for Rust Recovery Assistant & Time Machine (GTK4 / Libadwaita / Python)
+# Graphic Libraries for Rust Recovery Assistant, Time Machine & FlyDrop (GTK4 / Libadwaita / Python)
 libgtk-4-1
 libadwaita-1-0
 librsvg2-common
@@ -99,8 +99,12 @@ hicolor-icon-theme
 desktop-file-utils
 python3
 python3-gi
+python3-dbus
+python3-requests
+python3-cryptography
 gir1.2-gtk-4.0
 gir1.2-adw-1
+gir1.2-notify-0.7
 
 # Auxiliary Recovery Utilities
 gparted

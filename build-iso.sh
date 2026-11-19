@@ -1305,11 +1305,14 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-keybindings-*
-        # NOTE: gnome-control-center is intentionally NOT removed here. Pulsar OS
-        # ships a patched build (macOS panels, Liquid Glass / Appearance controls,
-        # notch section, live-wallpaper engine) that must land in the live ISO,
-        # so the local package is installed below via `pacman -U` (a deliberate
-        # downgrade over Arch's stock gnome-control-center).
+        # In the live ISO, install the native Next suite (Finder, System Settings,
+        # System Monitor, QuickTime / Video Player, Calculator).
+        # Remove conflicting legacy GNOME packages from /tmp/packages so only the
+        # new Pulsar Next apps are installed on the live ISO.
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-control-center-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/nautilus-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-system-monitor-*.pkg.tar.zst
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/totem-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/spotlight-gtk-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tubeos-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/tube-os-*.pkg.tar.zst
@@ -1377,17 +1380,24 @@ $pkg_name"
             /usr/bin/pacman -S --noconfirm archlinux-keyring qt6-multimedia-ffmpeg 2>/dev/null || /usr/bin/pacman -S --noconfirm archlinux-keyring
             /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
-            # Arch now ships libnautilus-extension as a separate package, but our
-            # bundled nautilus build provides/conflicts with it; remove upstream copy first
-            if pacman -Q libnautilus-extension >/dev/null 2>&1; then
-                pacman -Rdd --noconfirm libnautilus-extension || true
-            fi
+            # Satisfy virtual providers explicitly before package transactions to prevent interactive prompts
+            /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng tesseract-data-spa 2>/dev/null || /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng 2>/dev/null || true
+
+            # In the live ISO we install the native Pulsar Next apps (system-settings,
+            # finder, system-monitor, video-player, calculator).
+            # Remove conflicting legacy GNOME packages from the base chroot first
+            # to prevent unresolvable conflict errors during pacman -U.
+            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+                if pacman -Q "$conflict_pkg" >/dev/null 2>&1; then
+                    pacman -Rdd --noconfirm "$conflict_pkg" || true
+                fi
+            done
 
             # Pin custom local packages so pacman -Syu doesn't download/replace them with remote/upstream
             if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
-                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center' /etc/pacman.conf
+                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator' /etc/pacman.conf
             else
-                sed -i 's/^IgnorePkg.*/IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center/' /etc/pacman.conf
+                sed -i 's/^IgnorePkg.*/IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator/' /etc/pacman.conf
             fi
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
@@ -1472,11 +1482,17 @@ $pkg_name"
             /usr/bin/pacman -S --noconfirm archlinux-keyring 2>/dev/null || true
             /usr/bin/pacman-key --populate archlinux 2>/dev/null || true
 
-            # Arch now ships libnautilus-extension as a separate package, but our
-            # bundled nautilus build provides/conflicts with it; remove upstream copy first
-            if /usr/bin/pacman -Q libnautilus-extension >/dev/null 2>&1; then
-                /usr/bin/pacman -Rdd --noconfirm libnautilus-extension || true
-            fi
+            # Satisfy virtual providers explicitly before package transactions to prevent interactive prompts
+            /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng tesseract-data-spa 2>/dev/null || /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng 2>/dev/null || true
+
+            # In the live ISO we install the native Pulsar Next apps (system-settings,
+            # finder, system-monitor, video-player, calculator).
+            # Remove conflicting legacy GNOME packages before installing Next apps
+            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+                if /usr/bin/pacman -Q "$conflict_pkg" >/dev/null 2>&1; then
+                    /usr/bin/pacman -Rdd --noconfirm "$conflict_pkg" || true
+                fi
+            done
 
             # pulsaros-gnome bundles gnome-shell-extension-appindicator and declares
             # conflicts+replaces on it. Remove the distro copy explicitly so the
@@ -1489,9 +1505,11 @@ $pkg_name"
             # droidtux/macboat/appinstall/seafari come from the [inled] repo via pacman.
             /usr/bin/pacman -Syu --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
-                gnome-control-center \
-                nautilus \
-                gnome-keybindings \
+                finder \
+                system-settings \
+                system-monitor \
+                video-player \
+                calculator \
                 pulsaros-branding \
                 pulsaros-theme \
                 pulsaros-gnome \
@@ -2087,6 +2105,10 @@ Session=gnome
 EOF
 $SUDO chmod 644 "$ROOTFS_TARGET/etc/sddm.conf.d/autologin.conf"
 
+# Crear marcador de sesión Live para scripts que solo deben operar en modo Live
+$SUDO touch "$ROOTFS_TARGET/etc/pulsaros-live"
+$SUDO chmod 644 "$ROOTFS_TARGET/etc/pulsaros-live"
+
 # Force Plymouth to not use SimpleDRM in the configuration file to prevent early boot graphics freezes
 if [ -f "$ROOTFS_TARGET/etc/plymouth/plymouthd.conf" ]; then
     echo "⚙️ Forzando UseSimpledrm=false en /etc/plymouth/plymouthd.conf..."
@@ -2556,7 +2578,17 @@ unmount_tree "$ROOTFS_TARGET"
         fi
         if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/bin" ]; then
             $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-gnome/usr/bin/"* "$ROOTFS_TARGET/usr/bin/" 2>/dev/null || true
+            $SUDO chmod 755 "$ROOTFS_TARGET/usr/bin/pulsaros-"* "$ROOTFS_TARGET/usr/bin/pulsar-"* 2>/dev/null || true
         fi
+        if [ -d "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/systemd" ]; then
+            $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-gnome/etc/systemd/." "$ROOTFS_TARGET/etc/systemd/" 2>/dev/null || true
+        fi
+        # En la sesión live, habilitar chequeo de aceleración GPU antes de iniciar entorno gráfico
+        if [ -f "$ROOTFS_TARGET/etc/systemd/system/pulsaros-live-check-gpu.service" ]; then
+            $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl enable pulsaros-live-check-gpu.service 2>/dev/null || true" 2>/dev/null || true
+        fi
+        # VM Guest services (GNOME Boxes / QEMU / KVM)
+        $SUDO "$CHROOT_BIN" "$ROOTFS_TARGET" /bin/bash -c "systemctl enable spice-vdagentd.service qemu-guest-agent.service 2>/dev/null || true" 2>/dev/null || true
         # Ensure skeleton files are also synced to live user home directory
         if [ -d "$ROOTFS_TARGET/home/live" ]; then
             $SUDO cp -rf "$ROOTFS_TARGET/etc/skel/." "$ROOTFS_TARGET/home/live/" 2>/dev/null || true

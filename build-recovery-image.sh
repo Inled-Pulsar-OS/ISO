@@ -110,6 +110,7 @@ rec_hash_inputs() {
             "$PULSAR_ROOT/PKG/pulsaros-recovery/usr" \
             "$PULSAR_ROOT/PKG/pulsaros-recovery/rust-recovery" \
             "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr" \
+            "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr" \
             "$PULSAR_ROOT/PKG/pulsar-boot-icons"; do
             if [ -f "$p" ]; then
                 sha256sum "$p" 2>/dev/null || true
@@ -337,7 +338,7 @@ $SUDO chroot "$ROOTFS_REC" /bin/bash -c "
 "
 
 # Optional local overrides for development mode
-if [ "$USE_LOCAL_PKGS" = "true" ] || [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ]; then
+if [ "$USE_LOCAL_PKGS" = "true" ] || [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ] || [ -d "$PULSAR_ROOT/PKG/pulsaros-flydrop" ]; then
     if [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" ]; then
         echo "📂 Overriding with local Rust recovery assistant binary..."
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-recovery/usr/bin/pulsar-recovery-assistant" "$ROOTFS_REC/usr/bin/"
@@ -352,6 +353,20 @@ if [ "$USE_LOCAL_PKGS" = "true" ] || [ -f "$PULSAR_ROOT/PKG/pulsaros-recovery/us
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr/share/pulsaros-timemachine/." "$ROOTFS_REC/usr/share/pulsaros-timemachine/" 2>/dev/null || true
         $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-timemachine/usr/share/applications/pulsaros-timemachine.desktop" "$ROOTFS_REC/usr/share/applications/" 2>/dev/null || true
         $SUDO chmod +x "$ROOTFS_REC/usr/bin/pulsaros-timemachine" "$ROOTFS_REC/usr/share/pulsaros-timemachine/cli.py" 2>/dev/null || true
+    fi
+    if [ -d "$PULSAR_ROOT/PKG/pulsaros-flydrop" ]; then
+        echo "📂 Installing FlyDrop package files into recovery..."
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/bin/flydrop" "$ROOTFS_REC/usr/bin/" 2>/dev/null || true
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/bin/flydrop-daemon" "$ROOTFS_REC/usr/bin/" 2>/dev/null || true
+        $SUDO mkdir -p "$ROOTFS_REC/usr/share/flydrop" "$ROOTFS_REC/usr/share/applications" "$ROOTFS_REC/etc/xdg/autostart"
+        $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/share/flydrop/." "$ROOTFS_REC/usr/share/flydrop/" 2>/dev/null || true
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/share/applications/es.pulsaros.FlyDrop.desktop" "$ROOTFS_REC/usr/share/applications/" 2>/dev/null || true
+        if [ -d "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/share/icons" ]; then
+            $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsaros-flydrop/usr/share/icons/." "$ROOTFS_REC/usr/share/icons/" 2>/dev/null || true
+        fi
+        $SUDO cp -f "$PULSAR_ROOT/PKG/pulsaros-flydrop/etc/xdg/autostart/flydrop-daemon.desktop" "$ROOTFS_REC/etc/xdg/autostart/" 2>/dev/null || true
+        $SUDO chmod +x "$ROOTFS_REC/usr/bin/flydrop" "$ROOTFS_REC/usr/bin/flydrop-daemon" 2>/dev/null || true
+        $SUDO chmod +x "$ROOTFS_REC/usr/share/flydrop/ui/"*.py 2>/dev/null || true
     fi
     if [ -d "$PULSAR_ROOT/PKG/pulsar-boot-icons" ]; then
         $SUDO cp -rf "$PULSAR_ROOT/PKG/pulsar-boot-icons/." "$ROOTFS_REC/usr/share/pulsar-boot-icons/" 2>/dev/null || true
@@ -527,6 +542,9 @@ $SUDO chmod +x "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" "$ROOTFS_REC/home/li
 # Openbox autostart: launch the Recovery Assistant as soon as Openbox is up
 $SUDO bash -c "cat << 'OB_AUTOSTART' > '$ROOTFS_REC/etc/xdg/openbox/autostart'
 # Pulsar OS Recovery — start the assistant automatically
+if [ -x /usr/bin/flydrop-daemon ]; then
+    /usr/bin/flydrop-daemon &
+fi
 /usr/bin/pulsar-recovery-assistant
 OB_AUTOSTART"
 
@@ -537,6 +555,9 @@ $SUDO bash -c "cat << 'OB_MENU' > '$ROOTFS_REC/etc/xdg/openbox/menu.xml'
   <menu id=\"root-menu\" label=\"Pulsar OS Recovery\">
     <item label=\"Recovery Assistant\">
       <action name=\"Execute\"><command>/usr/bin/pulsar-recovery-assistant</command></action>
+    </item>
+    <item label=\"FlyDrop\">
+      <action name=\"Execute\"><command>/usr/bin/flydrop send</command></action>
     </item>
     <item label=\"GParted\">
       <action name=\"Execute\"><command>/usr/sbin/gparted</command></action>
@@ -1106,6 +1127,7 @@ VERIFY_FAIL=""
 [ -x "$ROOTFS_REC/usr/bin/openbox" ]                 || VERIFY_FAIL="$VERIFY_FAIL openbox-binary"
 [ -x "$ROOTFS_REC/usr/bin/xinit" ]                    || VERIFY_FAIL="$VERIFY_FAIL xinit"
 [ -x "$ROOTFS_REC/usr/bin/pulsar-recovery-assistant" ] || VERIFY_FAIL="$VERIFY_FAIL recovery-assistant"
+[ -x "$ROOTFS_REC/usr/bin/flydrop" ]                  || VERIFY_FAIL="$VERIFY_FAIL flydrop-binary"
 grep -q "exec /usr/bin/openbox" "$ROOTFS_REC/etc/X11/xinit/xinitrc.recovery" 2>/dev/null \
     || VERIFY_FAIL="$VERIFY_FAIL xinitrc-runs-openbox"
 [ -L "$ROOTFS_REC/etc/systemd/system/graphical.target.wants/pulsar-recovery-gui.service" ] \

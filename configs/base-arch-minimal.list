@@ -29,7 +29,6 @@ dbus
 # ── GNOME Desktop (core only) ────────────────────────────────────────────────
 gnome-shell
 gnome-session
-gnome-control-center
 gnome-terminal
 fastfetch
 dconf
@@ -77,7 +76,6 @@ grub
 efibootmgr
 
 # ── File Manager & Portals ───────────────────────────────────────────────────
-nautilus
 gnome-keyring
 xdg-desktop-portal-gnome
 xdg-desktop-portal
@@ -170,9 +168,11 @@ libkeybinder3
 gtk3
 gtk4
 gtk4-layer-shell
-# ── GNOME Apps (essential only) ──────────────────────────────────────────────
-# Enlace Python de Nautilus: integración de GSConnect (enviar archivos al móvil)
-python-nautilus
+# ── Native Next Apps & OCR Support ──────────────────────────────────────────
+tesseract-data-eng
+tesseract-data-spa
+sdl3
+poppler
 
 # ── Arch ISO live support ────────────────────────────────────────────────────
 # CRÍTICO: archiso + mkinitcpio-archiso proveen los hooks de arranque live
@@ -184,4 +184,8 @@ squashfs-tools
 
 # ── Btrfs Filesystem Support ─────────────────────────────────────────────────
 btrfs-progs
+
+# ── VM / Guest Integration (GNOME Boxes / QEMU / KVM) ──────────────────────
+spice-vdagent
+qemu-guest-agent
 
