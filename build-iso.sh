@@ -1386,9 +1386,7 @@ $pkg_name"
             # Remove conflicting legacy GNOME packages from the base chroot first
             # to prevent unresolvable conflict errors during pacman -U.
             for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
-                if pacman -Q "$conflict_pkg" >/dev/null 2>&1; then
-                    pacman -Rdd --noconfirm "$conflict_pkg" || true
-                fi
+                pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
             done
 
             # Pin custom local packages so pacman -Syu doesn't download/replace them with remote/upstream
@@ -1408,6 +1406,11 @@ $pkg_name"
             if pacman -Q gnome-shell-extension-appindicator >/dev/null 2>&1; then
                 pacman -Rdd --noconfirm gnome-shell-extension-appindicator || true
             fi
+
+            # Ensure no legacy GNOME packages linger before installing local Next packages
+            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+                pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
+            done
 
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
@@ -1487,9 +1490,7 @@ $pkg_name"
             # finder, system-monitor, video-player, calculator).
             # Remove conflicting legacy GNOME packages before installing Next apps
             for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
-                if /usr/bin/pacman -Q "$conflict_pkg" >/dev/null 2>&1; then
-                    /usr/bin/pacman -Rdd --noconfirm "$conflict_pkg" || true
-                fi
+                /usr/bin/pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
             done
 
             # pulsaros-gnome bundles gnome-shell-extension-appindicator and declares
