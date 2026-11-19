@@ -1727,6 +1727,10 @@ EOF
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/opt/pulsar-pkgs/"
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/*-debug*
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/gnome-control-center*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/nautilus*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/gnome-system-monitor*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/totem*.deb
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/winboat*.deb
         $SUDO rm -f "$ROOTFS_TARGET/opt/pulsar-pkgs"/droidtux*.deb
@@ -1737,8 +1741,14 @@ EOF
 
         $SUDO mkdir -p "$ROOTFS_TARGET/tmp/packages"
         $SUDO cp "$LOCAL_DEBS_DIR"/*.deb "$ROOTFS_TARGET/tmp/packages/"
+        # Clean up packages that are not needed or cause dependency issues inside the chroot
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*-debug*
+        # Remove conflicting legacy GNOME packages so only the Next apps are installed
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-control-center*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/nautilus*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-system-monitor*.deb
+        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/totem*.deb
         # Always exclude pulsar-store, winboat, droidtux, and pulsaros-update from live ISO
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/pulsar-store_*.deb
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/winboat*.deb
@@ -1798,6 +1808,9 @@ EOF
                 fi
             fi
             yes | apt-get install -y --allow-downgrades --no-install-recommends $BOOTLOADER_PKGS
+            # In the live ISO we install the native Pulsar Next apps (finder, system-settings, system-monitor, video-player, calculator)
+            # Remove conflicting legacy GNOME packages first
+            dpkg --purge --force-all gnome-control-center nautilus gnome-system-monitor totem 2>/dev/null || true
             yes | apt-get install -y --allow-downgrades \
                 /tmp/packages/*.deb \
                 appinstall \
