@@ -622,9 +622,8 @@ cleanup() {
         $SUDO chown root:kvm /dev/kvm 2>/dev/null || true
     fi
     $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
-    if [ ! -c /dev/ptmx ]; then
-        $SUDO rm -f /dev/ptmx 2>/dev/null || true
-        $SUDO mknod -m 666 /dev/ptmx c 5 2 2>/dev/null || true
+    if [ ! -L /dev/ptmx ]; then
+        $SUDO ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
     fi
     $SUDO chmod 666 /dev/ptmx 2>/dev/null || true
 }
@@ -636,9 +635,8 @@ preflight_cleanup() {
     unmount_tree "$ROOTFS_BASE"
     unmount_tree "$ISO_STAGING"
     $SUDO chmod 666 /dev/pts/ptmx 2>/dev/null || true
-    if [ ! -c /dev/ptmx ]; then
-        $SUDO rm -f /dev/ptmx 2>/dev/null || true
-        $SUDO mknod -m 666 /dev/ptmx c 5 2 2>/dev/null || true
+    if [ ! -L /dev/ptmx ]; then
+        $SUDO ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
     fi
     $SUDO chmod 666 /dev/ptmx 2>/dev/null || true
     echo "✅ Residual mnt check completed."
