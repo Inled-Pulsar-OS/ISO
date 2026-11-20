@@ -1488,8 +1488,8 @@ $pkg_name"
 
             # In the live ISO we install the native Pulsar Next apps (system-settings,
             # finder, system-monitor, video-player, calculator).
-            # Remove conflicting legacy GNOME packages before installing Next apps
-            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+            # Remove conflicting legacy GNOME packages before installing Next apps (keep gnome-control-center for dual settings)
+            for conflict_pkg in gnome-calculator gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
                 /usr/bin/pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
             done
 
@@ -1506,6 +1506,7 @@ $pkg_name"
                 $BOOTLOADER_PKGS \
                 finder \
                 system-settings \
+                gnome-control-center \
                 system-monitor \
                 video-player \
                 calculator \
@@ -2737,6 +2738,9 @@ EOI
         if [ -f /etc/dconf/db/local.d/00-pulsaros-theme ]; then
             sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
             sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            if ! grep -q "org.gnome.Settings.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
+                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'org.gnome.Settings.desktop']/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            fi
             if ! grep -q "system-settings.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
                 sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /etc/dconf/db/local.d/00-pulsaros-theme
             fi
@@ -2747,6 +2751,9 @@ EOI
         if [ -f /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override ]; then
             sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
             sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            if ! grep -q "org.gnome.Settings.desktop" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override; then
+                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'org.gnome.Settings.desktop']/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            fi
             if ! grep -q "system-settings.desktop" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override; then
                 sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
             fi
