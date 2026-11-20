@@ -2732,6 +2732,27 @@ EOI
         if command -v gtk-update-icon-cache >/dev/null 2>&1; then
             gtk-update-icon-cache -f -q /usr/share/icons/hicolor 2>/dev/null || true
         fi
+
+        # Ensure finder.desktop and system-settings.desktop are in favorite-apps for the dock
+        if [ -f /etc/dconf/db/local.d/00-pulsaros-theme ]; then
+            sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            if ! grep -q "system-settings.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
+                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            fi
+            if ! grep -q "finder.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
+                sed -i "s/favorite-apps=\[/favorite-apps=\['finder.desktop', /g" /etc/dconf/db/local.d/00-pulsaros-theme
+            fi
+        fi
+        if [ -f /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override ]; then
+            sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            if ! grep -q "system-settings.desktop" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override; then
+                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            fi
+            glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
+        fi
+
         if command -v dconf >/dev/null 2>&1; then
             dconf update 2>/dev/null || true
         fi
