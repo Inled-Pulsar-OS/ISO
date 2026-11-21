@@ -2733,15 +2733,13 @@ EOI
             gtk-update-icon-cache -f -q /usr/share/icons/hicolor 2>/dev/null || true
         fi
 
-        # Ensure finder.desktop and system-settings.desktop are in favorite-apps for the dock
+        # Ensure finder.desktop and org.gnome.Settings.desktop are in favorite-apps for the dock (not system-settings.desktop)
         if [ -f /etc/dconf/db/local.d/00-pulsaros-theme ]; then
             sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
             sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /etc/dconf/db/local.d/00-pulsaros-theme
+            sed -i "s/, 'system-settings.desktop'//g; s/'system-settings.desktop', //g" /etc/dconf/db/local.d/00-pulsaros-theme
             if ! grep -q "org.gnome.Settings.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
                 sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'org.gnome.Settings.desktop']/g" /etc/dconf/db/local.d/00-pulsaros-theme
-            fi
-            if ! grep -q "system-settings.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
-                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /etc/dconf/db/local.d/00-pulsaros-theme
             fi
             if ! grep -q "finder.desktop" /etc/dconf/db/local.d/00-pulsaros-theme; then
                 sed -i "s/favorite-apps=\[/favorite-apps=\['finder.desktop', /g" /etc/dconf/db/local.d/00-pulsaros-theme
@@ -2750,11 +2748,9 @@ EOI
         if [ -f /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override ]; then
             sed -i "s/org.gnome.Nautilus.desktop/finder.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
             sed -i "s/org.gnome.Calculator.desktop/calculator.desktop/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
+            sed -i "s/, 'system-settings.desktop'//g; s/'system-settings.desktop', //g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
             if ! grep -q "org.gnome.Settings.desktop" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override; then
                 sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'org.gnome.Settings.desktop']/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
-            fi
-            if ! grep -q "system-settings.desktop" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override; then
-                sed -i "s/'es.inled.AppInstall.desktop']/'es.inled.AppInstall.desktop', 'system-settings.desktop']/g" /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override
             fi
             glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
         fi
