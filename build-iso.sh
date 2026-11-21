@@ -1304,10 +1304,8 @@ $pkg_name"
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/*calamares*
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-keybindings-*
         # In the live ISO, install the native Next suite (Finder, System Settings,
-        # System Monitor, QuickTime / Video Player, Calculator).
-        # Remove conflicting legacy GNOME packages from /tmp/packages so only the
-        # new Pulsar Next apps are installed on the live ISO.
-        $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-control-center-*.pkg.tar.zst
+        # System Monitor, QuickTime / Video Player, Calculator) and retain gnome-control-center for dual settings.
+        # Remove conflicting legacy GNOME packages from /tmp/packages.
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/nautilus-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/gnome-system-monitor-*.pkg.tar.zst
         $SUDO rm -f "$ROOTFS_TARGET/tmp/packages"/totem-*.pkg.tar.zst
@@ -1382,10 +1380,10 @@ $pkg_name"
             /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng tesseract-data-spa 2>/dev/null || /usr/bin/pacman -S --needed --noconfirm tesseract-data-eng 2>/dev/null || true
 
             # In the live ISO we install the native Pulsar Next apps (system-settings,
-            # finder, system-monitor, video-player, calculator).
+            # finder, system-monitor, video-player, calculator) and gnome-control-center for dual settings.
             # Remove conflicting legacy GNOME packages from the base chroot first
             # to prevent unresolvable conflict errors during pacman -U.
-            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+            for conflict_pkg in gnome-calculator gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
                 pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
             done
 
@@ -1407,8 +1405,8 @@ $pkg_name"
                 pacman -Rdd --noconfirm gnome-shell-extension-appindicator || true
             fi
 
-            # Ensure no legacy GNOME packages linger before installing local Next packages
-            for conflict_pkg in gnome-calculator gnome-control-center gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
+            # Ensure conflicting legacy GNOME packages are removed before installing local Next packages
+            for conflict_pkg in gnome-calculator gnome-system-monitor totem nautilus python-nautilus libnautilus-extension; do
                 pacman -Rdd --noconfirm "\$conflict_pkg" 2>/dev/null || true
             done
 
@@ -1418,6 +1416,7 @@ $pkg_name"
             # Install remaining dependencies and packages.
             pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
+                gnome-control-center \
                 appinstall \
                 seafari \
                 qt6-multimedia \
