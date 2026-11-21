@@ -1389,9 +1389,9 @@ $pkg_name"
 
             # Pin custom local packages so pacman -Syu doesn't download/replace them with remote/upstream
             if ! grep -q '^IgnorePkg' /etc/pacman.conf; then
-                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator' /etc/pacman.conf
+                sed -i '/^Architecture = auto$/a IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator appinstall' /etc/pacman.conf
             else
-                sed -i 's/^IgnorePkg.*/IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator/' /etc/pacman.conf
+                sed -i 's/^IgnorePkg.*/IgnorePkg = nautilus pulsaros-gnome pulsaros-theme pulsaros-branding gnome-control-center finder system-settings system-monitor video-player calculator appinstall/' /etc/pacman.conf
             fi
 
             # Perform a full system upgrade of the base chroot first to prevent rolling-release dependency conflicts
@@ -1413,11 +1413,9 @@ $pkg_name"
             # Install local packages (using -U) and pull dependencies
             pacman -U --noconfirm --overwrite '*' /tmp/packages/*.pkg.tar.zst
 
-            # Install remaining dependencies and packages.
+            # Install remaining dependencies and packages (local packages like gnome-control-center and appinstall are already installed via -U above).
             pacman -S --needed --noconfirm --overwrite '*' \
                 $BOOTLOADER_PKGS \
-                gnome-control-center \
-                appinstall \
                 seafari \
                 qt6-multimedia \
                 qt6-multimedia-gstreamer
